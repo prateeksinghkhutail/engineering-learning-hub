@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engineering Learning Hub</title>
+  <script>
+    // Apply saved theme before first paint (avoids light/dark flash).
+    try {
+      var t = (JSON.parse(localStorage.getItem('elh.state.v1')) || {}).theme;
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="assets/dashboard.css">
+</head>
+<body data-page="index">
+  <div class="wrap">
+    <header class="hub-header">
+      <div>
+        <h1 class="hub-title">Engineering Learning Hub</h1>
+        <p class="hub-sub" id="topicCount">&nbsp;</p>
+      </div>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode"></button>
+    </header>
+
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="searchInput" type="search" placeholder="Search topics, tags, categories…" autocomplete="off" spellcheck="false" aria-label="Search topics">
+      <kbd>/</kbd>
+    </div>
+
+    <section id="continueSection" class="continue" hidden></section>
+
+    <section id="recentSection" class="recent" hidden>
+      <h2 class="section-label">Recently opened</h2>
+      <div class="recent-list" id="recentList"></div>
+    </section>
+
+    <nav class="filters" id="filters" aria-label="Filter by category"></nav>
+
+    <main id="catalog"></main>
+
+    <p class="empty" id="emptyState" hidden></p>
+  </div>
+
+  <script src="assets/dashboard.js"></script>
+</body>
+</html>

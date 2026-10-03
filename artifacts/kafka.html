@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kafka from the log up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f7;--surface:#ffffff;--surface2:#e2e9f2;--ink:#16233a;--muted:#52617a;--line:#c7d2e0;
+  --leader:#f2b705;--leader-ink:#16233a;--follower:#2f6fde;--follower-bg:#e3edff;
+  --ctrl:#7a4fd6;--ctrl-bg:#efe8ff;--ok:#17885c;--ok-bg:#dff5ea;--bad:#cf3f36;--bad-bg:#fde6e3;
+  --link:#2459c4;--board:#111c2e;--board-ink:#e8eef7;--board-line:#2c3e5e;
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",Verdana,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 70px);scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--body);-webkit-text-size-adjust:100%}
+a{color:var(--link)}
+:focus-visible{outline:3px solid var(--leader);outline-offset:2px;border-radius:4px}
+code,kbd{font-family:var(--mono);font-size:.86em;background:var(--surface2);padding:.1em .35em;border-radius:4px}
+h1,h2,h3{font-family:var(--display);line-height:1.1;margin:0}
+p{margin:.7em 0;max-width:68ch}
+ul,ol{max-width:68ch;padding-left:1.2em;margin:.6em 0}
+li{margin:.3em 0}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:.6rem;
+  padding:.55rem 1rem;background:var(--surface);border-bottom:1px solid var(--line)}
+.top strong{font-family:var(--display);font-size:1.05rem;margin-right:auto}
+.btn{font:700 .9rem var(--body);color:var(--ink);background:var(--surface2);border:1px solid var(--line);
+  padding:.45rem .8rem;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn{white-space:nowrap}
+.top strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.btn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.warn{background:var(--bad-bg);border-color:var(--bad);color:var(--ink)}
+#bar{position:absolute;left:0;bottom:-3px;height:3px;width:0;background:var(--leader)}
+#menuBtn{display:none}
+
+.shell{display:grid;grid-template-columns:270px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav#toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);align-self:start;max-height:calc(100vh - 60px);
+  overflow:auto;padding:1.2rem 1rem 2rem;font-size:.9rem}
+nav#toc h3{font-size:.95rem;margin:1.1rem 0 .3rem;color:var(--muted)}
+nav#toc a{display:flex;gap:.5rem;padding:.22rem .4rem;border-radius:6px;color:var(--ink);text-decoration:none}
+nav#toc a span{font-family:var(--mono);font-size:.78rem;color:var(--muted);min-width:1.4rem;padding-top:.15rem}
+nav#toc a:hover{background:var(--surface2)}
+nav#toc a.cur{background:var(--leader);color:var(--leader-ink)}
+nav#toc a.cur span{color:var(--leader-ink)}
+main{padding:0 1.25rem 5rem;min-width:0}
+@media (max-width:980px){
+  .shell{display:block}
+  #menuBtn{display:inline-block}
+  nav#toc{display:none;position:fixed;top:calc(env(safe-area-inset-top,0px) + 51px);right:0;bottom:0;left:0;max-height:none;align-self:stretch;background:var(--bg);z-index:15}
+  nav#toc.open{display:block}
+}
+
+/* hero */
+.hero{padding:3.2rem 0 2.2rem;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(2.5rem,7vw,4.6rem);font-weight:800;letter-spacing:-.03em;max-width:14ch}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:52ch}
+.herolog{margin-top:1.8rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.88rem;color:var(--muted);margin-top:1.2rem}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+
+/* part divider + sections */
+.part{margin:3.5rem 0 0;padding:1rem 1.2rem;background:var(--ink);color:var(--bg);border-radius:14px}
+.part h2{font-size:1.5rem;font-weight:700}
+.part p{margin:.2rem 0 0;opacity:.8;font-size:.95rem}
+section.s{padding:2.6rem 0 1rem;border-bottom:1px dashed var(--line)}
+.sh{display:flex;align-items:center;gap:.9rem;margin-bottom:.4rem}
+.sh .off{font:600 .95rem var(--mono);background:var(--leader);color:var(--leader-ink);min-width:2.6rem;height:2.6rem;
+  display:grid;place-items:center;border-radius:8px;border:2px solid var(--ink)}
+.sh h2{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em}
+.lead{font-size:1.15rem;margin:.6rem 0 1rem}
+h3{font-size:1.2rem;margin:1.6rem 0 .3rem}
+
+/* what / why / how */
+.wwh{display:grid;gap:.5rem;margin:1rem 0;max-width:72ch}
+.wwh div{display:grid;grid-template-columns:4.2rem 1fr;gap:.8rem;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:.6rem .8rem}
+.wwh b{font-family:var(--display);color:var(--follower)}
+
+/* figures */
+figure{margin:1.2rem 0;max-width:820px}
+.canvas{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.1rem;overflow-x:auto}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.45rem;max-width:68ch}
+.cluster{border:2px dashed var(--muted);border-radius:14px;padding:1.6rem .8rem .8rem;position:relative;min-width:max-content}
+.cluster>em{position:absolute;top:-.8rem;left:.9rem;background:var(--surface);padding:0 .5rem;font:700 .9rem var(--display);font-style:normal}
+.row{display:flex;gap:.7rem;flex-wrap:wrap;align-items:stretch}
+.row.nowrap{flex-wrap:nowrap}
+.bk{flex:1 1 150px;min-width:150px;background:var(--surface2);border:2px solid var(--ink);border-radius:10px;padding:.6rem}
+.bk>b{display:block;font-family:var(--display);margin-bottom:.35rem}
+.bk small{color:var(--muted);display:block;font-size:.8rem}
+.bk.dead{opacity:.45;border-style:dashed;border-color:var(--bad)}
+.bk.ctl{border-color:var(--ctrl);background:var(--ctrl-bg)}
+button.bk{font:inherit;color:inherit;text-align:left;cursor:pointer}
+.chip{display:block;font:600 .8rem var(--mono);padding:.3rem .5rem;border-radius:6px;margin-top:.3rem;
+  background:var(--surface);border:1px solid var(--line)}
+.chip.L{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.L::before{content:"L  "}
+.chip.Y{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.F{background:var(--follower-bg);border-color:var(--follower)}
+.chip.F::before{content:"F  "}
+.chip.C{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.chip.X{background:var(--bad-bg);border-color:var(--bad)}
+.chip.inl{display:inline-block;margin:0}
+.log{display:flex;align-items:flex-end;gap:3px;margin:.35rem 0;min-width:max-content}
+.log>label,.log>em{font:600 .82rem var(--mono);font-style:normal;min-width:5.6rem;padding-bottom:.45rem;color:var(--muted)}
+.cell{border:1.5px solid var(--ink);background:var(--surface);border-radius:5px;min-width:4.6rem;text-align:center;
+  font:400 .78rem var(--mono);overflow:hidden}
+.cell b{display:block;background:var(--ink);color:var(--surface);font-weight:600;padding:.05rem 0}
+.cell span{display:block;padding:.28rem .35rem}
+.cell.new{animation:pop .45s ease-out}
+.cell.done span{background:var(--ok-bg)}
+.cell.pend span{background:var(--leader);color:var(--leader-ink)}
+.cell.ghost{border-style:dashed;opacity:.55}
+.cell.gone{opacity:.3;text-decoration:line-through}
+@keyframes pop{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+.flow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.flow.v{flex-direction:column;align-items:flex-start}
+.flow .n{background:var(--surface2);border:1.5px solid var(--ink);border-radius:8px;padding:.4rem .7rem;font-weight:700;font-size:.92rem}
+.flow .n small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.flow .n.y{background:var(--leader);color:var(--leader-ink)}
+.flow .n.y small{color:var(--leader-ink)}
+.flow .n.b{background:var(--follower-bg);border-color:var(--follower)}
+.flow .n.p{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.flow .n.r{background:var(--bad-bg);border-color:var(--bad)}
+.flow .n.g{background:var(--ok-bg);border-color:var(--ok)}
+.flow>i{font-style:normal;color:var(--muted);font-weight:700}
+.flow>i::before{content:"→"}
+.flow.v>i{padding-left:1.2rem}
+.flow.v>i::before{content:"↓"}
+.flow>i[data-t]::after{content:" " attr(data-t);font:400 .78rem var(--body)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.8rem}
+.two>div{background:var(--surface2);border-radius:10px;padding:.8rem}
+.two h4{margin:0 0 .5rem;font:700 .95rem var(--display)}
+
+/* mermaid board follows the theme; code blocks stay dark */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;overflow-x:auto}
+.board pre.mmd{margin:0;font:400 .8rem/1.5 var(--mono);color:var(--muted);white-space:pre-wrap}
+.board .svgw{text-align:center;min-width:min(100%,520px)}
+.board svg{max-width:100%;height:auto}
+pre.code{background:var(--board);color:var(--board-ink);border:1px solid var(--board-line);border-radius:12px;padding:.9rem 1rem;
+  font:400 .84rem/1.55 var(--mono);overflow-x:auto;max-width:820px}
+pre.code i{color:#9fb3d1;font-style:normal}
+pre.code b{color:var(--leader);font-weight:600}
+
+/* callouts */
+.tip,.fail,.remember{border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;border-left:6px solid}
+.tip{background:var(--follower-bg);border-color:var(--follower)}
+.fail{background:var(--bad-bg);border-color:var(--bad)}
+.remember{background:var(--leader);color:var(--leader-ink);border-color:var(--ink);font-weight:700}
+.tip>b,.fail>b{font-family:var(--display)}
+details.deep,details.q{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:1rem 0;max-width:72ch}
+details summary{cursor:pointer;padding:.65rem .9rem;font-weight:700}
+details .in{padding:0 .9rem .7rem}
+details.q{border-color:var(--ok)}
+details.q summary::before{content:"Quick check: ";color:var(--ok)}
+
+/* steps */
+ol.steps{list-style:none;padding:0;counter-reset:s;max-width:72ch}
+ol.steps li{counter-increment:s;position:relative;padding:.1rem 0 .7rem 2.6rem;margin:0;border-left:2px solid var(--line);margin-left:.9rem}
+ol.steps li::before{content:counter(s);position:absolute;left:-.95rem;top:0;width:1.8rem;height:1.8rem;border-radius:50%;
+  background:var(--ink);color:var(--bg);display:grid;place-items:center;font:600 .82rem var(--mono)}
+ol.steps li:last-child{border-color:transparent}
+ol.steps b{font-family:var(--display)}
+
+/* demos */
+.demo{background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:1rem;margin:1.2rem 0;max-width:820px}
+.demo>h4{margin:0 0 .6rem;font:700 1.05rem var(--display)}
+.ctrls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.8rem}
+.ctrls input,.ctrls select{font:400 .95rem var(--mono);padding:.42rem .6rem;border-radius:8px;border:1.5px solid var(--ink);
+  background:var(--bg);color:var(--ink);min-width:0}
+.ctrls label{font-size:.88rem;color:var(--muted)}
+.out{font:400 .88rem var(--mono);background:var(--surface2);border-radius:8px;padding:.55rem .7rem;margin:.6rem 0;min-height:2.4rem}
+.scroll{overflow-x:auto}
+
+/* tables + cards */
+.tw{overflow-x:auto;max-width:820px}
+table{border-collapse:collapse;width:100%;background:var(--surface);font-size:.94rem}
+th,td{border:1px solid var(--line);padding:.5rem .7rem;text-align:left;vertical-align:top}
+th{background:var(--ink);color:var(--bg);font-family:var(--display)}
+.yes{color:var(--ok);font-weight:700}.no{color:var(--bad);font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.8rem;max-width:900px;margin:1rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:.8rem .9rem}
+.card h4{margin:0 0 .3rem;font:700 1rem var(--display)}
+.card p{margin:.3rem 0;font-size:.94rem}
+.myth .w{background:var(--bad-bg);border-radius:8px;padding:.5rem .6rem;margin:0 0 .4rem}
+.myth .c{background:var(--ok-bg);border-radius:8px;padding:.5rem .6rem;margin:0}
+.myth .w::before{content:"✗ ";color:var(--bad);font-weight:700}
+.myth .c::before{content:"✓ ";color:var(--ok);font-weight:700}
+.final{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.tag{display:inline-block;font:700 .72rem var(--body);padding:.08rem .5rem;border-radius:999px;border:1.5px solid;text-decoration:none;vertical-align:.08em;white-space:nowrap;margin-left:.15rem}
+.tag.g{color:var(--ok);background:var(--ok-bg)}
+.tag.d{color:var(--follower);background:var(--follower-bg)}
+.tag.s{color:var(--ctrl);background:var(--ctrl-bg)}
+.tag.x{color:var(--muted);background:var(--surface2);border-style:dashed}
+a.tag:hover{filter:brightness(.92)}
+.remember .tag,.chip.Y .tag{background:var(--surface)}
+.trk{border:2px solid var(--ink);border-radius:12px;margin:1.6rem 0 .8rem;max-width:820px;background:var(--surface);overflow:hidden}
+.trk h4{margin:0;padding:.35rem .8rem;background:var(--leader);color:var(--leader-ink);font:700 .95rem var(--display);border-bottom:2px solid var(--ink)}
+.trk h4::after{content:attr(data-id);float:right;font:600 .8rem var(--mono)}
+.trk .in{padding:.2rem .8rem .7rem}
+.trk pre.code{margin:.4rem 0 0;border-radius:8px}
+.zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.7rem}
+.zone{border:2px solid var(--ink);border-radius:10px;padding:.6rem;background:var(--surface2)}
+.zone>b{font-family:var(--display);display:block}
+.zone>small{color:var(--muted);font:400 .78rem var(--mono);display:block;margin-bottom:.3rem}
+.zone h5{margin:.5rem 0 0;font:700 .78rem var(--body);color:var(--muted)}
+table.lab td:first-child{text-align:center}
+table.lab input{width:1.2rem;height:1.2rem;accent-color:var(--ok)}
+table.lab code{white-space:normal;word-break:break-word}
+table.lab tr.ok td{background:var(--ok-bg)}
+#labProg{font-weight:700}
+/* reader tools: search, lesson progress, glossary tooltips, self-test */
+.srch{margin:0 0 .5rem}
+.srch input{width:100%;font:400 .9rem var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:.45rem .6rem}
+.srch .res{margin-top:.3rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.25rem;max-height:55vh;overflow:auto}
+.srch .res small{display:block;color:var(--muted);font-size:.78rem}
+.srch .res p{margin:.3rem .45rem;color:var(--muted);font-size:.85rem}
+#doneProg{font-size:.82rem;color:var(--muted);margin:0 0 .2rem}
+.btn.done{font-size:.8rem;padding:.25rem .6rem;margin:.1rem 0 .3rem}
+.btn.done.ok{background:var(--ok-bg);border-color:var(--ok)}
+nav#toc a.ok span{color:var(--ok);font-weight:700}
+nav#toc a.cur.ok span{color:var(--leader-ink)}
+abbr.gl{text-decoration:none;border-bottom:2px dotted var(--follower);cursor:help;position:relative}
+abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolute;left:0;top:1.6em;z-index:12;width:max-content;max-width:min(20rem,70vw);
+  background:var(--ink);color:var(--bg);font:400 .82rem/1.4 var(--body);padding:.5rem .7rem;border-radius:8px;white-space:normal}
+.selftest .q{font:700 1.1rem var(--display);margin:.2rem 0 .6rem}
+.selftest .a{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:8px;padding:.6rem .8rem;margin:0 0 .7rem}
+.selftest .from{font-size:.82rem;color:var(--muted);margin:0}
+.selftest ul{margin:.3rem 0 .7rem}
+footer{color:var(--muted);font-size:.88rem;padding:2rem 0}
+</style>
+</head>
+<body>
+<div class="top">
+  <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
+  <strong>Kafka from the log up</strong>
+  <button class="btn" id="themeBtn">Dark theme</button>
+  <div id="bar"></div>
+</div>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+
+<div class="hero">
+  <h1>Kafka is a log. The rest follows.</h1>
+  <p>35 short lessons on brokers, topics, partitions, replication, offsets, consumer groups and KRaft. One order is followed through every lesson with real payloads, four lessons let you break things, and it ends with a self-test and a checklist to prove it all on a real cluster.</p>
+  <div class="canvas herolog scroll" aria-label="Animation of records being appended to a log">
+    <div class="log" id="heroLog"><label>orders-0</label></div>
+    <div style="font:400 .82rem var(--mono);color:var(--muted)">New records only ever land on the right. Nothing in the middle changes.</div>
+  </div>
+  <div class="legend">
+    <span><span class="chip L inl">leader</span> takes writes</span>
+    <span><span class="chip F inl">follower</span> keeps a copy</span>
+    <span><span class="chip C inl">controller</span> manages metadata</span>
+    <span><span class="chip X inl">down</span> crashed</span>
+  </div>
+</div>
+<section class="s" id="s0" data-t="Running example and tags">
+  <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  <p class="lead">One order is followed through every lesson. Look for the yellow “Follow order 101” box at the end of each one.</p>
+<pre class="code">topic:   orders
+key:     customer-500
+value:   {"orderId":101,"customerId":500,"amount":1200}
+header:  source=web</pre>
+  <div class="tw"><table>
+    <tr><th>Piece</th><th>In this guide</th></tr>
+    <tr><td>Producer</td><td><code>orders-api</code></td></tr>
+    <tr><td>Topic</td><td><code>orders</code>: 3 partitions, replication factor 3, <code>min.insync.replicas=2</code></td></tr>
+    <tr><td>Where the record lands</td><td>Partition 0, offset 42. Its address is <code>(orders, 0, 42)</code>.</td></tr>
+    <tr><td>Brokers</td><td>1, 2, 3 at <code>kafka-1:9092</code> to <code>kafka-3:9092</code>. Broker 1 leads <code>orders-0</code>.</td></tr>
+    <tr><td>Controllers</td><td>101, 102, 103 at <code>ctrl-1:9093</code> to <code>ctrl-3:9093</code>. 101 is active.</td></tr>
+    <tr><td>Readers</td><td>Group <code>payment-service</code> (3 consumers) and group <code>analytics</code></td></tr>
+  </table></div>
+  <p>The partition is real: <code>customer-500</code> hashes to partition 0 of 3 on any Kafka cluster. The IDs, hosts, paths and offset 42 are made up.</p>
+  <h3>Four tags tell you how far to trust a statement</h3>
+  <div class="tw"><table>
+    <tr><th>Tag</th><th>Meaning</th></tr>
+    <tr><td><span class="tag g">Guaranteed</span></td><td>Holds on every Kafka cluster. Part of the design.</td></tr>
+    <tr><td><span class="tag d">Default</span></td><td>The stock setting. Your cluster may be configured differently.</td></tr>
+    <tr><td><span class="tag s">Simplified</span></td><td>True in spirit. A detail was left out to keep the picture clear.</td></tr>
+    <tr><td><span class="tag x">Example value</span></td><td>A number or name invented for the running example.</td></tr>
+  </table></div>
+  <p>A tag that says “check 10” links to row 10 of the <a href="#slab">proof checklist</a>, where you settle it on a real cluster.</p>
+</section>
+
+<div class="part" data-part="Foundations"><h2>Part 1: Foundations</h2><p>Cluster, brokers, topics</p></div>
+
+<section class="s" id="s1" data-t="What Kafka is">
+  <div class="sh"><span class="off">01</span><h2>The simplest mental model</h2></div>
+  <p class="lead">Kafka is a shared notebook that programs append lines to, and that other programs read at their own pace.</p>
+  <figure><div class="canvas">
+    <div class="flow"><span class="n g">Writers<small>producers</small></span><i data-t="append at the end"></i>
+    <span class="n y">The notebook<small>a log, nothing is erased on read</small></span><i data-t="read from a bookmark"></i>
+    <span class="n b">Readers<small>consumers, one bookmark each</small></span></div>
+  </div><figcaption>Three rules: writers only append, lines keep their order, each reader remembers its own place.</figcaption></figure>
+
+  <h3>Why it exists</h3>
+  <div class="two" style="max-width:820px">
+    <div><h4>Without Kafka</h4>
+      <div class="flow v"><span class="n">orders-api</span><i data-t="calls 3 services directly"></i><span class="n r">payments, email, analytics</span></div>
+      <p style="font-size:.9rem">One slow receiver slows the sender. Add a 4th receiver and you change the sender.</p></div>
+    <div><h4>With Kafka</h4>
+      <div class="flow v"><span class="n">orders-api</span><i data-t="writes once"></i><span class="n y">Kafka</span><i data-t="each reads when ready"></i><span class="n g">payments, email, analytics</span></div>
+      <p style="font-size:.9rem">Sender and receivers never meet. A receiver can be down for an hour and catch up.</p></div>
+  </div>
+
+  <h3>Cluster and broker</h3>
+  <div class="remember">A Kafka cluster is made up of multiple Kafka brokers. A broker is one Kafka server process.</div>
+  <figure><div class="canvas"><div class="cluster"><em>Kafka cluster</em><div class="row nowrap">
+    <div class="bk"><b>Broker 1</b><small>one server</small></div><div class="bk"><b>Broker 2</b><small>one server</small></div><div class="bk"><b>Broker 3</b><small>one server</small></div>
+  </div></div></div><figcaption>Clients see one cluster. Underneath it is several machines sharing the work.</figcaption></figure>
+
+  <h3>What runs inside one broker</h3>
+  <figure><div class="canvas"><div class="cluster"><em>Broker 1 (one JVM process)</em>
+    <div class="flow v" style="gap:.3rem">
+      <span class="n">Network layer<small>keeps TCP connections to clients and other brokers</small></span>
+      <span class="n">Request handlers<small>produce, fetch, metadata, offset commit</small></span>
+      <span class="n y">Log manager<small>appends records to partition files on disk</small></span>
+      <span class="n b">Replica manager<small>copies partitions from leaders on other brokers</small></span>
+      <span class="n">Group coordinator<small>tracks consumer groups and their offsets</small></span>
+      <span class="n p">Metadata cache<small>local copy of “who leads what”</small></span>
+    </div></div></div><figcaption>You will meet each of these boxes again in later lessons.</figcaption></figure>
+  <details class="q"><summary>What is a Kafka cluster made of, and what is one of those things?</summary><div class="in">Brokers. A broker is one Kafka server process that stores partitions on its disk and answers client requests.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p><code>orders-api</code> has a new order. Instead of calling payments, email and analytics, it will write one record to Kafka and move on. </p></div></aside>
+</section>
+
+<section class="s" id="s2" data-t="Brokers">
+  <div class="sh"><span class="off">02</span><h2>The broker</h2></div>
+  <p class="lead">A broker stores partitions on its disk and answers requests about them.</p>
+  <div class="wwh">
+    <div><b>What</b><span>One Kafka server with a unique number, its <code>node.id</code> (older docs say broker ID).</span></div>
+    <div><b>Why</b><span>Something has to hold the data and talk to clients.</span></div>
+    <div><b>How</b><span>It appends producer records to files, serves them to consumers, and copies partitions to and from other brokers.</span></div>
+  </div>
+  <ul>
+    <li><b>Takes writes</b> from producers for partitions it leads</li>
+    <li><b>Serves reads</b> to consumers</li>
+    <li><b>Stores</b> partition replicas under its <code>log.dirs</code> folder</li>
+    <li><b>Replicates</b>: follower replicas fetch from leaders on other brokers</li>
+    <li><b>Reports in</b> to the controller with heartbeats</li>
+  </ul>
+  <figure><div class="canvas"><div class="cluster"><em>Kafka cluster</em><div class="row nowrap">
+    <div class="bk"><b>Broker 1</b><span class="chip">Topic-A · P0</span><span class="chip">Topic-B · P1</span><span class="chip">Topic-C · P2</span></div>
+    <div class="bk"><b>Broker 2</b><span class="chip">Topic-A · P1</span><span class="chip">Topic-B · P0</span><span class="chip">Topic-C · P0</span></div>
+    <div class="bk"><b>Broker 3</b><span class="chip">Topic-A · P2</span><span class="chip">Topic-B · P2</span><span class="chip">Topic-C · P1</span></div>
+  </div></div></div><figcaption>No broker owns a whole topic. Each one holds a few partitions from several topics.</figcaption></figure>
+  <h3>Why not one big server?</h3>
+  <div class="cards">
+    <div class="card"><h4>More room</h4><p>One disk fills up. Three disks hold three times as much.</p></div>
+    <div class="card"><h4>More speed</h4><p>Writes and reads spread over machines instead of queueing at one.</p></div>
+    <div class="card"><h4>Survival</h4><p>If one broker dies, copies on the others keep the data available.</p></div>
+  </div>
+  <details class="q"><summary>Does a single Kafka broker hold a whole topic?</summary><div class="in">Usually not. A broker holds only the partition replicas assigned to it, typically a few partitions from several topics.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Our record will be handled by broker 1. This is the part of its config that makes it “broker 1”. <span class="tag x">Example value</span></p><pre class="code"># kafka-1: server.properties (trimmed)
+process.roles=broker
+node.id=1
+listeners=PLAINTEXT://kafka-1:9092
+log.dirs=/var/lib/kafka/data
+controller.quorum.bootstrap.servers=ctrl-1:9093,ctrl-2:9093,ctrl-3:9093</pre></div></aside>
+</section>
+
+<section class="s" id="s3" data-t="Topics">
+  <div class="sh"><span class="off">03</span><h2>Topics</h2></div>
+  <p class="lead">A topic is a name for one stream of records, like <code>orders</code>.</p>
+  <div class="wwh">
+    <div><b>What</b><span>A named category. Producers write to a name, consumers subscribe to a name.</span></div>
+    <div><b>Why</b><span>So order events and payment events don't mix, and each can have its own settings.</span></div>
+    <div><b>How</b><span>The name is only a label. The data lives in the topic's partitions.</span></div>
+  </div>
+  <figure><div class="canvas">
+    <div class="log"><em>orders</em><div class="cell"><span>Order 101</span></div><div class="cell"><span>Order 102</span></div><div class="cell"><span>Order 103</span></div><div class="cell"><span>Order 104</span></div></div>
+    <div class="flow" style="margin-top:.9rem"><span class="n">Topic<small>a name</small></span><i data-t="is split into"></i><span class="n y">Partitions<small>the real logs</small></span><i data-t="stored across"></i><span class="n b">Brokers<small>the machines</small></span></div>
+  </div><figcaption>A topic is not one file and not one server. It is a logical grouping.</figcaption></figure>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Before order 101 can be written, the topic has to exist. </p><pre class="code">$ kafka-topics.sh --bootstrap-server kafka-1:9092 --create --topic orders \
+    --partitions 3 --replication-factor 3 --config min.insync.replicas=2
+Created topic orders.</pre></div></aside>
+</section>
+
+<div class="part" data-part="The log"><h2>Part 2: The log itself</h2><p>Partitions, records, offsets</p></div>
+
+<section class="s" id="s4" data-t="Partitions">
+  <div class="sh"><span class="off">04</span><h2>Partitions</h2></div>
+  <p class="lead">A partition is one append-only log. A topic is a set of them.</p>
+  <div class="wwh">
+    <div><b>What</b><span>An ordered sequence of records that only grows at the end.</span></div>
+    <div><b>Why</b><span>One log can sit on only one disk and be read by one worker in order. Many logs can sit on many brokers and be read in parallel.</span></div>
+    <div><b>How</b><span>Each record goes to exactly one partition and gets the next number in that partition.</span></div>
+  </div>
+  <figure><div class="canvas">
+    <div class="log"><label>orders · P0</label><div class="cell "><b>40</b><span>Order95</span></div><div class="cell "><b>41</b><span>Order98</span></div><div class="cell pend"><b>42</b><span>Order101</span></div></div>
+    <div class="log"><label>orders · P1</label><div class="cell "><b>36</b><span>Order96</span></div><div class="cell "><b>37</b><span>Order99</span></div></div>
+    <div class="log"><label>orders · P2</label><div class="cell "><b>38</b><span>Order97</span></div><div class="cell "><b>39</b><span>Order100</span></div></div>
+  </div><figcaption>The latest records of each partition. The dark number is the offset: the record's position inside its own partition. Each partition keeps its own count, starting from 0. The yellow one is our order 101.</figcaption></figure>
+  <h3>What you get</h3>
+  <div class="cards">
+    <div class="card"><h4>Scale</h4><p>3 partitions on 3 brokers means 3 disks and 3 machines taking writes.</p></div>
+    <div class="card"><h4>Parallelism</h4><p>3 partitions can be read by 3 consumers at once.</p></div>
+    <div class="card"><h4>Order, per partition</h4><p>In P0, Order98 is always read before Order101. <a class="tag g" href="#c3">Guaranteed · check 3</a></p></div>
+  </div>
+  <div class="fail"><b>No global order.</b> Kafka never promises that Order102 (in P1) is read before Order103 (in P2). The partitions are independent logs read by independent workers. Making them agree on one order would mean one queue again, and the scaling would be gone.</div>
+  <figure><div class="canvas"><div class="cluster"><em>Topic orders, spread out</em><div class="row nowrap">
+    <div class="bk"><b>Broker 1</b><span class="chip L">orders · P0</span></div>
+    <div class="bk"><b>Broker 2</b><span class="chip L">orders · P1</span></div>
+    <div class="bk"><b>Broker 3</b><span class="chip L">orders · P2</span></div>
+  </div></div></div><figcaption>Each partition lives on a different broker here. Copies come later, in lesson 12.</figcaption></figure>
+  <details class="q"><summary>A topic has 3 partitions. Is a record in partition 1 guaranteed to be read before a later record in partition 2?</summary><div class="in">No. Order is guaranteed only inside one partition. Partitions are independent logs read by independent consumers.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Order 101 will live in exactly one of these three partitions: partition 0. Output trimmed. Which broker leads which partition will differ on your cluster. <a class="tag x" href="#c2">Example value · check 2</a></p><pre class="code">$ kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --topic orders
+Topic: orders   PartitionCount: 3   ReplicationFactor: 3   Configs: min.insync.replicas=2
+    Partition: 0   Leader: 1   Replicas: 1,2,3   Isr: 1,2,3
+    Partition: 1   Leader: 2   Replicas: 2,3,1   Isr: 2,3,1
+    Partition: 2   Leader: 3   Replicas: 3,1,2   Isr: 3,1,2</pre></div></aside>
+</section>
+
+<section class="s" id="s5" data-t="Records">
+  <div class="sh"><span class="off">05</span><h2>The record</h2></div>
+  <p class="lead">A record is a key, a value and a little metadata. To Kafka the key and value are plain bytes.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>You send</h4>
+      <span class="chip"><b>key</b> customer-500 (optional)</span>
+      <span class="chip"><b>value</b> {"orderId":101,"customerId":500,"amount":1200}</span>
+      <span class="chip"><b>headers</b> source=web (optional)</span>
+      <span class="chip"><b>timestamp</b> producer's clock, by default</span></div>
+    <div><h4>Kafka adds</h4>
+      <span class="chip Y">partition, picked by the producer's partitioner</span>
+      <span class="chip Y">offset, assigned by the leader broker on append</span>
+      <span class="chip">timestamp, only if the topic uses broker time</span></div>
+  </div></div><figcaption>The offset does not exist until the broker has appended the record.</figcaption></figure>
+  <ul>
+    <li><b>Key</b> decides the partition (lesson 8). It is not a unique ID.</li>
+    <li><b>Value</b> is your payload: JSON, Avro, anything.</li>
+    <li><b>Headers</b> carry extras such as trace IDs.</li>
+  </ul>
+  <details class="q"><summary>Which parts of a Kafka record does your code set, and which does Kafka assign?</summary><div class="in">You set key, value, headers and usually the timestamp. The partition is picked by the producer's partitioner and the offset is assigned by the leader broker when it appends the record.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>This is the record as <code>orders-api</code> builds it. There is no partition or offset in it yet. </p><pre class="code">String json = "{\"orderId\":101,\"customerId\":500,\"amount\":1200}";
+var record = new ProducerRecord&lt;&gt;("orders", "customer-500", json);
+record.headers().add("source", "web".getBytes(UTF_8));</pre></div></aside>
+</section>
+
+<section class="s" id="s8" data-t="Offsets">
+  <div class="sh"><span class="off">06</span><h2>Offsets</h2></div>
+  <p class="lead">An offset is a record's seat number inside one partition.</p>
+  <figure><div class="canvas">
+    <div class="log"><label>P0</label><div class="cell "><b>39</b><span>Order92</span></div><div class="cell "><b>40</b><span>Order95</span></div><div class="cell "><b>41</b><span>Order98</span></div><div class="cell pend"><b>42</b><span>Order101</span></div><div class="cell ghost"><b>43</b><span>next write</span></div></div>
+    <div class="log"><label>P1</label><div class="cell "><b>36</b><span>Order96</span></div><div class="cell "><b>37</b><span>Order99</span></div><div class="cell ghost"><b>38</b><span>next write</span></div></div>
+    <div class="log"><label>P2</label><div class="cell "><b>38</b><span>Order97</span></div><div class="cell "><b>39</b><span>Order100</span></div><div class="cell ghost"><b>40</b><span>next write</span></div></div>
+  </div><figcaption>P0 has an offset 39 and so does P2, holding different orders. “Offset 39” means nothing until you say which partition.</figcaption></figure>
+  <ul>
+    <li>Offsets only go up and are never reused. <span class="tag g">Guaranteed</span></li>
+    <li>Each partition counts on its own.</li>
+    <li>A record's full address is <code>(topic, partition, offset)</code>, for example <code>(orders, 0, 42)</code> for order 101.</li>
+  </ul>
+  <details class="q"><summary>A topic named orders has 3 partitions. Which record is “offset 1 of orders”?</summary><div class="in">Trick question. There are three: one in each partition. You must name the partition.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Order 101 becomes offset 42 of partition 0. The tool below prints each partition's <em>next</em> offset, so 43 means “42 was the last one written”. <a class="tag x" href="#c4">Example value · check 4</a></p><pre class="code">$ kafka-get-offsets.sh --bootstrap-server kafka-1:9092 --topic orders
+orders:0:43
+orders:1:38
+orders:2:40</pre></div></aside>
+</section>
+
+<div class="part" data-part="Clients"><h2>Part 3: Writing and reading</h2><p>Producers, consumers, groups</p></div>
+
+<section class="s" id="s6" data-t="Producer">
+  <div class="sh"><span class="off">07</span><h2>The producer</h2></div>
+  <p class="lead">A producer finds out who leads the target partition, then sends straight to that broker.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant P as orders-api (producer)
+  participant B2 as Broker 2 (bootstrap)
+  participant B1 as Broker 1 (leader of orders P0)
+  participant F as Brokers 2 and 3 (followers)
+  P->>B2: 1. Who leads what?
+  B2-->>P: 2. Metadata (P0 on B1, P1 on B2, P2 on B3)
+  Note over P: 3. hash(customer-500) mod 3 = P0
+  P->>B1: 4. Produce batch to orders P0
+  Note over B1: 5. Append to log, assign offset 42
+  F->>B1: 6. Fetch from offset 42
+  B1-->>P: 7. Ack with offset 42
+</pre></div><figcaption>The bootstrap broker is only the first contact. Any broker can answer the metadata question.</figcaption></figure>
+  <ol class="steps">
+    <li><b>Connect.</b> The producer dials any address in <code>bootstrap.servers</code>.</li>
+    <li><b>Get metadata.</b> It learns every broker, topic, partition and leader, and caches the map.</li>
+    <li><b>Choose a partition.</b> Done inside the producer, not by the broker (next lesson).</li>
+    <li><b>Batch.</b> Records for the same partition are grouped for a few milliseconds.</li>
+    <li><b>Send to the leader.</b> Directly. There is no router in the middle.</li>
+    <li><b>Append.</b> The leader writes the batch to its log and assigns offsets.</li>
+    <li><b>Replicate and ack.</b> Followers copy it. With <code>acks=all</code> the producer hears back once the in-sync copies have it.</li>
+  </ol>
+  <div class="fail"><b>If the leader moved:</b> the broker answers “not the leader”, the producer refreshes metadata and retries on the new leader.</div>
+  <details class="q"><summary>Does a producer send its records to the bootstrap broker?</summary><div class="in">No. The bootstrap broker only answers the first metadata request. Records go directly to the broker that leads the target partition.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>The producer only knew broker 2's address. Metadata told it broker 1 leads partition 0, so the record went there. The ack carries the address. </p><pre class="code">// producer config: bootstrap.servers=kafka-2:9092, acks=all
+RecordMetadata md = producer.send(record).get();
+// md.topic() = "orders"   md.partition() = 0   md.offset() = 42</pre></div></aside>
+</section>
+
+<section class="s" id="s7" data-t="Choosing a partition">
+  <div class="sh"><span class="off">08</span><h2>How a partition is chosen</h2></div>
+  <p class="lead">With a key: hash it. Without a key: stick to one partition per batch, then move on.</p>
+  <div class="two" style="max-width:820px">
+    <div><h4>With a key</h4><div class="flow v"><span class="n">key = customer-500</span><i data-t="murmur2 hash"></i><span class="n">a big number</span><i data-t="mod partition count"></i><span class="n y">Partition</span></div></div>
+    <div><h4>No key</h4><div class="flow v"><span class="n">record</span><i data-t="sticky partitioner"></i><span class="n y">fill a batch for one partition</span><i data-t="batch full"></i><span class="n y">switch to another</span></div></div>
+  </div>
+  <div class="demo">
+    <h4>Try it: send records and watch where they land</h4>
+    <div class="ctrls">
+      <label for="kKey">Key</label><input id="kKey" value="customer-500" size="14" aria-describedby="kOut">
+      <label for="kN">Partitions</label><select id="kN"><option>3</option><option>4</option><option>6</option></select>
+      <button class="btn on" id="kSend">Send record</button>
+      <button class="btn" id="kClear">Clear logs</button>
+    </div>
+    <div class="ctrls"><span style="font-size:.88rem;color:var(--muted)">Quick keys:</span>
+      <button class="btn" data-k="customer-500">customer-500</button><button class="btn" data-k="customer-102">customer-102</button>
+      <button class="btn" data-k="customer-105">customer-105</button><button class="btn" data-k="">no key</button></div>
+    <div class="out" id="kOut" aria-live="polite">Press “Send record”.</div>
+    <div class="scroll" id="kLanes"></div>
+  </div>
+  <ul>
+    <li><b>Same key, same partition.</b> So all events for customer-500 stay in order. <a class="tag g" href="#c3">Guaranteed · check 3</a></li>
+    <li><b>Only while the partition count stays the same.</b> Switch the demo from 3 to 4 partitions and the same key may land elsewhere.</li>
+    <li><b>No key means no ordering need,</b> so Kafka optimises for full batches instead.</li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in">The Java client computes <code>murmur2(keyBytes) mod numPartitions</code>. The demo runs the same hash. For null keys, the built-in partitioner (Kafka 3.3+) stays on one partition until about <code>batch.size</code> bytes are produced, then switches, favouring less busy brokers. <a class="tag d" href="#c16">Default · check 16</a> The demo switches every 3 records to keep it visible. <a class="tag s" href="#c5">Simplified · check 5</a></div></details>
+  <details class="q"><summary>Two records have the same key. When could they land in different partitions?</summary><div class="in">When the topic's partition count changed between the two sends, or when the producers use different partitioning logic.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Why partition 0? This is the actual arithmetic. Type <code>customer-500</code> into the demo above and you get the same number. <a class="tag g" href="#c3">Guaranteed · check 3</a></p><pre class="code">murmur2("customer-500") = 1929974841
+1929974841 mod 3        = 0        → orders-0</pre></div></aside>
+</section>
+
+<section class="s" id="s9" data-t="Consumer">
+  <div class="sh"><span class="off">09</span><h2>The consumer</h2></div>
+  <p class="lead">A consumer asks for records starting at an offset. Kafka never pushes.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant C as Consumer
+  participant B as Broker (leader of P0)
+  loop poll loop
+    C->>B: Fetch P0 from offset 42
+    B-->>C: Records 42, 43, 44
+    Note over C: Process them
+    C->>B: Fetch P0 from offset 45
+  end
+</pre></div><figcaption>The consumer owns the bookmark. The broker only answers “give me records from N”.</figcaption></figure>
+  <ul>
+    <li><b>Pull, not push.</b> A slow consumer simply asks less often. It cannot be flooded.</li>
+    <li><b>Reading deletes nothing.</b> The records stay in the log. <a class="tag g" href="#c6">Guaranteed · check 6</a></li>
+    <li><b>Many readers, same records.</b> Each has its own position.</li>
+  </ul>
+  <figure><div class="canvas">
+    <div class="log"><label>orders · P0</label><div class="cell "><b>40</b><span>Order95</span></div><div class="cell "><b>41</b><span>Order98</span></div><div class="cell pend"><b>42</b><span>Order101</span></div><div class="cell "><b>43</b><span>Order104</span></div><div class="cell "><b>44</b><span>Order107</span></div></div>
+    <div style="font:400 .82rem var(--mono);margin-top:.5rem">analytics is at offset 41 &nbsp;|&nbsp; payment-service is at offset 43 &nbsp;|&nbsp; same log, two bookmarks</div>
+  </div></figure>
+  <details class="q"><summary>A consumer reads a record. Is the record removed from the partition?</summary><div class="in">No. Reading never deletes. The record stays until the retention policy removes it, and other consumers can still read it.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>A <code>payment-service</code> consumer fetches from offset 42 and receives the record with its coordinates. </p><pre class="code">$ kafka-console-consumer.sh --bootstrap-server kafka-1:9092 --topic orders \
+    --group payment-service --property print.partition=true \
+    --property print.offset=true --property print.key=true
+Partition:0   Offset:42   customer-500   {"orderId":101,"customerId":500,"amount":1200}</pre></div></aside>
+</section>
+
+<section class="s" id="s10" data-t="Consumer groups">
+  <div class="sh"><span class="off">10</span><h2>Consumer groups</h2></div>
+  <p class="lead">A group is a team of consumers that splits a topic's partitions between its members.</p>
+  <div class="remember">Within one consumer group, a partition is read by only one consumer at a time. <a class="tag g" href="#c7">Guaranteed · check 7</a></div>
+  <div class="demo">
+    <h4>Try it: resize the payment-service group</h4>
+    <div class="ctrls" id="gBtns"><span style="font-size:.88rem;color:var(--muted)">Consumers in the group:</span>
+      <button class="btn" data-g="1">1</button><button class="btn" data-g="2">2</button><button class="btn on" data-g="3">3</button><button class="btn" data-g="4">4</button></div>
+    <div class="scroll"><div id="gView"></div></div>
+    <div class="out" id="gOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Which consumer gets which partition depends on the assignor. The counts are what matter. <a class="tag s" href="#c7">Simplified · check 7</a></p>
+  </div>
+  <ul>
+    <li><b>Why one consumer per partition?</b> Two readers on one log would race, and order would be lost.</li>
+    <li><b>Partition count caps parallelism.</b> A 4th consumer on 3 partitions waits as a spare.</li>
+    <li><b>Membership changes trigger a rebalance:</b> partitions are handed out again.</li>
+  </ul>
+  <h3>A different group reads everything again</h3>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Group payment-service</h4><span class="chip">P0 at offset 43</span><span class="chip">P1 at offset 38</span><span class="chip">P2 at offset 40</span></div>
+    <div><h4>Group analytics</h4><span class="chip">P0 at offset 41</span><span class="chip">P1 at offset 20</span><span class="chip">P2 at offset 33</span></div>
+  </div></div><figcaption>Same topic, same records, separate bookmarks. Groups never affect each other.</figcaption></figure>
+  <div class="tip"><b>Rule of thumb.</b> Same group = share the work. Different groups = each gets its own full copy of the stream.</div>
+  <details class="q"><summary>A topic has 3 partitions and a consumer group has 5 members. How many members do work?</summary><div class="in">Three. Each partition goes to exactly one member, so two members sit idle as spares.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Partition 0 belongs to consumer-1, so only consumer-1 charges this order. The <code>analytics</code> group gets its own copy through its own member. Output trimmed. <a class="tag x" href="#c7">Example value · check 7</a></p><pre class="code">$ kafka-consumer-groups.sh --bootstrap-server kafka-1:9092 --describe \
+    --group payment-service --members --verbose
+GROUP            CONSUMER-ID    HOST         #PARTITIONS  ASSIGNMENT
+payment-service  consumer-1-…   /10.0.0.21   1            orders(0)
+payment-service  consumer-2-…   /10.0.0.22   1            orders(1)
+payment-service  consumer-3-…   /10.0.0.23   1            orders(2)</pre></div></aside>
+</section>
+
+<section class="s" id="s11" data-t="Consumer offsets">
+  <div class="sh"><span class="off">11</span><h2>Consumer offsets</h2></div>
+  <p class="lead">A group saves its bookmarks in Kafka itself, in an internal topic named <code>__consumer_offsets</code>.</p>
+  <div class="wwh">
+    <div><b>Position</b><span>Where this consumer will read next. Lives in memory.</span></div>
+    <div><b>Committed</b><span>The saved bookmark: the next offset the group should read after a restart.</span></div>
+    <div><b>Gap</b><span>Records read but not yet committed. A crash replays them.</span></div>
+  </div>
+  <div class="demo">
+    <h4>Try it: poll, commit, crash</h4>
+    <div class="ctrls">
+      <button class="btn on" id="oPoll">Poll 2 records</button><button class="btn" id="oCommit">Commit</button>
+      <button class="btn warn" id="oCrash">Crash and restart</button><button class="btn" id="oReset">Rewind to offset 40</button>
+    </div>
+    <div class="scroll"><div class="log" id="oLog"><label>orders · P0</label></div></div>
+    <div class="out" id="oOut" aria-live="polite"></div>
+    <div class="legend" style="margin-top:.3rem"><span><span class="chip inl" style="background:var(--ok-bg)">committed</span></span><span><span class="chip Y inl">read, not committed</span></span><span><span class="chip inl">not read yet</span></span></div>
+  </div>
+  <ul>
+    <li><b>Restart:</b> the consumer resumes from the committed offset, not from where it was.</li>
+    <li><b>Replay:</b> reset a group's offsets to an earlier point and it reads old events again. Possible because reading never deleted them. <a class="tag g" href="#c9">Guaranteed · check 9</a></li>
+    <li><b>Brand new group:</b> <code>auto.offset.reset</code> decides: <code>earliest</code> or <code>latest</code>. The consumer default is <code>latest</code>. <span class="tag d">Default</span></li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in">A commit is just a record written to <code>__consumer_offsets</code> with key (group, topic, partition) and the offset as value. One broker acts as the <b>group coordinator</b> for each group and handles these commits and the group's membership.</div></details>
+  <details class="q"><summary>A group's committed offset for a partition is 43. Which record did it last finish?</summary><div class="in">Offset 42. The committed offset is the next record to read, not the last one processed.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>After charging order 101, consumer-1 commits 43: “next time, start at 43”. First the group view, then the record that stores it. <a class="tag g" href="#c8">Guaranteed · check 8</a></p><pre class="code">$ kafka-consumer-groups.sh --bootstrap-server kafka-1:9092 --describe --group payment-service
+GROUP            TOPIC   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+payment-service  orders  0          43              43              0
+payment-service  orders  1          38              38              0
+payment-service  orders  2          40              40              0
+
+# the record in __consumer_offsets (formatter output, trimmed)
+[payment-service,orders,0]::OffsetAndMetadata(offset=43, leaderEpoch=Optional[0], metadata=, commitTimestamp=1791089100412)</pre></div></aside>
+</section>
+<div class="part" data-part="Replication"><h2>Part 4: Surviving failure</h2><p>Replicas, leaders, ISR, failover</p></div>
+
+<section class="s" id="s12" data-t="Replication">
+  <div class="sh"><span class="off">12</span><h2>Replication</h2></div>
+  <p class="lead">Every partition is copied to several brokers, so losing a machine does not lose data.</p>
+  <div class="wwh">
+    <div><b>What</b><span><b>Replication factor</b> (RF) = how many copies of each partition exist. RF 3 is the usual choice.</span></div>
+    <div><b>Why</b><span>Disks die and servers reboot. One copy means one accident from data loss.</span></div>
+    <div><b>How</b><span>One copy is the <b>leader</b>, the rest are <b>followers</b> that keep copying from it.</span></div>
+  </div>
+  <figure><div class="canvas"><div class="cluster"><em>orders, RF = 3</em><div class="row nowrap">
+    <div class="bk"><b>Broker 1</b><span class="chip L">P0</span><span class="chip F">P1</span><span class="chip F">P2</span></div>
+    <div class="bk"><b>Broker 2</b><span class="chip F">P0</span><span class="chip L">P1</span><span class="chip F">P2</span></div>
+    <div class="bk"><b>Broker 3</b><span class="chip F">P0</span><span class="chip F">P1</span><span class="chip L">P2</span></div>
+  </div></div></div><figcaption>L = leader, F = follower. Leadership is spread out so no broker carries all the traffic.</figcaption></figure>
+  <ul>
+    <li>A copy on a broker is called a <b>replica</b>. Leader and followers are all replicas.</li>
+    <li>RF 3 can lose 2 brokers and still have the data, as long as the survivors were caught up.</li>
+    <li>RF cannot exceed the number of brokers: two copies on one machine protect nothing.</li>
+  </ul>
+  <details class="q"><summary>With replication factor 3, how many brokers can fail before a partition's data is gone?</summary><div class="in">Two, as long as the surviving replica was in sync. The third copy still has every acknowledged record.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Order 101 is stored three times, in the same folder name on three machines. <a class="tag x" href="#c12">Example value · check 12</a></p><pre class="code">kafka-1:/var/lib/kafka/data/orders-0/    leader
+kafka-2:/var/lib/kafka/data/orders-0/    follower
+kafka-3:/var/lib/kafka/data/orders-0/    follower</pre></div></aside>
+</section>
+
+<section class="s" id="s13" data-t="Partition leader">
+  <div class="sh"><span class="off">13</span><h2>The partition leader</h2></div>
+  <p class="lead">One replica decides the order of records. Everyone else copies it.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant P as orders-api
+  participant L as Broker 1 (leader of P0)
+  participant F2 as Broker 2 (follower)
+  participant F3 as Broker 3 (follower)
+  P->>L: Write order 101
+  Note over L: Append at offset 42
+  F2->>L: Fetch from offset 42
+  L-->>F2: Order 101
+  F3->>L: Fetch from offset 42
+  L-->>F3: Order 101
+  Note over L: All in-sync copies have offset 42. It is committed.
+  L-->>P: Ack (offset 42)
+</pre></div><figcaption>Followers pull from the leader with the same fetch request consumers use.</figcaption></figure>
+  <ul>
+    <li><b>Why a leader?</b> If two brokers both accepted writes for P0, they could disagree on what offset 42 is. One writer means one order.</li>
+    <li><b>All writes go to the leader.</b> Reads go there too by default. <span class="tag d">Default</span></li>
+    <li><b>High watermark:</b> the last offset that every in-sync replica has. Consumers only see records up to it, so they never read something that could vanish in a failover.</li>
+  </ul>
+  <figure><div class="canvas">
+    <div class="log"><label>leader</label><div class="cell done"><b>40</b><span>ok</span></div><div class="cell done"><b>41</b><span>ok</span></div><div class="cell done"><b>42</b><span>Order101</span></div><div class="cell pend"><b>43</b><span>new</span></div></div>
+    <div class="log"><label>follower</label><div class="cell done"><b>40</b><span>ok</span></div><div class="cell done"><b>41</b><span>ok</span></div><div class="cell done"><b>42</b><span>Order101</span></div><div class="cell ghost"><b>43</b><span>fetching</span></div></div>
+  </div><figcaption>High watermark sits after offset 42. Offset 43 is on the leader but not yet visible to consumers.</figcaption></figure>
+  <details class="q"><summary>What is the high watermark, and why can consumers not read past it?</summary><div class="in">It marks the last offset that every in-sync replica has. Records beyond it exist only on the leader and could vanish in a failover, so consumers are not shown them.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Broker 2 asks broker 1 for whatever comes after its own last record. Broker 3 does the same. Once both have offset 42, the high watermark moves to 43. Real field names, most fields left out. <span class="tag s">Simplified</span></p><pre class="code">FetchRequest   broker 2 → broker 1
+  replicaId: 2
+  topic: orders   partition: 0   fetchOffset: 42
+
+FetchResponse  broker 1 → broker 2
+  highWatermark: 42
+  records: [ offset 42 | key customer-500 | 46-byte value ]</pre></div></aside>
+</section>
+
+<section class="s" id="s14" data-t="ISR">
+  <div class="sh"><span class="off">14</span><h2>ISR: in-sync replicas</h2></div>
+  <p class="lead">The ISR is the list of replicas that are fully caught up with the leader right now.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Healthy</h4><span class="chip L">Broker 1, at offset 100</span><span class="chip F">Broker 2, at offset 100</span><span class="chip F">Broker 3, at offset 100</span>
+      <p style="font:600 .85rem var(--mono)">ISR = {1, 2, 3}</p></div>
+    <div><h4>Broker 3 falls behind</h4><span class="chip L">Broker 1, at offset 180</span><span class="chip F">Broker 2, at offset 180</span><span class="chip X">Broker 3, stuck at offset 100</span>
+      <p style="font:600 .85rem var(--mono)">ISR = {1, 2}</p></div>
+  </div></div><figcaption>A follower that has not caught up within <code>replica.lag.time.max.ms</code> (30 s by default) is dropped from the ISR. <a class="tag d" href="#c16">Default · check 16</a> The picture shows the gap in offsets, but Kafka judges it by time. <span class="tag s">Simplified</span> It rejoins once it catches up.</figcaption></figure>
+  <ul>
+    <li><b>Why track it?</b> Kafka needs to know which copies are safe to promote.</li>
+    <li><b>Failover:</b> a new leader is picked from the ISR, so no acknowledged record is lost.</li>
+    <li><b>Durability:</b> with <code>acks=all</code>, a write is acknowledged only after every ISR member has it.</li>
+  </ul>
+  <div class="tip"><b>The classic safe setup.</b> RF = 3, <code>min.insync.replicas = 2</code>, <code>acks=all</code>. Every acknowledged write is on at least 2 brokers, and one broker can be down without blocking writes. This is a recommendation: <code>min.insync.replicas</code> is 1 out of the box. <a class="tag d" href="#c16">Default · check 16</a> <a class="tag g" href="#c11">Guaranteed · check 11</a></div>
+  <details class="q"><summary>A producer uses acks=all on a topic with replication factor 3 and min.insync.replicas 2. One broker is down. Does the write succeed?</summary><div class="in">Yes. Two replicas are still in sync, which meets the minimum. With two brokers down it would be rejected.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>When order 101 was written the ISR was full, so <code>acks=all</code> waited for all three brokers. Had broker 3 been lagging, the ISR would be 1,2 and the ack would still come, because 2 meets <code>min.insync.replicas=2</code>. <a class="tag g" href="#c11">Guaranteed · check 11</a></p><pre class="code">Partition: 0   Leader: 1   Replicas: 1,2,3   Isr: 1,2,3     ← as it was
+Partition: 0   Leader: 1   Replicas: 1,2,3   Isr: 1,2       ← if broker 3 lags</pre></div></aside>
+</section>
+
+<section class="s" id="s15" data-t="Broker failure">
+  <div class="sh"><span class="off">15</span><h2>When a broker crashes</h2></div>
+  <p class="lead">Followers in the ISR already have the data. One of them is promoted and clients switch over.</p>
+  <div class="demo">
+    <h4>Try it: click a broker to crash or restart it</h4>
+    <div class="scroll"><div class="row nowrap" id="fBrokers"></div></div>
+    <div class="tw" style="margin-top:.8rem"><table id="fTable"></table></div>
+    <div class="out" id="fOut" aria-live="polite">All three brokers are up.</div>
+  </div>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant B1 as Broker 1 (leader of P0)
+  participant C as Controller
+  participant B2 as Broker 2 (follower)
+  participant P as Producer
+  B1-xC: Heartbeats stop
+  Note over C: Session timeout. Broker 1 is marked down.
+  Note over C: Pick new leader for P0 from the ISR
+  C->>B2: You now lead P0
+  P-xB1: Produce to P0 fails
+  P->>B2: Refresh metadata
+  B2-->>P: Leader of P0 is Broker 2
+  P->>B2: Retry produce
+</pre></div><figcaption>The whole switch usually takes a few seconds. It depends on your session timeout and client settings. <a class="tag s" href="#c10">Simplified · check 10</a></figcaption></figure>
+  <ol class="steps">
+    <li><b>Detect.</b> Every broker sends heartbeats to the controller. Silence past the session timeout means down.</li>
+    <li><b>Elect.</b> For each partition the dead broker led, the controller picks another ISR member.</li>
+    <li><b>Announce.</b> The change is written to cluster metadata and every broker learns it.</li>
+    <li><b>Producers</b> get an error, refresh metadata, retry on the new leader.</li>
+    <li><b>Consumers</b> do the same and continue from the same offset. Offsets are identical on every replica.</li>
+    <li><b>Return.</b> The old broker restarts, catches up as a follower and rejoins the ISR.</li>
+  </ol>
+  <details class="q"><summary>Partition 0 is led by broker 1, its ISR is {1, 2} and broker 3 is lagging. Broker 1 dies. Who becomes leader?</summary><div class="in">Broker 2. It is the only live member of the ISR. Broker 3 is not eligible because it is missing records.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Broker 1 dies after order 101 was acknowledged. The record is still at offset 42 on brokers 2 and 3. The controller writes one metadata record and broker 2 leads. <a class="tag g" href="#c10">Guaranteed · check 10</a></p><pre class="code"># appended to the metadata log
+{"type":"PARTITION_CHANGE_RECORD","version":0,
+ "data":{"partitionId":0,"topicId":"Yq3kT0mXQ1m2vJ8dPz7RfA","isr":[2,3],"leader":2}}
+
+# what describe shows afterwards
+Partition: 0   Leader: 2   Replicas: 1,2,3   Isr: 2,3</pre></div></aside>
+</section>
+
+<div class="part" data-part="KRaft"><h2>Part 5: The control plane</h2><p>Metadata, controllers, KRaft</p></div>
+
+<section class="s" id="s16" data-t="Cluster metadata">
+  <div class="sh"><span class="off">16</span><h2>Cluster metadata</h2></div>
+  <p class="lead">Metadata is everything the cluster knows about itself, apart from your records.</p>
+  <figure><div class="canvas"><div class="tw"><table>
+    <tr><th>Question</th><th>Example answer</th></tr>
+    <tr><td>Which brokers exist?</td><td><code>1, 2, 3</code></td></tr>
+    <tr><td>Which topics exist?</td><td><code>orders, payments</code></td></tr>
+    <tr><td>How many partitions?</td><td><code>orders: 3</code></td></tr>
+    <tr><td>Where are the replicas?</td><td><code>orders-0: [1, 2, 3]</code></td></tr>
+    <tr><td>Who is the leader?</td><td><code>orders-0: broker 1</code></td></tr>
+    <tr><td>Who is in sync?</td><td><code>orders-0 ISR: [1, 2]</code></td></tr>
+    <tr><td>What configs apply?</td><td><code>orders: retention 7 days</code></td></tr>
+  </table></div></div><figcaption>Small in size, huge in consequence. If two brokers disagree on these answers, data gets corrupted.</figcaption></figure>
+  <p>So who keeps this table, and how does it stay identical everywhere? That is the next four lessons.</p>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>This is the slice of metadata the producer needed to deliver order 101. </p><pre class="code">MetadataResponse (trimmed)
+  brokers:  1 → kafka-1:9092    2 → kafka-2:9092    3 → kafka-3:9092
+  topic orders
+    partition 0   leader 1   replicas [1,2,3]   isr [1,2,3]
+    partition 1   leader 2   replicas [2,3,1]   isr [2,3,1]
+    partition 2   leader 3   replicas [3,1,2]   isr [3,1,2]</pre></div></aside>
+</section>
+
+<section class="s" id="s17" data-t="Controllers">
+  <div class="sh"><span class="off">17</span><h2>Why Kafka needs a controller</h2></div>
+  <p class="lead">Someone has to make cluster-wide decisions. That someone is the controller.</p>
+  <div class="cards">
+    <div class="card"><h4>Registers brokers</h4><p>Knows who joined, who is alive.</p></div>
+    <div class="card"><h4>Creates topics</h4><p>Decides which brokers get which replicas.</p></div>
+    <div class="card"><h4>Elects leaders</h4><p>Picks a new partition leader when one dies.</p></div>
+    <div class="card"><h4>Publishes changes</h4><p>Makes sure every broker hears the update.</p></div>
+  </div>
+  <div class="flow" style="margin:1rem 0"><span class="n">Brokers decide alone</span><i></i><span class="n r">two leaders for P0</span></div>
+  <div class="flow" style="margin:1rem 0"><span class="n p">One controller decides</span><i></i><span class="n g">one answer for everyone</span></div>
+  <p>Older Kafka kept this metadata in a separate system, ZooKeeper. Modern Kafka keeps it inside Kafka, using KRaft.</p>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>When <code>orders</code> was created, the controller chose replicas 1,2,3 for partition 0 and made broker 1 the leader. That decision is why order 101 went to broker 1. </p></div></aside>
+</section>
+
+<section class="s" id="s18" data-t="KRaft: the problem">
+  <div class="sh"><span class="off">18</span><h2>KRaft, starting from the problem</h2></div>
+  <p class="lead">KRaft (Kafka Raft) is how a few controller nodes agree on the metadata, even when one of them fails.</p>
+  <p>One controller is a single point of failure. So run three. But now three machines must agree, and messages between them can be late or lost.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Without consensus</h4><span class="chip C">Controller 1: “leader of P0 is broker 1”</span><span class="chip X">Controller 2: “leader of P0 is broker 2”</span>
+      <p style="font-size:.9rem">Two truths. This is split brain.</p></div>
+    <div><h4>With consensus</h4><span class="chip C">Controller 1 proposes a change</span><span class="chip C">Controller 2 agrees</span><span class="chip">Controller 3 is slow</span>
+      <p style="font-size:.9rem">2 of 3 agree, so it is decided. Controller 3 catches up later.</p></div>
+  </div></div><figcaption>Consensus = a change counts only when a majority has stored it.</figcaption></figure>
+  <div class="tip"><b>Why majority?</b> Any two majorities of the same group share at least one member. So two conflicting decisions can never both win.</div>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>“Broker 1 leads <code>orders-0</code>” is exactly the kind of fact controllers must agree on. If two of them disagreed, order 101 could be appended to two different logs at offset 42. </p></div></aside>
+</section>
+
+<section class="s" id="s19" data-t="Before KRaft">
+  <div class="sh"><span class="off">19</span><h2>Kafka before KRaft</h2></div>
+  <p class="lead">Metadata lived in ZooKeeper, a separate cluster you had to run next to Kafka.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  subgraph K["Kafka cluster"]
+    B1["Broker 1 (also the controller)"]
+    B2["Broker 2"]
+    B3["Broker 3"]
+  end
+  subgraph Z["ZooKeeper ensemble (separate system)"]
+    Z1["ZK 1"]
+    Z2["ZK 2"]
+    Z3["ZK 3"]
+  end
+  B1 -->|"reads and writes metadata"| Z
+  B2 -->|"registers, watches"| Z
+  B3 -->|"registers, watches"| Z
+  B1 -.->|"pushes updates"| B2
+  B1 -.->|"pushes updates"| B3
+</pre></div><figcaption>ZooKeeper held broker registrations, topic and partition state, and chose which broker acted as controller.</figcaption></figure>
+  <h3>Why Kafka moved away</h3>
+  <ul>
+    <li><b>Two systems to operate:</b> separate deploys, security, monitoring and upgrades.</li>
+    <li><b>Slow controller failover:</b> a new controller had to load all metadata from ZooKeeper before it could act.</li>
+    <li><b>Scaling limits:</b> clusters with very many partitions hit this hard.</li>
+    <li><b>Two sources of truth</b> that could drift: ZooKeeper's state and the controller's memory.</li>
+  </ul>
+  <div class="tip"><b>Timeline.</b> KRaft became production-ready in Kafka 3.3 (2022). Kafka 4.0 (2025) removed ZooKeeper completely.</div>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>In the ZooKeeper era, the same fact sat in a znode instead of a Kafka log. </p><pre class="code">/brokers/topics/orders/partitions/0/state
+{"controller_epoch":1,"leader":1,"version":1,"leader_epoch":0,"isr":[1,2,3]}</pre></div></aside>
+</section>
+
+<section class="s" id="s20" data-t="KRaft architecture">
+  <div class="sh"><span class="off">20</span><h2>KRaft architecture</h2></div>
+  <p class="lead">A small quorum of controllers owns the metadata. Brokers follow along and handle the data.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  subgraph Q["KRaft controller quorum"]
+    C1["Controller 1: active (leader)"]:::lead
+    C2["Controller 2: follower"]:::ctl
+    C3["Controller 3: follower"]:::ctl
+    C1 -->|"replicates metadata log"| C2
+    C1 -->|"replicates metadata log"| C3
+  end
+  subgraph K["Brokers"]
+    B1["Broker 1"]
+    B2["Broker 2"]
+    B3["Broker 3"]
+  end
+  B1 -.->|"heartbeat + fetch metadata"| C1
+  B2 -.->|"heartbeat + fetch metadata"| C1
+  B3 -.->|"heartbeat + fetch metadata"| C1
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Dashed lines are metadata traffic. No producer or consumer record ever passes through a controller.</figcaption></figure>
+  <div class="wwh">
+    <div><b>Quorum</b><span>The set of controller nodes that vote. Usually 3 or 5.</span></div>
+    <div><b>Active</b><span>The one controller currently leading. It makes every decision.</span></div>
+    <div><b>Standby</b><span>The other controllers. They hold a full copy and can take over at once.</span></div>
+    <div><b>Log</b><span>The metadata log: every cluster change, in order.</span></div>
+  </div>
+  <details class="q"><summary>What do KRaft controllers store, and what do they never store?</summary><div class="in">They store cluster metadata: brokers, topics, partitions, leaders, ISR and configs. They never store application records.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>The quorum behind our cluster. Controllers are the voters. Brokers 1 to 3 only observe. Output trimmed. <a class="tag x" href="#c1">Example value · check 1</a></p><pre class="code">$ kafka-metadata-quorum.sh --bootstrap-server kafka-1:9092 describe --status
+LeaderId:           101
+LeaderEpoch:        7
+HighWatermark:      1840
+CurrentVoters:      [101,102,103]
+CurrentObservers:   [1,2,3]</pre></div></aside>
+</section>
+
+<section class="s" id="s21" data-t="Metadata log">
+  <div class="sh"><span class="off">21</span><h2>The metadata log</h2></div>
+  <p class="lead">Kafka stores its own metadata the same way it stores your data: as an append-only log.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>__cluster_metadata</label>
+      <div class="cell"><b>1</b><span>Broker 1<br>registered</span></div>
+      <div class="cell"><b>2</b><span>Topic orders<br>created</span></div>
+      <div class="cell"><b>3</b><span>P0 replicas<br>= [1, 2, 3]</span></div>
+      <div class="cell"><b>4</b><span>P0 leader<br>= broker 1</span></div>
+      <div class="cell ghost"><b>5</b><span>next<br>change</span></div>
+    </div>
+  </div><figcaption>Replay the records from the start and you rebuild the exact current state of the cluster.</figcaption></figure>
+  <h3>Why a log works so well here</h3>
+  <ul>
+    <li><b>One order of events.</b> Everyone applies the same changes in the same sequence.</li>
+    <li><b>Easy to compare.</b> “I am at record 4” tells you exactly how up to date a node is.</li>
+    <li><b>Cheap catch-up.</b> A node that was away fetches only the records it missed.</li>
+    <li><b>Fast failover.</b> A standby controller already has the log. Nothing to reload.</li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in">The log is an internal single-partition topic called <code>__cluster_metadata</code>. Controllers are its voters. Brokers are observers: they fetch the log and build an in-memory metadata cache from it. Periodic snapshots keep the log from growing forever.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>These two metadata records are what make partition 0 exist. Order 101 itself never appears in this log. Fields trimmed. <a class="tag g" href="#c13">Guaranteed · check 13</a></p><pre class="code">$ kafka-dump-log.sh --cluster-metadata-decoder \
+    --files /var/lib/kafka/meta/__cluster_metadata-0/00000000000000000000.log
+{"type":"TOPIC_RECORD","version":0,"data":{"name":"orders","topicId":"Yq3kT0mXQ1m2vJ8dPz7RfA"}}
+{"type":"PARTITION_RECORD","version":0,"data":{"partitionId":0,"topicId":"Yq3kT0mXQ1m2vJ8dPz7RfA",
+  "replicas":[1,2,3],"isr":[1,2,3],"leader":1,"leaderEpoch":0,"partitionEpoch":0}}</pre></div></aside>
+</section>
+
+<section class="s" id="s22" data-t="KRaft leader and followers">
+  <div class="sh"><span class="off">22</span><h2>KRaft leader and followers</h2></div>
+  <p class="lead">Every change goes through the active controller and counts once a majority has written it.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant A as Admin client
+  participant B as Any broker
+  participant C1 as Controller 1 (active)
+  participant C2 as Controller 2
+  participant C3 as Controller 3
+  A->>B: Create topic orders
+  B->>C1: Forward request
+  Note over C1: Append records to metadata log
+  C2->>C1: Fetch
+  C1-->>C2: New records
+  Note over C1,C2: 2 of 3 have it. Committed.
+  C1-->>B: Done
+  B-->>A: Topic created
+  C3->>C1: Fetch (a bit later)
+  B->>C1: Fetch metadata updates
+</pre></div><figcaption>Controller 3 being slow did not block anything. Two out of three is enough.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Controllers</th><th>Majority needed <span class="tag g">Guaranteed</span></th><th>Failures survived</th></tr>
+    <tr><td>3</td><td>2</td><td>1</td></tr>
+    <tr><td>5</td><td>3</td><td>2</td></tr>
+    <tr><td>4</td><td>3</td><td>1 (no better than 3, so use odd numbers)</td></tr>
+  </table></div>
+  <div class="fail"><b>If the active controller dies:</b> the others notice the silence, one asks for votes, a majority elects it, and it continues from the same log. Brokers keep serving produce and fetch the whole time.</div>
+  <details class="q"><summary>A KRaft quorum has 5 controllers. How many can fail while the cluster can still change metadata?</summary><div class="in">Two. A majority of 3 is needed to commit a change.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Creating <code>orders</code> needed 2 of the 3 controllers. Writing order 101 needed none of them: it is data, and data commits through the partition's ISR. </p></div></aside>
+</section>
+
+<section class="s" id="s23" data-t="Broker vs controller">
+  <div class="sh"><span class="off">23</span><h2>Broker vs controller</h2></div>
+  <p class="lead">Brokers move your data. Controllers manage the map.</p>
+  <div class="tw"><table>
+    <tr><th>Responsibility</th><th>Broker</th><th>KRaft controller</th></tr>
+    <tr><td>Store Kafka records</td><td class="yes">Yes</td><td class="no">No</td></tr>
+    <tr><td>Host partitions</td><td class="yes">Yes</td><td class="no">No</td></tr>
+    <tr><td>Accept producers</td><td class="yes">Yes</td><td class="no">No</td></tr>
+    <tr><td>Serve consumers</td><td class="yes">Yes</td><td class="no">No</td></tr>
+    <tr><td>Manage metadata</td><td>Uses a cached copy</td><td class="yes">Yes</td></tr>
+    <tr><td>Partition leader election</td><td>Becomes leader when told</td><td class="yes">Decides</td></tr>
+    <tr><td>Replicate data</td><td class="yes">Yes</td><td class="no">No</td></tr>
+    <tr><td>Replicate metadata</td><td>Reads it</td><td class="yes">Yes</td></tr>
+  </table></div>
+  <pre class="code"><i># dedicated controller (recommended for production)</i>
+process.roles=<b>controller</b>
+
+<i># dedicated broker</i>
+process.roles=<b>broker</b>
+
+<i># combined: one process plays both roles (fine for a laptop or tests)</i>
+process.roles=<b>broker,controller</b></pre>
+  <details class="q"><summary>All 3 KRaft controllers are down but the brokers are up. Can producers still write?</summary><div class="in">For a while, yes. Brokers already know the current leaders, so existing partitions keep working. What stops is change: no new topics, no leader elections if a broker dies. <a class="tag s" href="#c14">Simplified · check 14</a></div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Order 101 touched brokers 1, 2 and 3. It never touched controllers 101 to 103. </p></div></aside>
+</section>
+<div class="part" data-part="Big picture"><h2>Part 6: The whole machine</h2><p>HLD, LLD, one message end to end</p></div>
+
+<section class="s" id="s24" data-t="Full HLD">
+  <div class="sh"><span class="off">24</span><h2>High-level design</h2></div>
+  <p class="lead">Two planes: solid arrows carry your records, dashed arrows carry metadata.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  PR["Producers"]
+  subgraph Q["KRaft controllers"]
+    direction LR
+    C1["C1 active"]:::lead
+    C2["C2"]:::ctl
+    C3["C3"]:::ctl
+  end
+  subgraph BR["Brokers"]
+    B1["Broker 1&lt;br/&gt;P0 leader&lt;br/&gt;P1 replica, P2 replica"]
+    B2["Broker 2&lt;br/&gt;P1 leader&lt;br/&gt;P2 replica, P0 replica"]
+    B3["Broker 3&lt;br/&gt;P2 leader&lt;br/&gt;P0 replica, P1 replica"]
+    B1 ---|"C replicate"| B2
+    B2 ---|"C replicate"| B3
+  end
+  CG["Consumer group"]
+  PR -->|"A write to leaders"| BR
+  Q -.->|"B cluster metadata"| BR
+  BR -->|"D fetch records"| CG
+  CG -.->|"E commit offsets"| BR
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div></figure>
+  <div class="tw"><table>
+    <tr><th>Arrow</th><th>What travels on it</th></tr>
+    <tr><td>A</td><td>Record batches, each sent to the broker leading the target partition.</td></tr>
+    <tr><td>B</td><td>Who is alive, who leads what, topic configs. Brokers fetch this from the active controller.</td></tr>
+    <tr><td>C</td><td>Followers fetching new records from partition leaders.</td></tr>
+    <tr><td>D</td><td>Consumers pulling records from a given offset.</td></tr>
+    <tr><td>E</td><td>The group saving its bookmarks into <code>__consumer_offsets</code>.</td></tr>
+  </table></div>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>On the diagram: arrow A carried it to broker 1, C copied it to brokers 2 and 3, D delivered it to consumer-1, E saved offset 43. Arrow B was not used for this record at all. </p></div></aside>
+</section>
+
+<section class="s" id="s25" data-t="Full LLD">
+  <div class="sh"><span class="off">25</span><h2>Low-level design</h2></div>
+  <p class="lead">The same system zoomed in on partition <code>orders-0</code>. Follow the numbers.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  PR["Producer: orders-api"]
+  subgraph Q["KRaft controller quorum"]
+    C1["Controller 1 (active)"]:::lead
+    C2["Controller 2"]:::ctl
+    C3["Controller 3"]:::ctl
+    ML[("Metadata log&lt;br/&gt;__cluster_metadata")]:::ctl
+    C1 --- ML
+    C1 -.->|"replicate metadata"| C2
+    C1 -.->|"replicate metadata"| C3
+  end
+  subgraph B1["Broker 1 (bootstrap)"]
+    M1["Metadata cache"]
+    L0["orders-0 LEADER&lt;br/&gt;ISR = 1, 2, 3"]:::lead
+    D1[("Disk: orders-0 segments")]
+    L0 --> D1
+  end
+  subgraph B2["Broker 2"]
+    M2["Metadata cache"]
+    F2["orders-0 follower"]
+    GC["Group coordinator&lt;br/&gt;__consumer_offsets"]
+  end
+  subgraph B3["Broker 3"]
+    M3["Metadata cache"]
+    F3["orders-0 follower"]
+  end
+  subgraph CG["Consumer group: payment-service"]
+    CO["Consumer 1 (owns orders-0)"]
+  end
+  PR -->|"1 metadata request"| M1
+  PR -->|"2 produce"| L0
+  L0 -->|"3 replicate"| F2
+  L0 -->|"3 replicate"| F3
+  L0 -->|"4 fetch from offset N"| CO
+  CO -->|"5 commit offset"| GC
+  M1 -.->|"register, heartbeat, fetch metadata"| C1
+  M2 -.-> C1
+  M3 -.-> C1
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Solid = data path. Dashed = control path. Arrow 3 is drawn leader to follower for readability; on the wire the followers do the asking.</figcaption></figure>
+  <div class="two" style="max-width:820px">
+    <div><h4>Data path</h4><ol style="margin:0"><li>Producer asks the bootstrap broker for metadata</li><li>Produces to the leader of orders-0</li><li>Followers copy the records, the ISR stays full</li><li>Consumer fetches from the leader</li><li>Consumer commits its offset to the group coordinator</li></ol></div>
+    <div><h4>Control path</h4><ul style="margin:0"><li>Brokers register with the active controller on startup</li><li>Brokers heartbeat to stay “alive”</li><li>Controller appends every change to the metadata log</li><li>Other controllers replicate that log</li><li>Brokers fetch it into their metadata cache</li></ul></div>
+  </div>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Steps 1 to 5 on the diagram are order 101's exact route. The dashed lines did their work earlier, when the topic was created and leaders were chosen. </p></div></aside>
+</section>
+
+
+<section class="s" id="smap" data-t="Where it lives, who calls whom">
+  <div class="sh"><span class="off">26</span><h2>Where it lives and who calls whom</h2></div>
+  <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port each thing is in, and who opens each connection.</p>
+  <h3>Where each thing lives</h3>
+  <figure><div class="canvas"><div class="zones">
+    <div class="zone"><b>orders-api</b><small>producer process</small>
+      <h5>In memory</h5><span class="chip">partitioner (the hash)</span><span class="chip">metadata cache</span><span class="chip">batches not yet sent</span></div>
+    <div class="zone"><b>Brokers 1, 2, 3</b><small>kafka-N:9092</small>
+      <h5>On disk</h5><span class="chip Y">orders-0/ segment files</span><span class="chip">__consumer_offsets-N/</span>
+      <h5>In memory</h5><span class="chip">metadata cache</span><span class="chip">high watermark</span><span class="chip">group membership</span></div>
+    <div class="zone"><b>Controllers 101, 102, 103</b><small>ctrl-N:9093</small>
+      <h5>On disk</h5><span class="chip C">__cluster_metadata-0/</span>
+      <h5>In memory</h5><span class="chip">current cluster state</span><span class="chip">broker liveness</span></div>
+    <div class="zone"><b>payment-service</b><small>consumer process</small>
+      <h5>In memory</h5><span class="chip">position (next offset to read)</span><span class="chip">metadata cache</span><span class="chip">fetched, unprocessed records</span></div>
+  </div></div><figcaption>Anything “in memory” is lost on a crash and rebuilt from something on disk.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Thing</th><th>Lives in</th><th>For order 101</th></tr>
+    <tr><td>The record</td><td>A segment file, on every replica's broker</td><td><code>/var/lib/kafka/data/orders-0/00000000000000000000.log</code> on brokers 1, 2, 3</td></tr>
+    <tr><td>Its offset</td><td>Inside the record batch in that file</td><td>42</td></tr>
+    <tr><td>Partition choice</td><td>Producer code. Never stored on its own.</td><td><code>hash("customer-500") mod 3</code>, recomputed per send</td></tr>
+    <tr><td>Consumer position</td><td>Consumer memory</td><td>consumer-1 holds 43</td></tr>
+    <tr><td>Committed offset</td><td>Topic <code>__consumer_offsets</code>, on brokers</td><td>key (payment-service, orders, 0), value 43</td></tr>
+    <tr><td>Group membership</td><td>The group coordinator broker</td><td>consumer-1 owns orders-0</td></tr>
+    <tr><td>Leader and ISR</td><td>Metadata log on controllers, cached by every broker</td><td>leader 1, ISR 1,2,3</td></tr>
+    <tr><td>Topic config</td><td>Metadata log</td><td><code>min.insync.replicas=2</code></td></tr>
+    <tr><td>High watermark</td><td>Leader's memory, checkpointed to a small file</td><td>43</td></tr>
+  </table></div>
+
+  <h3>Who calls whom</h3>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  P["orders-api&lt;br/&gt;producer"]
+  C["payment-service&lt;br/&gt;consumer"]
+  A["Admin CLI"]
+  subgraph BR["Brokers, port 9092"]
+    B1["Broker 1&lt;br/&gt;leader of orders-0"]:::lead
+    B2["Broker 2&lt;br/&gt;follower, group coordinator"]
+  end
+  subgraph Q["Controllers, port 9093"]
+    K1["101 active"]:::lead
+    K2["102, 103"]:::ctl
+  end
+  P -->|"Metadata"| B2
+  P -->|"Produce"| B1
+  C -->|"Fetch"| B1
+  C -->|"heartbeat, OffsetCommit"| B2
+  A -->|"CreateTopics"| B2
+  B2 -->|"Fetch (replication)"| B1
+  B1 -.->|"register, heartbeat, fetch metadata"| K1
+  B2 -.->|"register, heartbeat, fetch metadata"| K1
+  K2 -.->|"Vote, Fetch (Raft)"| K1
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Every arrow points from the side that opens the connection to the side that answers.</figcaption></figure>
+  <div class="remember">Everything in Kafka pulls. Clients call brokers. Followers call leaders. Brokers call the controller. Nobody calls a client, and the controller never calls a broker. <span class="tag g">Guaranteed</span></div>
+  <div class="tw"><table>
+    <tr><th>Caller</th><th>Calls</th><th>Request</th><th>Why</th></tr>
+    <tr><td>Producer</td><td>Any broker</td><td>Metadata</td><td>Learn brokers, partitions, leaders</td></tr>
+    <tr><td>Producer</td><td>Leader of the partition</td><td>Produce</td><td>Append records</td></tr>
+    <tr><td>Consumer</td><td>Any broker</td><td>FindCoordinator</td><td>Find the broker that manages its group</td></tr>
+    <tr><td>Consumer</td><td>Group coordinator</td><td>Group heartbeat, OffsetCommit, OffsetFetch</td><td>Join the group, get partitions, save and load bookmarks</td></tr>
+    <tr><td>Consumer</td><td>Leader of the partition</td><td>Fetch</td><td>Read records from an offset</td></tr>
+    <tr><td>Follower broker</td><td>Leader broker</td><td>Fetch</td><td>Replicate the partition</td></tr>
+    <tr><td>Leader broker</td><td>Active controller</td><td>AlterPartition</td><td>Ask to shrink or grow the ISR</td></tr>
+    <tr><td>Every broker</td><td>Active controller</td><td>BrokerRegistration, BrokerHeartbeat, Fetch</td><td>Join, stay alive, pull the metadata log</td></tr>
+    <tr><td>Standby controller</td><td>Active controller</td><td>Fetch, Vote</td><td>Replicate the metadata log, elect a leader</td></tr>
+    <tr><td>Admin tool</td><td>Any broker, which forwards to the controller</td><td>CreateTopics and similar</td><td>Change the cluster</td></tr>
+  </table></div>
+  <h3>What that means for your network</h3>
+  <ul>
+    <li><b>Clients must reach every broker,</b> not only the bootstrap one. Each broker hands out its own address through <code>advertised.listeners</code>.</li>
+    <li><b>Clients never need the controller port.</b> Brokers answer metadata questions from their cache.</li>
+    <li><b>Brokers must reach each other and the controllers.</b> Controllers must reach each other.</li>
+    <li>9092 and 9093 are conventions, set by your <code>listeners</code> config. <span class="tag x">Example value</span></li>
+  </ul>
+  <details class="q"><summary>Who opens the connection: the controller to the broker, or the broker to the controller?</summary><div class="in">The broker. Everything in Kafka pulls: clients call brokers, followers call leaders, brokers call the controller.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Six calls moved it: Metadata to broker 2, Produce to broker 1, two replication Fetches from brokers 2 and 3, a consumer Fetch from consumer-1, and an OffsetCommit of 43 to the group coordinator. </p></div></aside>
+</section>
+
+<section class="s" id="s26" data-t="Message journey">
+  <div class="sh"><span class="off">27</span><h2>One message, start to finish</h2></div>
+  <p class="lead">Ten steps take one order from the producer's code to a committed offset.</p>
+  <pre class="code">key:   <b>customer-500</b>
+value: { "orderId": 101, "customerId": 500, "amount": 1200 }</pre>
+  <ol class="steps">
+    <li><b>Producer creates the record.</b> Key and value are serialized to bytes.</li>
+    <li><b>Metadata lookup.</b> The producer's cached map says: orders has 3 partitions, P0 is led by Broker 1.</li>
+    <li><b>Partition selection.</b> <code>hash("customer-500") mod 3</code> gives P0. Try it in the lesson 8 demo.</li>
+    <li><b>Send to the leader.</b> The record waits a moment in a batch, then goes to Broker 1.</li>
+    <li><b>Leader appends.</b> Broker 1 writes it at the end of <code>orders-0</code> and assigns offset 42.</li>
+    <li><b>Followers replicate.</b> Brokers 2 and 3 fetch offset 42 and append it to their copies.</li>
+    <li><b>Committed.</b> The high watermark moves past 42. The producer gets its ack, and consumers can now see the record.</li>
+    <li><b>Consumer fetches.</b> The payment-service member that owns P0 asks “from 42” and receives it.</li>
+    <li><b>Consumer processes.</b> It charges the customer.</li>
+    <li><b>Consumer commits 43.</b> Meaning “next time, start at 43”. Saved in <code>__consumer_offsets</code>.</li>
+  </ol>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>orders · P0</label><div class="cell done"><b>40</b><span>...</span></div><div class="cell done"><b>41</b><span>...</span></div><div class="cell pend"><b>42</b><span>Order 101</span></div><div class="cell ghost"><b>43</b><span>next write</span></div></div>
+  </div><figcaption>The record sits at <code>(orders, 0, 42)</code> until retention removes it, no matter how many groups read it.</figcaption></figure>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>This whole lesson is the running example, end to end. The payload for each step is in the box of the lesson that teaches it. </p></div></aside>
+</section>
+
+<div class="part" data-part="Storage and guarantees"><h2>Part 7: Disk and promises</h2><p>Storage, retention, guarantees</p></div>
+
+<section class="s" id="s27" data-t="Disk storage">
+  <div class="sh"><span class="off">28</span><h2>How a broker stores records</h2></div>
+  <p class="lead">Each partition replica is a folder. Inside it, the log is cut into segment files.</p>
+  <pre class="code"><b>orders-0/</b>                        <i># topic name, dash, partition number</i>
+    00000000000000000000.log      <i># records from offset 0</i>
+    00000000000000000000.index    <i># offset to file position</i>
+    00000000000000000000.timeindex<i># timestamp to offset</i>
+
+    00000000000001000000.log      <i># records from offset 1,000,000</i>
+    00000000000001000000.index
+    00000000000001000000.timeindex</pre>
+  <figure><div class="canvas scroll"><div class="flow" style="flex-wrap:nowrap">
+    <span class="n">Segment 1<small>offsets 0 to 999,999<br>closed, read-only</small></span>
+    <span class="n">Segment 2<small>offsets 1,000,000 to 1,999,999<br>closed, read-only</small></span>
+    <span class="n y">Active segment<small>offsets 2,000,000 and up<br>all appends go here</small></span>
+  </div></div><figcaption>The file name is the first offset in the segment. To find offset 1,500,000, Kafka picks the right file by name, then uses the index to jump close to it. Round numbers are for the picture: real segments roll by size, 1 GB by default. <a class="tag x" href="#c12">Example value · check 12</a></figcaption></figure>
+  <h3>Why append-only is fast</h3>
+  <div class="cards">
+    <div class="card"><h4>Sequential writes</h4><p>Writing at the end of a file is the cheapest thing a disk does.</p></div>
+    <div class="card"><h4>Page cache</h4><p>The OS keeps recent data in RAM, so most reads never touch the disk.</p></div>
+    <div class="card"><h4>Zero-copy</h4><p>Bytes go from file to network socket without passing through the application.</p></div>
+    <div class="card"><h4>Batches</h4><p>Records are written, stored and sent in groups, not one at a time.</p></div>
+  </div>
+  <details class="q"><summary>How does a broker find offset 1,500,000 of a partition quickly?</summary><div class="in">Segment files are named after their first offset, so it picks the right file by name, then uses that segment's index to jump close to the record.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>This is order 101 as it sits in broker 1's segment file: one batch holding one record. Line breaks added, a few fields dropped. <a class="tag x" href="#c12">Example value · check 12</a></p><pre class="code">$ kafka-dump-log.sh --print-data-log \
+    --files /var/lib/kafka/data/orders-0/00000000000000000000.log
+baseOffset: 42 lastOffset: 42 count: 1 baseSequence: 17 lastSequence: 17
+  producerId: 4000 producerEpoch: 0 partitionLeaderEpoch: 0 isTransactional: false
+  position: 5210 CreateTime: 1791089100000 magic: 2 compresscodec: none isvalid: true
+| offset: 42 CreateTime: 1791089100000 keySize: 12 valueSize: 46 sequence: 17
+  headerKeys: [source] key: customer-500 payload: {"orderId":101,"customerId":500,"amount":1200}</pre></div></aside>
+</section>
+
+<section class="s" id="s28" data-t="Retention">
+  <div class="sh"><span class="off">29</span><h2>Retention</h2></div>
+  <p class="lead">Records are removed by policy, never because someone read them. <a class="tag g" href="#c15">Guaranteed · check 15</a></p>
+  <div class="cards">
+    <div class="card"><h4>By time</h4><p>Drop segments older than a limit. Default: 7 days. <a class="tag d" href="#c16">Default · check 16</a></p></div>
+    <div class="card"><h4>By size</h4><p>Drop the oldest segments once a partition exceeds a size. Off by default.</p></div>
+    <div class="card"><h4>Compaction</h4><p>Keep only the latest record for each key.</p></div>
+  </div>
+  <figure><div class="canvas scroll">
+    <div class="flow" style="flex-wrap:nowrap"><span class="n r">Segment 1<small>9 days old, deleted</small></span><span class="n">Segment 2<small>5 days old, kept</small></span><span class="n y">Active segment<small>kept</small></span></div>
+  </div><figcaption>Delete policy: whole old segments are dropped from the front of the log.</figcaption></figure>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>before</label><div class="cell gone"><b>0</b><span>A = 1</span></div><div class="cell gone"><b>1</b><span>B = 7</span></div><div class="cell gone"><b>2</b><span>A = 2</span></div><div class="cell"><b>3</b><span>B = 8</span></div><div class="cell"><b>4</b><span>A = 3</span></div></div>
+    <div class="log"><label>after</label><div class="cell"><b>3</b><span>B = 8</span></div><div class="cell"><b>4</b><span>A = 3</span></div></div>
+  </div><figcaption>Compact policy: older values of the same key are cleaned up. Offsets of survivors do not change. Good for “latest state per key” topics.</figcaption></figure>
+  <details class="q"><summary>A record was never read by any consumer. Can Kafka still delete it?</summary><div class="in">Yes. Retention works on age, size or compaction. Whether anyone read the record plays no part.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>With the stock 7-day retention, order 101 disappears roughly a week later, once its segment has closed and aged out. Whether <code>payment-service</code> or <code>analytics</code> read it makes no difference. <a class="tag d" href="#c16">Default · check 16</a></p><pre class="code">$ kafka-configs.sh --bootstrap-server kafka-1:9092 --describe --all \
+    --entity-type topics --entity-name orders | grep retention.ms
+  retention.ms=604800000</pre></div></aside>
+</section>
+
+<section class="s" id="s29" data-t="Guarantees">
+  <div class="sh"><span class="off">30</span><h2>What Kafka promises</h2></div>
+  <p class="lead">Kafka makes promises about order, durability and delivery, each with a condition.</p>
+  <div class="cards">
+    <div class="card"><h4>Order inside a partition</h4><p>Records are read in the order they were appended.</p></div>
+    <div class="card"><h4>No order across partitions</h4><p>Need order for an entity? Give its records the same key.</p></div>
+    <div class="card"><h4>Durability</h4><p>A write acked with <code>acks=all</code> survives as long as one in-sync replica does.</p></div>
+    <div class="card"><h4>Availability</h4><p>A partition stays usable while any ISR member is alive.</p></div>
+  </div>
+  <h3>Delivery semantics</h3>
+  <div class="tw"><table>
+    <tr><th>Mode</th><th>How you get it</th><th>On a crash</th></tr>
+    <tr><td><b>At most once</b></td><td>Commit the offset, then process</td><td>A record may be skipped. Never repeated.</td></tr>
+    <tr><td><b>At least once</b></td><td>Process, then commit</td><td>A record may be processed twice. Never lost. The usual default.</td></tr>
+    <tr><td><b>Exactly once</b></td><td>Idempotent producer plus transactions</td><td>Results appear once, for read-process-write flows that stay inside Kafka. <span class="tag s">Simplified</span></td></tr>
+  </table></div>
+  <div class="tip"><b>Idempotent producer.</b> The broker spots a retried batch by its sequence number and stores it once. On by default since Kafka 3.0. It is the reason producer retries don't create duplicates. <span class="tag d">Default</span></div>
+  <details class="q"><summary>Your consumer processes a record, then crashes before committing. Which delivery semantics did you get?</summary><div class="in">At least once. After restart it resumes from the last committed offset and processes that record again. Go back to the lesson 11 demo and press “Crash and restart” to see it.</div></details>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Customer 500 places order 104 next. Same key, so it lands in partition 0 at offset 43 and is always read after order 101. If consumer-1 crashes after charging order 101 but before committing 43, the order is delivered again. So the charge must be safe to repeat, for example by using <code>orderId</code> as an idempotency key. </p></div></aside>
+</section>
+
+<div class="part" data-part="Revision"><h2>Part 8: Revision</h2><p>Myths, failures, the final picture</p></div>
+
+<section class="s" id="s30" data-t="Misconceptions">
+  <div class="sh"><span class="off">31</span><h2>Common misconceptions</h2></div>
+  <p class="lead">Nine beliefs that sound right and are wrong.</p>
+  <div class="cards">
+    <div class="card myth"><p class="w">One topic lives on one broker.</p><p class="c">A topic's partitions are spread across brokers.</p></div>
+    <div class="card myth"><p class="w">Every broker stores the whole topic.</p><p class="c">A broker stores only the partition replicas assigned to it.</p></div>
+    <div class="card myth"><p class="w">Kafka deletes a message once it is consumed.</p><p class="c">Retention is independent of reads.</p></div>
+    <div class="card myth"><p class="w">Kafka orders the whole topic.</p><p class="c">Order is guaranteed within a partition only.</p></div>
+    <div class="card myth"><p class="w">KRaft stores application messages.</p><p class="c">KRaft stores cluster metadata. Brokers store messages.</p></div>
+    <div class="card myth"><p class="w">Offsets are global to a topic.</p><p class="c">Each partition numbers its records from 0.</p></div>
+    <div class="card myth"><p class="w">More consumers always means more speed.</p><p class="c">A group cannot use more consumers than partitions.</p></div>
+    <div class="card myth"><p class="w">The broker pushes records to consumers.</p><p class="c">Consumers pull, at their own pace.</p></div>
+    <div class="card myth"><p class="w">Producers send to a load balancer.</p><p class="c">Producers send directly to each partition's leader.</p></div>
+  </div>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>Test each myth against it: order 101 is on three brokers, in one partition, still on disk after being read, ordered only against other partition-0 records, and absent from the KRaft log. </p></div></aside>
+</section>
+
+<section class="s" id="s31" data-t="Failure examples">
+  <div class="sh"><span class="off">32</span><h2>Four failures, four recoveries</h2></div>
+  <p class="lead">Every failure has the same shape: detect, hand over, resume.</p>
+  <h3>Broker 1 crashes</h3>
+  <div class="flow"><span class="n r">heartbeats stop</span><i></i><span class="n p">controller marks it down</span><i></i><span class="n y">ISR followers become leaders</span><i></i><span class="n g">clients refresh metadata, continue</span></div>
+  <p>Partitions run with fewer replicas until Broker 1 returns and catches up.</p>
+  <h3>Controller leader crashes</h3>
+  <div class="flow"><span class="n r">active controller silent</span><i></i><span class="n p">a standby asks for votes</span><i></i><span class="n p">majority elects it</span><i></i><span class="n g">it continues from the metadata log</span></div>
+  <p>Producers and consumers do not notice. Only metadata changes pause for a moment.</p>
+  <h3>Consumer crashes</h3>
+  <div class="flow"><span class="n r">consumer stops heartbeating</span><i></i><span class="n">coordinator removes it</span><i></i><span class="n y">rebalance: its partitions go to others</span><i></i><span class="n g">they resume from committed offsets</span></div>
+  <p>Records read but not committed by the dead consumer are processed again.</p>
+  <h3>Producer loses its connection</h3>
+  <div class="flow"><span class="n r">send fails or times out</span><i></i><span class="n">producer retries</span><i></i><span class="n y">broker drops duplicates by sequence number</span><i></i><span class="n g">record stored once</span></div>
+  <p>If retries run past <code>delivery.timeout.ms</code>, the send fails and your code gets the error.</p>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>In the four failures above: order 101 stays at offset 42 on brokers 2 and 3. Nothing happens to it when a controller dies. It is charged again if consumer-1 crashed before committing 43. It is stored once even if <code>orders-api</code> had to retry. </p></div></aside>
+</section>
+
+<section class="s" id="s32" data-t="Final mental model">
+  <div class="sh"><span class="off">33</span><h2>The final mental model</h2></div>
+  <p class="lead">Three stacks. If you can redraw these from memory, you have Kafka.</p>
+  <figure><div class="canvas"><div class="final">
+    <div><h3 style="margin-top:0">Structure</h3><div class="flow v"><span class="n">Kafka cluster</span><i></i><span class="n">Brokers</span><i></i><span class="n">Topics</span><i></i><span class="n">Partitions</span><i></i><span class="n y">Leader + replicas</span><i></i><span class="n">Records + offsets</span></div></div>
+    <div><h3 style="margin-top:0">Control</h3><div class="flow v"><span class="n p">KRaft controllers</span><i></i><span class="n p">Metadata log</span><i></i><span class="n">Brokers, topics,<br>partitions, leaders, ISR</span></div></div>
+    <div><h3 style="margin-top:0">Data flow</h3><div class="flow v"><span class="n g">Producer</span><i data-t="hash(key)"></i><span class="n y">Partition leader</span><i data-t="replicate"></i><span class="n b">Follower replicas</span><i data-t="fetch from offset"></i><span class="n g">Consumer group</span><i data-t="commit"></i><span class="n">Committed offset</span></div></div>
+  </div></div></figure>
+  <div class="remember">One sentence to keep: Kafka is a set of replicated, append-only logs (partitions) hosted on brokers, with a small Raft quorum keeping everyone's map of those logs identical.</div>
+  <aside class="trk"><h4 data-id="(orders, 0, 42)">Follow order 101</h4><div class="in"><p>The whole guide in one line: <code>(orders, 0, 42)</code> on brokers 1, 2 and 3, led by whoever the metadata log says, read by consumer-1 of <code>payment-service</code>, bookmark at 43. </p></div></aside>
+</section>
+
+
+<section class="s" id="srev" data-t="Revision and glossary">
+  <div class="sh"><span class="off">34</span><h2>Quick revision and glossary</h2></div>
+  <p class="lead">Test yourself, then look up any term.</p>
+  <div class="demo selftest" id="selftest"></div>
+  <details class="q"><summary>Name the two planes of a Kafka cluster and what travels on each.</summary><div class="in">The data plane carries your records between producers, brokers and consumers. The control plane carries metadata between brokers and the KRaft controllers.</div></details>
+  <details class="q"><summary>Trace a Kafka record from producer to committed offset in five steps.</summary><div class="in">The producer hashes the key to pick a partition. It sends to that partition's leader. Followers copy the record and the high watermark moves. A consumer fetches and processes it. The consumer commits the next offset.</div></details>
+  <details class="q"><summary>What replaced ZooKeeper in Kafka, and which version removed ZooKeeper?</summary><div class="in">KRaft, a quorum of controllers that keeps cluster metadata in a replicated log inside Kafka. ZooKeeper was removed in Kafka 4.0.</div></details>
+  <details class="q"><summary>How do you keep all events for one customer in order?</summary><div class="in">Give them the same key. The same key always hashes to the same partition, and order is guaranteed inside a partition.</div></details>
+  <h3>Glossary</h3>
+  <div class="tw"><table class="gloss"><tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>broker</td><td>One Kafka server process. It stores partition replicas and answers produce and fetch requests.</td></tr>
+    <tr><td>topic</td><td>A named stream of records. Only a label: the data lives in its partitions.</td></tr>
+    <tr><td>partition</td><td>One append-only log. The unit of ordering, parallelism and replication.</td></tr>
+    <tr><td>offset</td><td>A record's position inside one partition. Counted per partition, never reused.</td></tr>
+    <tr><td>record</td><td>One message: key, value, headers and a timestamp.</td></tr>
+    <tr><td>producer</td><td>A client that writes records, sending each one to the leader of its partition.</td></tr>
+    <tr><td>consumer group</td><td>A team of consumers that splits a topic's partitions between its members.</td></tr>
+    <tr><td>consumer</td><td>A client that pulls records from partitions, starting at an offset.</td></tr>
+    <tr><td>committed offset</td><td>A group's saved bookmark for a partition: the next offset to read after a restart.</td></tr>
+    <tr><td>rebalance</td><td>Handing a group's partitions out again after a member joins or leaves.</td></tr>
+    <tr><td>group coordinator</td><td>The broker that tracks one group's members and stores its committed offsets.</td></tr>
+    <tr><td>replication factor</td><td>How many copies of each partition exist.</td></tr>
+    <tr><td>replica</td><td>One copy of a partition on one broker. Leader and followers are all replicas.</td></tr>
+    <tr><td>leader</td><td>The replica that takes all writes for a partition and decides the order of records.</td></tr>
+    <tr><td>follower</td><td>A replica that keeps copying from the leader and can take over.</td></tr>
+    <tr><td>ISR</td><td>In-sync replicas: the replicas fully caught up with the leader right now.</td></tr>
+    <tr><td>high watermark</td><td>The last offset every in-sync replica has. Consumers see records only up to it.</td></tr>
+    <tr><td>controller</td><td>A node that makes cluster-wide decisions: registers brokers, creates topics, elects partition leaders.</td></tr>
+    <tr><td>quorum</td><td>The set of controllers that vote. A change counts once a majority has stored it.</td></tr>
+    <tr><td>KRaft</td><td>Kafka Raft: how controllers agree on cluster metadata without ZooKeeper.</td></tr>
+    <tr><td>metadata log</td><td>The ordered list of every cluster change, replicated across the controllers.</td></tr>
+    <tr><td>ZooKeeper</td><td>The separate system that held Kafka metadata before KRaft. Removed in Kafka 4.0.</td></tr>
+    <tr><td>segment</td><td>One file of a partition's log. The file name is the first offset it holds.</td></tr>
+    <tr><td>retention</td><td>The policy that removes old records by age or size, regardless of who read them.</td></tr>
+    <tr><td>compaction</td><td>A cleanup policy that keeps only the latest record for each key.</td></tr>
+    <tr><td>sticky partitioner</td><td>How keyless records are placed: fill a batch for one partition, then switch.</td></tr>
+    <tr><td>idempotent producer</td><td>A producer whose retried batches are stored once, thanks to sequence numbers.</td></tr>
+  </table></div>
+  <p>Hover or tab to a dotted-underlined word in any lesson to see its meaning without coming back here.</p>
+</section>
+
+<section class="s" id="slab" data-t="Proof checklist">
+  <div class="sh"><span class="off">35</span><h2>Proof checklist</h2></div>
+  <p class="lead">Sixteen small experiments on a real cluster. Each one settles a tagged statement from the lessons.</p>
+  <ul>
+    <li>You need a local KRaft cluster with 3 brokers and 3 controllers. Docker Compose with the <code>apache/kafka</code> image is the quickest route.</li>
+    <li>Work top to bottom. Later rows reuse the topic and group from earlier ones.</li>
+    <li>Tick a row when it passes. Ticks are remembered in this browser only.</li>
+  </ul>
+  <p id="labProg" aria-live="polite"></p>
+  <div class="tw" style="max-width:none"><table class="lab">
+    <tr><th>Passed</th><th>#</th><th>Question</th><th>Experiment</th><th>Passes when</th></tr>
+<tr id="c1"><td><input type="checkbox" data-lab="c1" aria-label="Passed: Cluster shape"></td><td>1</td><td><b>Cluster shape</b><br>Do you have 3 brokers and a 3-controller quorum?</td><td><code>kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status</code></td><td>3 voters, 3 observers, one LeaderId.</td></tr>
+<tr id="c2"><td><input type="checkbox" data-lab="c2" aria-label="Passed: Topic layout"></td><td>2</td><td><b>Topic layout</b><br>Are partitions and replicas spread across brokers?</td><td>Create <code>orders</code> as in lesson 3, then <code>kafka-topics.sh --describe --topic orders</code></td><td>3 partitions, 3 replicas each. Note your own leaders: they replace the example values.</td></tr>
+<tr id="c3"><td><input type="checkbox" data-lab="c3" aria-label="Passed: Key to partition"></td><td>3</td><td><b>Key to partition</b><br>Does <code>customer-500</code> land in partition 0, every time?</td><td>Produce <code>customer-500:{...}</code> five times with <code>--property parse.key=true --property key.separator=:</code>. Consume with <code>print.partition</code> and <code>print.offset</code>.</td><td>Always <code>Partition:0</code>, offsets rising by one, read in the order sent.</td></tr>
+<tr id="c4"><td><input type="checkbox" data-lab="c4" aria-label="Passed: Offsets are per partition"></td><td>4</td><td><b>Offsets are per partition</b><br>Does each partition count on its own?</td><td><code>kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic orders</code></td><td>Three unrelated end offsets.</td></tr>
+<tr id="c5"><td><input type="checkbox" data-lab="c5" aria-label="Passed: No key"></td><td>5</td><td><b>No key</b><br>Where do keyless records go?</td><td>Produce 30 records with no key, quickly. Consume with <code>print.partition</code>.</td><td>They arrive in runs on a partition, not in strict rotation.</td></tr>
+<tr id="c6"><td><input type="checkbox" data-lab="c6" aria-label="Passed: Reading deletes nothing"></td><td>6</td><td><b>Reading deletes nothing</b><br>Can two groups read the same record?</td><td>Consume <code>--from-beginning</code> with <code>--group a</code>, then again with <code>--group b</code>.</td><td>Both print order 101.</td></tr>
+<tr id="c7"><td><input type="checkbox" data-lab="c7" aria-label="Passed: One consumer per partition"></td><td>7</td><td><b>One consumer per partition</b><br>What does a 4th consumer get?</td><td>Start 4 console consumers with <code>--group payment-service</code>. Run <code>kafka-consumer-groups.sh --describe --group payment-service --members</code>.</td><td>Three members own 1 partition, one owns 0. Kill one and the spare takes over.</td></tr>
+<tr id="c8"><td><input type="checkbox" data-lab="c8" aria-label="Passed: Restart resumes from commit"></td><td>8</td><td><b>Restart resumes from commit</b><br>Does a restarted group continue where it committed?</td><td><code>Stop the consumers. Produce 3 records. Describe the group, then restart one consumer.</code></td><td>LAG shows 3 while stopped. The consumer prints exactly those 3.</td></tr>
+<tr id="c9"><td><input type="checkbox" data-lab="c9" aria-label="Passed: Replay"></td><td>9</td><td><b>Replay</b><br>Can old records be read again?</td><td>With the group stopped: <code>kafka-consumer-groups.sh --group payment-service --topic orders --reset-offsets --to-earliest --execute</code>. Restart.</td><td>Order 101 is printed again.</td></tr>
+<tr id="c10"><td><input type="checkbox" data-lab="c10" aria-label="Passed: Leader failover"></td><td>10</td><td><b>Leader failover</b><br>Who takes over, and how long does it take?</td><td>Stop the broker that leads <code>orders-0</code> while producing. Describe the topic. Time the gap.</td><td>New leader comes from the old ISR, ISR shrinks, producing continues. Write down your seconds.</td></tr>
+<tr id="c11"><td><input type="checkbox" data-lab="c11" aria-label="Passed: Durable ack"></td><td>11</td><td><b>Durable ack</b><br>Does <code>acks=all</code> refuse when too few replicas are in sync?</td><td>With one broker down, produce with <code>--producer-property acks=all</code>. Then stop a second broker and produce again.</td><td>First works. Second fails with a not-enough-replicas error.</td></tr>
+<tr id="c12"><td><input type="checkbox" data-lab="c12" aria-label="Passed: Record on disk"></td><td>12</td><td><b>Record on disk</b><br>Is the record really in a segment file?</td><td><code>kafka-dump-log.sh --print-data-log --files &lt;log.dirs&gt;/orders-0/00000000000000000000.log</code></td><td>You see <code>key: customer-500</code>, your payload and its offset. Same on all three brokers.</td></tr>
+<tr id="c13"><td><input type="checkbox" data-lab="c13" aria-label="Passed: Metadata is a log"></td><td>13</td><td><b>Metadata is a log</b><br>What is in the KRaft log?</td><td><code>kafka-dump-log.sh --cluster-metadata-decoder --files &lt;metadata dir&gt;/__cluster_metadata-0/00000000000000000000.log</code></td><td>TOPIC_RECORD and PARTITION_RECORD for <code>orders</code>. None of your order payloads.</td></tr>
+<tr id="c14"><td><input type="checkbox" data-lab="c14" aria-label="Passed: Controller failover"></td><td>14</td><td><b>Controller failover</b><br>Does data keep flowing when the active controller dies?</td><td><code>Stop the active controller while producing. Run the quorum status command again.</code></td><td>A new LeaderId. Producing never stopped.</td></tr>
+<tr id="c15"><td><input type="checkbox" data-lab="c15" aria-label="Passed: Retention ignores readers"></td><td>15</td><td><b>Retention ignores readers</b><br>Are records removed even if a group never read them?</td><td>Set <code>retention.ms=60000</code> and <code>segment.ms=10000</code> on a test topic. Wait about 6 minutes. Consume <code>--from-beginning</code> with a new group.</td><td>Old records are gone.</td></tr>
+<tr id="c16"><td><input type="checkbox" data-lab="c16" aria-label="Passed: Your defaults"></td><td>16</td><td><b>Your defaults</b><br>What are the real values on your version?</td><td><code>kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 1 --describe --all</code></td><td>You have written down <code>log.retention.hours</code>, <code>log.segment.bytes</code>, <code>replica.lag.time.max.ms</code>, <code>min.insync.replicas</code>.</td></tr>
+  </table></div>
+  <p>The list and its order are my proposal. Commands use Kafka 4.x tool names and assume <code>--bootstrap-server localhost:9092</code> where it is left out. <span class="tag s">Simplified</span></p>
+</section>
+
+<footer>Covers Apache Kafka in KRaft mode (Kafka 4.x). Defaults quoted are the stock broker and Java client defaults.</footer>
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cell=(o,v,c)=>`<div class="cell ${c||''}"><b>${o}</b><span>${esc(v)}</span></div>`;
+
+/* theme */
+const root=document.documentElement, tb=$('#themeBtn');
+const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+const label=()=>tb.textContent=isDark()?'Light theme':'Dark theme';
+try{const t=localStorage.getItem('kafka-theme');if(t)root.dataset.theme=t}catch(e){}
+label();
+tb.onclick=()=>{const t=isDark()?'light':'dark';root.dataset.theme=t;try{localStorage.setItem('kafka-theme',t)}catch(e){}label()};
+new MutationObserver(label).observe(root,{attributes:true,attributeFilter:['data-theme']});
+
+/* contents */
+const toc=$('#toc'), links={};
+document.querySelectorAll('main>.part, main>section.s').forEach(n=>{
+  if(n.classList.contains('part')){toc.appendChild(el('h3','',esc(n.dataset.part)));return}
+  const a=el('a','',`<span>${n.querySelector('.off').textContent}</span>${esc(n.dataset.t)}`);a.href='#'+n.id;toc.appendChild(a);links[n.id]=a;
+});
+const mb=$('#menuBtn');
+mb.onclick=()=>{const o=toc.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+toc.addEventListener('click',e=>{if(e.target.closest('a')){toc.classList.remove('open');mb.setAttribute('aria-expanded',false)}});
+if('IntersectionObserver' in window){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){Object.values(links).forEach(a=>a.classList.remove('cur'));const a=links[e.target.id];a.classList.add('cur');if(!toc.classList.contains('open'))a.scrollIntoView({block:'nearest'})}}),{rootMargin:'-15% 0px -75% 0px'});
+  document.querySelectorAll('section.s').forEach(s=>io.observe(s));
+}
+const bar=$('#bar');
+addEventListener('scroll',()=>{const h=document.documentElement;bar.style.width=(100*h.scrollTop/Math.max(1,h.scrollHeight-h.clientHeight))+'%'},{passive:true});
+
+/* reader tools ------------------------------------------------------------
+   Four tools that need no markup per lesson: search, lesson progress,
+   glossary tooltips (fed by table.gloss) and a self-test (fed by details.q). */
+const lessons=[...document.querySelectorAll('main>section.s')];
+const load=k=>{try{return JSON.parse(localStorage.getItem(k)||'{}')||{}}catch(e){return {}}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+
+/* search: a box at the top of the contents. Matches lesson titles, h3 sub-headings and lesson text. */
+(function(){
+  const box=el('div','srch','<input type="search" placeholder="Search lessons" aria-label="Search lessons"><div class="res" hidden></div>');
+  toc.prepend(box);
+  const inp=box.firstChild,res=box.lastChild,idx=[];let hid=0;
+  const words=n=>{const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT);let o='',x;while((x=w.nextNode()))o+=' '+x.nodeValue;return o};
+  lessons.forEach(s=>{const n=s.querySelector('.off').textContent,title=s.querySelector('h2').textContent;
+    let cur={id:s.id,t:title,n,x:''};idx.push(cur);
+    [...s.children].forEach(c=>{if(c.classList.contains('sh'))return;
+      if(c.tagName==='H3'){if(!c.id)c.id='h'+(hid++);cur={id:c.id,t:c.textContent,n,x:'',p:title};idx.push(cur);return}
+      cur.x+=words(c)})});
+  idx.forEach(e=>{e.x=e.x.replace(/\s+/g,' ');e.low=(e.t+' '+e.x).toLowerCase()});
+  inp.addEventListener('input',()=>{const q=inp.value.trim().toLowerCase();res.innerHTML='';if(q.length<2){res.hidden=true;return}
+    const w=q.split(/\s+/),hits=idx.filter(e=>w.every(x=>e.low.includes(x))).slice(0,8);
+    if(!hits.length)res.appendChild(el('p','','Nothing found. Try a shorter word.'));
+    hits.forEach(e=>{const at=e.x.toLowerCase().indexOf(w[0]);const snip=at<0?(e.p||''):(at>30?'…':'')+e.x.substr(Math.max(0,at-30),90).trim()+'…';
+      const a=el('a','',`<span>${e.n}</span><div>${esc(e.t)}<small>${esc(snip)}</small></div>`);a.href='#'+e.id;res.appendChild(a)});
+    res.hidden=false});
+  inp.addEventListener('keydown',e=>{if(e.key==='Escape'){inp.value='';res.hidden=true}});
+  res.addEventListener('click',e=>{if(e.target.closest('a'))res.hidden=true});
+})();
+
+/* lesson progress: a "Mark as done" button under every lesson title, a tick in the contents, and a count. */
+(function(){
+  const done=load('course-done'),list=lessons.filter(s=>s.id!=='slab');
+  const prog=el('p');prog.id='doneProg';toc.querySelector('.srch').after(prog);
+  const draw=()=>{let n=0;list.forEach(s=>{const on=!!done[s.id];if(on)n++;
+      const b=s.querySelector('.btn.done');b.classList.toggle('ok',on);b.textContent=on?'✓ Done. Undo?':'Mark as done';b.setAttribute('aria-pressed',on);
+      const a=links[s.id],sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=on?'✓':sp.dataset.n;a.classList.toggle('ok',on)});
+    prog.textContent=n+' of '+list.length+' lessons done'};
+  list.forEach(s=>{const b=el('button','btn done');b.type='button';b.onclick=()=>{done[s.id]=!done[s.id];save('course-done',done);draw()};s.querySelector('.sh').after(b)});
+  draw();
+})();
+
+/* glossary tooltips: underline the first mention of each table.gloss term in every lesson. */
+(function(){
+  const terms=[...document.querySelectorAll('table.gloss tr')].map(r=>r.cells).filter(c=>c.length>1&&c[0].tagName==='TD')
+    .map(c=>({name:c[0].textContent.trim(),tip:c[1].textContent.trim()})).filter(t=>t.name.length>2&&!/[()\/]/.test(t.name));
+  if(!terms.length)return;
+  terms.sort((a,b)=>b.name.length-a.name.length);
+  terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
+  /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk';
+  lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
+    nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
+      for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;
+        const mid=node.splitText(m.index+m[1].length);mid.splitText(m[2].length);
+        const ab=el('abbr','gl');ab.tabIndex=0;ab.dataset.tip=t.tip;ab.textContent=mid.nodeValue;mid.replaceWith(ab);used[t.name]=true;return}})});
+})();
+
+/* self-test: a scored run through every details.q on the page, with a retry of the missed ones. */
+(function(){
+  const host=$('#selftest');if(!host)return;
+  const cards=[...document.querySelectorAll('section.s details.q')].map(d=>{const s=d.closest('section.s');
+    return{q:d.querySelector('summary').textContent,a:d.querySelector('.in').innerHTML,id:s.id,n:s.querySelector('.off').textContent,t:s.dataset.t}});
+  if(!cards.length){host.hidden=true;return}
+  let deck,i,missed;
+  const home=msg=>{host.innerHTML='<h4>Self-test</h4><div class="out" aria-live="polite">'+msg+'</div><div class="ctrls"><button class="btn on" data-a="start">Start ('+cards.length+' questions)</button></div>'};
+  const show=()=>{const c=deck[i];host.innerHTML='<h4>Self-test</h4><p class="from">Question '+(i+1)+' of '+deck.length+', from lesson <a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a></p><p class="q">'+esc(c.q)+'</p><div class="a" hidden>'+c.a+'</div>'
+    +'<div class="ctrls"><button class="btn on" data-a="show">Show answer</button><button class="btn" data-a="yes" hidden>Got it</button><button class="btn warn" data-a="no" hidden>Not yet</button><button class="btn" data-a="stop">Stop</button></div>'};
+  const end=()=>{const got=deck.length-missed.length;let h='<h4>Self-test</h4><div class="out" aria-live="polite">Score: '+got+' of '+deck.length+'.</div>';
+    if(missed.length)h+='<p>Worth another look:</p><ul>'+missed.map(c=>'<li><a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a>: '+esc(c.q)+'</li>').join('')+'</ul>';
+    h+='<div class="ctrls">'+(missed.length?'<button class="btn on" data-a="retry">Retry the ones I missed</button>':'')+'<button class="btn" data-a="start">Start again</button></div>';host.innerHTML=h};
+  const begin=list=>{deck=list.slice();i=0;missed=[];show()};
+  host.addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const a=b.dataset.a;
+    if(a==='start')begin(cards);else if(a==='retry')begin(missed);else if(a==='stop')home('Stopped. Start again any time.');
+    else if(a==='show'){host.querySelector('.a').hidden=false;b.hidden=true;host.querySelectorAll('[data-a=yes],[data-a=no]').forEach(x=>x.hidden=false)}
+    else{if(a==='no')missed.push(deck[i]);i++;if(i<deck.length)show();else end()}});
+  home('Answer in your head, show the answer, then mark yourself.');
+})();
+
+/* mermaid: rendered here so colours follow the page theme */
+(function(){
+  const LIGHT={background:'#ffffff',primaryColor:'#e2e9f2',primaryTextColor:'#16233a',primaryBorderColor:'#16233a',lineColor:'#52617a',secondaryColor:'#e3edff',tertiaryColor:'#f3f6fa',textColor:'#16233a',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#16233a',actorBkg:'#e2e9f2',actorBorder:'#16233a',actorTextColor:'#16233a',actorLineColor:'#8a99b3',signalColor:'#52617a',signalTextColor:'#16233a',labelBoxBkgColor:'#e2e9f2',labelBoxBorderColor:'#16233a',labelTextColor:'#16233a',loopTextColor:'#16233a',edgeLabelBackground:'#ffffff',clusterBkg:'#f3f6fa',clusterBorder:'#8a99b3',titleColor:'#16233a'};
+  const DARK={background:'#17233a',primaryColor:'#24365a',primaryTextColor:'#e8eef7',primaryBorderColor:'#78a7ff',lineColor:'#a3b3cb',secondaryColor:'#263a5c',tertiaryColor:'#111c2e',textColor:'#e8eef7',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#f2b705',actorBkg:'#24365a',actorBorder:'#78a7ff',actorTextColor:'#e8eef7',actorLineColor:'#4a628c',signalColor:'#a3b3cb',signalTextColor:'#e8eef7',labelBoxBkgColor:'#24365a',labelBoxBorderColor:'#78a7ff',labelTextColor:'#e8eef7',loopTextColor:'#e8eef7',edgeLabelBackground:'#17233a',clusterBkg:'#111c2e',clusterBorder:'#4a628c',titleColor:'#e8eef7'};
+  const CTL_DARK='fill:#3b2f6b,stroke:#b196f5,color:#e8eef7', CTL_LIGHT='fill:#efe8ff,stroke:#7a4fd6,color:#16233a';
+  const items=[...document.querySelectorAll('pre.mmd')].map(pre=>{const w=el('div','svgw');w.hidden=true;pre.after(w);return{pre,w,src:pre.textContent}});
+  let run=0,last=null;
+  async function render(){
+    if(!window.mermaid)return;
+    const dark=isDark();if(dark===last)return;last=dark;const me=++run;
+    mermaid.initialize({startOnLoad:false,theme:'base',themeVariables:Object.assign({fontFamily:'"Atkinson Hyperlegible",Verdana,sans-serif',fontSize:'15px'},dark?DARK:LIGHT),sequence:{useMaxWidth:true,mirrorActors:false},flowchart:{useMaxWidth:true}});
+    for(let i=0;i<items.length;i++){const it=items[i];
+      try{const {svg}=await mermaid.render('mmd'+i+'r'+me,dark?it.src:it.src.replace(CTL_DARK,CTL_LIGHT));
+        if(me!==run)return;it.w.innerHTML=svg;it.w.hidden=false;it.pre.hidden=true}
+      catch(e){it.w.hidden=true;it.pre.hidden=false}
+    }
+  }
+  render();
+  new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{label();render()});
+})();
+
+/* proof checklist */
+(function(){const boxes=[...document.querySelectorAll('[data-lab]')],prog=$('#labProg');if(!boxes.length||!prog)return;let st={};
+  try{st=JSON.parse(localStorage.getItem('kafka-lab')||'{}')}catch(e){}
+  const draw=()=>{let n=0;boxes.forEach(b=>{b.checked=!!st[b.dataset.lab];b.closest('tr').classList.toggle('ok',b.checked);if(b.checked)n++});prog.textContent=n+' of '+boxes.length+' passed';const a=links.slab;if(a){const sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=n===boxes.length?'✓':sp.dataset.n}};
+  boxes.forEach(b=>b.onchange=()=>{st[b.dataset.lab]=b.checked;try{localStorage.setItem('kafka-lab',JSON.stringify(st))}catch(e){}draw()});draw();
+})();
+
+/* hero log */
+(function(){const log=$('#heroLog');let o=40;const add=a=>{log.insertAdjacentHTML('beforeend',cell(o,'Order'+(59+o),a?'new':''));o++;if(log.querySelectorAll('.cell').length>7)log.querySelector('.cell').remove()};
+  for(let i=0;i<3;i++)add(false);
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches){for(let i=0;i<3;i++)add(false);return}
+  setInterval(()=>{if(!document.hidden)add(true)},1500);
+})();
+
+/* lesson 8: partitioner */
+function murmur2(d){const m=0x5bd1e995,len=d.length;let h=0x9747b28c^len;const n4=len>>2;
+  for(let i=0;i<n4;i++){const j=i*4;let k=d[j]|(d[j+1]<<8)|(d[j+2]<<16)|(d[j+3]<<24);k=Math.imul(k,m);k^=k>>>24;k=Math.imul(k,m);h=Math.imul(h,m);h^=k}
+  const t=len&~3;switch(len%4){case 3:h^=d[t+2]<<16;case 2:h^=d[t+1]<<8;case 1:h^=d[t];h=Math.imul(h,m)}
+  h^=h>>>13;h=Math.imul(h,m);h^=h>>>15;return h&0x7fffffff}
+(function(){const key=$('#kKey'),sel=$('#kN'),out=$('#kOut'),lanes=$('#kLanes');let L=[],sticky={p:0,c:0},seq=0;
+  const draw=hot=>{lanes.innerHTML=L.map((r,p)=>`<div class="log"><label>P${p}</label>${r.slice(-7).map((x,i,a)=>cell(x.o,x.k,(p===hot&&i===a.length-1)?'new pend':'')).join('')||'<span style="font:400 .8rem var(--mono);color:var(--muted);padding-bottom:.45rem">empty</span>'}</div>`).join('')};
+  const reset=msg=>{L=Array.from({length:+sel.value},()=>[]);sticky={p:0,c:0};draw(-1);out.textContent=msg};
+  const send=()=>{const n=L.length,k=key.value.trim();let p;
+    if(k){const h=murmur2(new TextEncoder().encode(k));p=h%n;out.textContent=`hash("${k}") = ${h}   →   ${h} mod ${n} = P${p}`}
+    else{if(sticky.c>=3){sticky.p=(sticky.p+1+Math.floor(Math.random()*(n-1)))%n;sticky.c=0}p=sticky.p;sticky.c++;out.textContent=`no key → sticky partitioner → P${p} (batch ${sticky.c} of 3, then it switches)`}
+    L[p].push({o:L[p].length,k:k||'(no key)'});draw(p)};
+  $('#kSend').onclick=send;key.addEventListener('keydown',e=>{if(e.key==='Enter')send()});
+  $('#kClear').onclick=()=>reset('Logs cleared.');
+  sel.onchange=()=>reset(`Now ${sel.value} partitions. Send the same keys again: some land on a different partition.`);
+  document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{key.value=b.dataset.k;send()});
+  reset('Press “Send record”.');
+})();
+
+/* lesson 10: groups */
+(function(){const view=$('#gView'),out=$('#gOut'),msg={1:'One consumer reads all three partitions. It works, but there is no parallelism.',2:'Two consumers share three partitions. One of them gets two.',3:'One partition each. This is the maximum parallelism for 3 partitions.',4:'Consumer 4 gets nothing. It idles as a spare and takes over if another member dies.'};
+  const set=n=>{const own=Array.from({length:n},()=>[]);for(let p=0;p<3;p++)own[p%n].push(p);
+    view.innerHTML='<div class="row nowrap">'+own.map((ps,i)=>`<div class="bk${ps.length?'':' dead'}"><b>Consumer ${i+1}</b>${ps.map(p=>`<span class="chip Y">orders · P${p}</span>`).join('')||'<span class="chip">idle (spare)</span>'}</div>`).join('')+'</div>';
+    out.textContent=msg[n];document.querySelectorAll('[data-g]').forEach(b=>b.classList.toggle('on',+b.dataset.g===n))};
+  document.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>set(+b.dataset.g));set(3);
+})();
+
+/* lesson 11: offsets */
+(function(){const log=$('#oLog'),out=$('#oOut'),B=40,N=50;let pos=B,com=B;
+  const draw=m=>{log.querySelectorAll('.cell').forEach(c=>c.remove());let h='';for(let o=B;o<N;o++)h+=cell(o,'Order'+(95+3*(o-B)),o<com?'done':o<pos?'pend':'');log.insertAdjacentHTML('beforeend',h);
+    out.innerHTML=`position = ${pos} &nbsp; committed = ${com}<br>${m}`};
+  $('#oPoll').onclick=()=>{if(pos>=N)return draw('Caught up. Nothing new to read.');const a=pos;pos=Math.min(N,pos+2);draw(`Read offsets ${a} to ${pos-1}. Not saved yet.`)};
+  $('#oCommit').onclick=()=>{com=pos;draw(`Bookmark saved: “next time start at ${com}”.`)};
+  $('#oCrash').onclick=()=>{const lost=pos-com;pos=com;draw(lost?`Restarted at ${com}. The ${lost} uncommitted record${lost>1?'s':''} will be processed again. That is at-least-once.`:`Restarted at ${com}. Nothing repeated, because everything read was committed.`)};
+  $('#oReset').onclick=()=>{pos=com=B;draw('Offsets rewound to 40. The group replays everything from there, order 101 included.')};
+  draw('Press “Poll 2 records” to start reading.');
+})();
+
+/* lesson 15: failure simulator */
+(function(){const wrap=$('#fBrokers'),table=$('#fTable'),out=$('#fOut');const up={1:true,2:true,3:true};
+  const P=[[1,2,3],[2,3,1],[3,1,2]].map((r,i)=>({i,r,leader:r[0],isr:r.slice()}));
+  const draw=()=>{wrap.innerHTML=[1,2,3].map(b=>`<button class="bk${up[b]?'':' dead'}" data-b="${b}" aria-pressed="${!up[b]}"><b>Broker ${b}</b><small>${up[b]?'up, click to crash':'down, click to restart'}</small>${P.map(p=>{const c=!up[b]?'X':p.leader===b?'L':'F';const w=up[b]&&p.leader!==b&&!p.isr.includes(b)?' (waiting)':'';return `<span class="chip ${c}">P${p.i}${w}</span>`}).join('')}</button>`).join('');
+    table.innerHTML='<tr><th>Partition</th><th>Leader</th><th>ISR</th><th>Status</th></tr>'+P.map(p=>`<tr><td>orders-${p.i}</td><td>${p.leader?'Broker '+p.leader:'<span class="no">none</span>'}</td><td>{${p.isr.slice().sort().join(', ')}}</td><td>${!p.leader?'<span class="no">offline</span>':p.isr.length===3?'<span class="yes">healthy</span>':'under-replicated'}</td></tr>`).join('');
+    wrap.querySelectorAll('button').forEach(x=>x.onclick=()=>toggle(+x.dataset.b))};
+  const toggle=b=>{const msgs=[];
+    if(up[b]){up[b]=false;P.forEach(p=>{if(p.leader===b){if(p.isr.length===1){p.leader=null;msgs.push(`P${p.i} is offline: Broker ${b} was the last in-sync replica`)}else{p.isr=p.isr.filter(x=>x!==b);p.leader=p.r.find(x=>p.isr.includes(x));msgs.push(`P${p.i}: Broker ${p.leader} promoted to leader`)}}else p.isr=p.isr.filter(x=>x!==b)});
+      out.textContent=`Broker ${b} crashed. `+(msgs.join('. ')||'It led nothing, so no election was needed')+'.'}
+    else{up[b]=true;P.forEach(p=>{if(!p.leader){if(p.isr.includes(b)){p.leader=b;msgs.push(`P${p.i} is back online with Broker ${b} as leader`)}else msgs.push(`P${p.i} stays offline: Broker ${b} is missing records, so it waits for Broker ${p.isr[0]}`)}
+        if(p.leader)p.r.forEach(x=>{if(up[x]&&!p.isr.includes(x))p.isr.push(x)})});
+      out.textContent=`Broker ${b} restarted, caught up and rejoined as a follower. `+(msgs.length?msgs.join('. ')+'.':'')}
+    draw()};
+  draw();
+})();
+})();
+</script>
+</body>
+</html>

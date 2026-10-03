@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Learning Hub</title>
+  <script>
+    try {
+      var t = (JSON.parse(localStorage.getItem('elh.state.v1')) || {}).theme;
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="assets/dashboard.css">
+</head>
+<body data-page="viewer" class="viewer">
+  <header class="vbar">
+    <a class="vbar-back" href="./" title="Back to Learning Hub">
+      <span aria-hidden="true">←</span><span class="hide-sm">Learning Hub</span>
+    </a>
+
+    <div class="vbar-title">
+      <span class="vbar-cat" id="topicCategory"></span>
+      <h1 id="topicTitle">Loading…</h1>
+    </div>
+
+    <div class="vbar-actions">
+      <button class="icon-btn" id="favBtn" type="button" aria-pressed="false" title="Bookmark"></button>
+      <a class="nav-btn" id="prevBtn" aria-disabled="true">
+        <span aria-hidden="true">←</span><span class="hide-md" id="prevLabel">Previous</span>
+      </a>
+      <a class="nav-btn" id="nextBtn" aria-disabled="true">
+        <span class="hide-md" id="nextLabel">Next</span><span aria-hidden="true">→</span>
+      </a>
+      <a class="icon-btn hide-sm" id="rawBtn" target="_blank" rel="noopener" title="Open original artifact in new tab">↗</a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode (hub only)"></button>
+    </div>
+  </header>
+
+  <main class="vframe">
+    <!-- The artifact is loaded unchanged into this iframe. Hub CSS/JS never reaches inside it. -->
+    <iframe id="artifactFrame" title="Learning artifact" allow="clipboard-write; fullscreen" allowfullscreen></iframe>
+    <div class="viewer-msg" id="viewerMsg" hidden></div>
+  </main>
+
+  <script src="assets/dashboard.js"></script>
+</body>
+</html>
