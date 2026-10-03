@@ -1,0 +1,1782 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PostgreSQL from first principles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f7;--surface:#ffffff;--surface2:#e2e9f2;--ink:#16233a;--muted:#52617a;--line:#c7d2e0;
+  --leader:#f2b705;--leader-ink:#16233a;--follower:#2f6fde;--follower-bg:#e3edff;
+  --ctrl:#7a4fd6;--ctrl-bg:#efe8ff;--ok:#17885c;--ok-bg:#dff5ea;--bad:#cf3f36;--bad-bg:#fde6e3;
+  --link:#2459c4;--board:#111c2e;--board-ink:#e8eef7;--board-line:#2c3e5e;
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",Verdana,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 70px);scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--body);-webkit-text-size-adjust:100%}
+a{color:var(--link)}
+:focus-visible{outline:3px solid var(--leader);outline-offset:2px;border-radius:4px}
+code,kbd{font-family:var(--mono);font-size:.86em;background:var(--surface2);padding:.1em .35em;border-radius:4px}
+h1,h2,h3{font-family:var(--display);line-height:1.1;margin:0}
+p{margin:.7em 0;max-width:68ch}
+ul,ol{max-width:68ch;padding-left:1.2em;margin:.6em 0}
+li{margin:.3em 0}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:.6rem;
+  padding:.55rem 1rem;background:var(--surface);border-bottom:1px solid var(--line)}
+.top strong{font-family:var(--display);font-size:1.05rem;margin-right:auto}
+.btn{font:700 .9rem var(--body);color:var(--ink);background:var(--surface2);border:1px solid var(--line);
+  padding:.45rem .8rem;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn{white-space:nowrap}
+.top strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.btn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.warn{background:var(--bad-bg);border-color:var(--bad);color:var(--ink)}
+#bar{position:absolute;left:0;bottom:-3px;height:3px;width:0;background:var(--leader)}
+#menuBtn{display:none}
+
+.shell{display:grid;grid-template-columns:270px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav#toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);align-self:start;max-height:calc(100vh - 60px);
+  overflow:auto;padding:1.2rem 1rem 2rem;font-size:.9rem}
+nav#toc h3{font-size:.95rem;margin:1.1rem 0 .3rem;color:var(--muted)}
+nav#toc a{display:flex;gap:.5rem;padding:.22rem .4rem;border-radius:6px;color:var(--ink);text-decoration:none}
+nav#toc a span{font-family:var(--mono);font-size:.78rem;color:var(--muted);min-width:1.4rem;padding-top:.15rem}
+nav#toc a:hover{background:var(--surface2)}
+nav#toc a.cur{background:var(--leader);color:var(--leader-ink)}
+nav#toc a.cur span{color:var(--leader-ink)}
+main{padding:0 1.25rem 5rem;min-width:0}
+@media (max-width:980px){
+  .shell{display:block}
+  #menuBtn{display:inline-block}
+  nav#toc{display:none;position:fixed;inset:calc(env(safe-area-inset-top,0px) + 50px) 0 0 0;max-height:none;background:var(--bg);z-index:15}
+  nav#toc.open{display:block}
+}
+
+/* hero */
+.hero{padding:3.2rem 0 2.2rem;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(2.5rem,7vw,4.6rem);font-weight:800;letter-spacing:-.03em;max-width:14ch}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:52ch}
+.herolog{margin-top:1.8rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.88rem;color:var(--muted);margin-top:1.2rem}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+
+/* part divider + sections */
+.part{margin:3.5rem 0 0;padding:1rem 1.2rem;background:var(--ink);color:var(--bg);border-radius:14px}
+.part h2{font-size:1.5rem;font-weight:700}
+.part p{margin:.2rem 0 0;opacity:.8;font-size:.95rem}
+section.s{padding:2.6rem 0 1rem;border-bottom:1px dashed var(--line)}
+.sh{display:flex;align-items:center;gap:.9rem;margin-bottom:.4rem}
+.sh .off{font:600 .95rem var(--mono);background:var(--leader);color:var(--leader-ink);min-width:2.6rem;height:2.6rem;
+  display:grid;place-items:center;border-radius:8px;border:2px solid var(--ink)}
+.sh h2{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em}
+.lead{font-size:1.15rem;margin:.6rem 0 1rem}
+h3{font-size:1.2rem;margin:1.6rem 0 .3rem}
+
+/* what / why / how */
+.wwh{display:grid;gap:.5rem;margin:1rem 0;max-width:72ch}
+.wwh div{display:grid;grid-template-columns:4.2rem 1fr;gap:.8rem;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:.6rem .8rem}
+.wwh b{font-family:var(--display);color:var(--follower)}
+
+/* figures */
+figure{margin:1.2rem 0;max-width:820px}
+.canvas{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.1rem;overflow-x:auto}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.45rem;max-width:68ch}
+.cluster{border:2px dashed var(--muted);border-radius:14px;padding:1.6rem .8rem .8rem;position:relative;min-width:max-content}
+.cluster>em{position:absolute;top:-.8rem;left:.9rem;background:var(--surface);padding:0 .5rem;font:700 .9rem var(--display);font-style:normal}
+.row{display:flex;gap:.7rem;flex-wrap:wrap;align-items:stretch}
+.row.nowrap{flex-wrap:nowrap}
+.bk{flex:1 1 150px;min-width:150px;background:var(--surface2);border:2px solid var(--ink);border-radius:10px;padding:.6rem}
+.bk>b{display:block;font-family:var(--display);margin-bottom:.35rem}
+.bk small{color:var(--muted);display:block;font-size:.8rem}
+.bk.dead{opacity:.45;border-style:dashed;border-color:var(--bad)}
+.bk.skip{opacity:.4}
+#ciBtns .btn{white-space:normal;text-align:left}
+#ciBtns .btn{white-space:normal;text-align:left;font:600 .8rem var(--mono)}
+.bk.ctl{border-color:var(--ctrl);background:var(--ctrl-bg)}
+button.bk{font:inherit;color:inherit;text-align:left;cursor:pointer}
+.chip{display:block;font:600 .8rem var(--mono);padding:.3rem .5rem;border-radius:6px;margin-top:.3rem;
+  background:var(--surface);border:1px solid var(--line)}
+.chip.L{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.L::before{content:"P  "}
+.chip.Y{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.F{background:var(--follower-bg);border-color:var(--follower)}
+.chip.F::before{content:"R  "}
+.chip.C{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.chip.X{background:var(--bad-bg);border-color:var(--bad)}
+.chip.inl{display:inline-block;margin:0}
+.log{display:flex;align-items:flex-end;gap:3px;margin:.35rem 0;min-width:max-content}
+.log>label,.log>em{font:600 .82rem var(--mono);font-style:normal;min-width:5.6rem;padding-bottom:.45rem;color:var(--muted)}
+.cell{border:1.5px solid var(--ink);background:var(--surface);border-radius:5px;min-width:4.6rem;text-align:center;
+  font:400 .78rem var(--mono);overflow:hidden}
+.cell b{display:block;background:var(--ink);color:var(--surface);font-weight:600;padding:.05rem 0}
+.cell span{display:block;padding:.28rem .35rem}
+.cell.new{animation:pop .45s ease-out}
+.cell.done span{background:var(--ok-bg)}
+.cell.pend span{background:var(--leader);color:var(--leader-ink)}
+.cell.ghost{border-style:dashed;opacity:.55}
+.cell.gone{opacity:.3;text-decoration:line-through}
+@keyframes pop{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+.flow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.flow.v{flex-direction:column;align-items:flex-start}
+.flow .n{background:var(--surface2);border:1.5px solid var(--ink);border-radius:8px;padding:.4rem .7rem;font-weight:700;font-size:.92rem}
+.flow .n small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.flow .n.y{background:var(--leader);color:var(--leader-ink)}
+.flow .n.y small{color:var(--leader-ink)}
+.flow .n.b{background:var(--follower-bg);border-color:var(--follower)}
+.flow .n.p{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.flow .n.r{background:var(--bad-bg);border-color:var(--bad)}
+.flow .n.g{background:var(--ok-bg);border-color:var(--ok)}
+.flow>i{font-style:normal;color:var(--muted);font-weight:700}
+.flow>i::before{content:"→"}
+.flow.v>i{padding-left:1.2rem}
+.flow.v>i::before{content:"↓"}
+.flow>i[data-t]::after{content:" " attr(data-t);font:400 .78rem var(--body)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.8rem}
+.two>div{background:var(--surface2);border-radius:10px;padding:.8rem}
+.two h4{margin:0 0 .5rem;font:700 .95rem var(--display)}
+
+/* mermaid board follows the theme; code blocks stay dark */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;overflow-x:auto}
+.board pre.mmd{margin:0;font:400 .8rem/1.5 var(--mono);color:var(--muted);white-space:pre-wrap}
+.board .svgw{text-align:center;min-width:min(100%,520px)}
+.board svg{max-width:100%;height:auto}
+pre.code{background:var(--board);color:var(--board-ink);border:1px solid var(--board-line);border-radius:12px;padding:.9rem 1rem;
+  font:400 .84rem/1.55 var(--mono);overflow-x:auto;max-width:820px}
+pre.code i{color:#9fb3d1;font-style:normal}
+pre.code b{color:var(--leader);font-weight:600}
+
+/* callouts */
+.tip,.fail,.remember{border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;border-left:6px solid}
+.tip{background:var(--follower-bg);border-color:var(--follower)}
+.fail{background:var(--bad-bg);border-color:var(--bad)}
+.remember{background:var(--leader);color:var(--leader-ink);border-color:var(--ink);font-weight:700}
+.tip>b,.fail>b{font-family:var(--display)}
+details.deep,details.q{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:1rem 0;max-width:72ch}
+details summary{cursor:pointer;padding:.65rem .9rem;font-weight:700}
+details .in{padding:0 .9rem .7rem}
+details.q{border-color:var(--ok)}
+details.q summary::before{content:"Quick check: ";color:var(--ok)}
+
+/* steps */
+ol.steps{list-style:none;padding:0;counter-reset:s;max-width:72ch}
+ol.steps li{counter-increment:s;position:relative;padding:.1rem 0 .7rem 2.6rem;margin:0;border-left:2px solid var(--line);margin-left:.9rem}
+ol.steps li::before{content:counter(s);position:absolute;left:-.95rem;top:0;width:1.8rem;height:1.8rem;border-radius:50%;
+  background:var(--ink);color:var(--bg);display:grid;place-items:center;font:600 .82rem var(--mono)}
+ol.steps li:last-child{border-color:transparent}
+ol.steps b{font-family:var(--display)}
+
+/* demos */
+.demo{background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:1rem;margin:1.2rem 0;max-width:820px}
+.demo>h4{margin:0 0 .6rem;font:700 1.05rem var(--display)}
+.ctrls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.8rem}
+.ctrls input,.ctrls select{font:400 .95rem var(--mono);padding:.42rem .6rem;border-radius:8px;border:1.5px solid var(--ink);
+  background:var(--bg);color:var(--ink);min-width:0}
+.ctrls label{font-size:.88rem;color:var(--muted)}
+.out{font:400 .88rem var(--mono);background:var(--surface2);border-radius:8px;padding:.55rem .7rem;margin:.6rem 0;min-height:2.4rem}
+.scroll{overflow-x:auto}
+
+/* tables + cards */
+.tw{overflow-x:auto;max-width:820px}
+table{border-collapse:collapse;width:100%;background:var(--surface);font-size:.94rem}
+th,td{border:1px solid var(--line);padding:.5rem .7rem;text-align:left;vertical-align:top}
+th{background:var(--ink);color:var(--bg);font-family:var(--display)}
+.yes{color:var(--ok);font-weight:700}.no{color:var(--bad);font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.8rem;max-width:900px;margin:1rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:.8rem .9rem}
+.card h4{margin:0 0 .3rem;font:700 1rem var(--display)}
+.card p{margin:.3rem 0;font-size:.94rem}
+.myth .w{background:var(--bad-bg);border-radius:8px;padding:.5rem .6rem;margin:0 0 .4rem}
+.myth .c{background:var(--ok-bg);border-radius:8px;padding:.5rem .6rem;margin:0}
+.myth .w::before{content:"✗ ";color:var(--bad);font-weight:700}
+.myth .c::before{content:"✓ ";color:var(--ok);font-weight:700}
+.final{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.tag{display:inline-block;font:700 .72rem var(--body);padding:.08rem .5rem;border-radius:999px;border:1.5px solid;text-decoration:none;vertical-align:.08em;white-space:nowrap;margin-left:.15rem}
+.tag.g{color:var(--ok);background:var(--ok-bg)}
+.tag.d{color:var(--follower);background:var(--follower-bg)}
+.tag.s{color:var(--ctrl);background:var(--ctrl-bg)}
+.tag.x{color:var(--muted);background:var(--surface2);border-style:dashed}
+a.tag:hover{filter:brightness(.92)}
+.remember .tag,.chip.Y .tag{background:var(--surface)}
+.trk{border:2px solid var(--ink);border-radius:12px;margin:1.6rem 0 .8rem;max-width:820px;background:var(--surface);overflow:hidden}
+.trk h4{margin:0;padding:.35rem .8rem;background:var(--leader);color:var(--leader-ink);font:700 .95rem var(--display);border-bottom:2px solid var(--ink)}
+.trk h4::after{content:attr(data-id);float:right;font:600 .8rem var(--mono)}
+.trk .in{padding:.2rem .8rem .7rem}
+.trk pre.code{margin:.4rem 0 0;border-radius:8px}
+.zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.7rem}
+.zone{border:2px solid var(--ink);border-radius:10px;padding:.6rem;background:var(--surface2)}
+.zone>b{font-family:var(--display);display:block}
+.zone>small{color:var(--muted);font:400 .78rem var(--mono);display:block;margin-bottom:.3rem}
+.zone h5{margin:.5rem 0 0;font:700 .78rem var(--body);color:var(--muted)}
+table.lab td:first-child{text-align:center}
+table.lab input{width:1.2rem;height:1.2rem;accent-color:var(--ok)}
+table.lab code{white-space:normal;word-break:break-word}
+table.lab tr.ok td{background:var(--ok-bg)}
+#labProg{font-weight:700}
+footer{color:var(--muted);font-size:.88rem;padding:2rem 0}
+
+/* reader tools: search, lesson progress, glossary tooltips, self-test */
+.srch{margin:0 0 .5rem}
+.srch input{width:100%;font:400 .9rem var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:.45rem .6rem}
+.srch .res{margin-top:.3rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.25rem;max-height:55vh;overflow:auto}
+.srch .res small{display:block;color:var(--muted);font-size:.78rem}
+.srch .res p{margin:.3rem .45rem;color:var(--muted);font-size:.85rem}
+#doneProg{font-size:.82rem;color:var(--muted);margin:0 0 .2rem}
+.btn.done{font-size:.8rem;padding:.25rem .6rem;margin:.1rem 0 .3rem}
+.btn.done.ok{background:var(--ok-bg);border-color:var(--ok)}
+nav#toc a.ok span{color:var(--ok);font-weight:700}
+nav#toc a.cur.ok span{color:var(--leader-ink)}
+abbr.gl{text-decoration:none;border-bottom:2px dotted var(--follower);cursor:help;position:relative}
+abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolute;left:0;top:1.6em;z-index:12;width:max-content;max-width:min(20rem,70vw);
+  background:var(--ink);color:var(--bg);font:400 .82rem/1.4 var(--body);padding:.5rem .7rem;border-radius:8px;white-space:normal}
+.selftest .q{font:700 1.1rem var(--display);margin:.2rem 0 .6rem}
+.selftest .a{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:8px;padding:.6rem .8rem;margin:0 0 .7rem}
+.selftest .from{font-size:.82rem;color:var(--muted);margin:0}
+.selftest ul{margin:.3rem 0 .7rem}
+</style>
+</head>
+<body>
+<div class="top">
+  <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
+  <strong>PostgreSQL from first principles</strong>
+  <button class="btn" id="themeBtn">Dark theme</button>
+  <div id="bar"></div>
+</div>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+
+<div class="hero">
+  <h1>Log it first. Never overwrite a row.</h1>
+  <p>32 short lessons on how PostgreSQL stores, protects, finds and scales data: the system-design interview material, with the internals behind it. One order is followed through every lesson with real output, and the last lesson is a checklist to prove it on your own server.</p>
+  <div class="canvas herolog scroll">
+    <div class="log"><label>WAL</label><div class="cell done"><b>0/19FF528</b><span>update stock</span></div><div class="cell done"><b>0/19FF618</b><span>insert order</span></div><div class="cell pend new"><b>0/19FF790</b><span>COMMIT</span></div><div class="cell ghost"><b>next</b><span>…</span></div></div>
+    <div class="log"><label>inventory</label><div class="cell gone"><b>(0,1)</b><span>qty 5</span></div><div class="cell pend new"><b>(0,2)</b><span>qty 4</span></div><div class="cell ghost"><b>(0,3)</b><span>next version</span></div></div>
+  </div>
+  <div class="legend">
+    <span><span class="chip L inl">primary</span> takes every write. Yellow also marks the live row or the part doing the work</span>
+    <span><span class="chip F inl">replica</span> replays the WAL and serves reads. Blue also marks a second transaction</span>
+    <span><span class="chip C inl">control</span> pooler, planner, Patroni, autovacuum</span>
+    <span><span class="chip X inl">down</span> failed, rejected or dead</span>
+  </div>
+</div>
+
+<section class="s" id="s0" data-t="Running example and tags">
+  <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  <p class="lead">One order is followed through every lesson. Look for the yellow “Follow order 9001” box at the end of each one.</p>
+  <pre class="code"><i>-- Asha (user 42) buys one Widget (product 123) for 499.00</i>
+BEGIN;
+UPDATE inventory SET quantity = quantity - 1
+ WHERE product_id = 123 AND quantity &gt; 0;          <i>-- 5 becomes 4</i>
+INSERT INTO orders (user_id, product_id, total, created_at)
+VALUES (42, 123, 499.00, '2026-03-15 10:00:00+00')
+RETURNING id, status, created_at;                 <i>-- <b>9001</b> | paid | 2026-03-15 10:00:00+00</i>
+COMMIT;</pre>
+  <div class="tw"><table>
+    <tr><th>Piece</th><th>In this guide</th></tr>
+    <tr><td>Shopper</td><td><code>users.id = 42</code>, Asha, <code>asha@example.com</code></td></tr>
+    <tr><td>Second shopper, for races</td><td><code>users.id = 43</code>, Ravi</td></tr>
+    <tr><td>Product</td><td><code>inventory.product_id = 123</code>, Widget, quantity 5 then 4</td></tr>
+    <tr><td>The order</td><td><code>orders.id = 9001</code>, total 499.00, status paid</td></tr>
+    <tr><td>Transaction ID</td><td><code>741</code></td></tr>
+    <tr><td>WAL written by it</td><td><code>0/19FF4E8</code> to <code>0/19FF7B8</code>, 720 bytes</td></tr>
+    <tr><td>Database</td><td><code>shop</code> (OID 16384)</td></tr>
+    <tr><td>Other data</td><td>1,000,000 generated orders from 10,000 users, 100,000 products</td></tr>
+    <tr><td>App server</td><td><code>orders-api</code> at 10.0.1.10 <span class="tag x">Example value</span></td></tr>
+    <tr><td>Pooler</td><td>PgBouncer at <code>pgb-1:6432</code> <span class="tag x">Example value</span></td></tr>
+    <tr><td>Primary</td><td><code>pg-1:5432</code></td></tr>
+    <tr><td>Replica</td><td><code>replica1</code> (shown as <code>pg-2</code> in diagrams)</td></tr>
+  </table></div>
+  <p>Every SQL result, plan, error message, size and timing in the yellow boxes is real output, captured on PostgreSQL 16.15 on one small Ubuntu machine. The primary ran on port 5432 and the replica on port 5433 of that same machine, so the host names are invented. The app server and PgBouncer were not run.</p>
+  <h3>Four tags tell you how far to trust a statement</h3>
+  <div class="tw"><table>
+    <tr><th>Tag</th><th>Meaning</th></tr>
+    <tr><td><span class="tag g">Guaranteed</span></td><td>Holds on every PostgreSQL server. Part of the design.</td></tr>
+    <tr><td><span class="tag d">Default</span></td><td>The stock setting. Yours may be configured differently.</td></tr>
+    <tr><td><span class="tag s">Simplified</span></td><td>True in spirit. A detail was left out, or it is a rule of thumb.</td></tr>
+    <tr><td><span class="tag x">Example value</span></td><td>A number or name invented for the running example.</td></tr>
+  </table></div>
+  <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>.</p>
+</section>
+
+<div class="part" data-part="The big picture"><h2>Part 1: The big picture</h2><p>What it is, and where a query goes</p></div>
+
+<section class="s" id="s1" data-t="When to pick PostgreSQL">
+  <div class="sh"><span class="off">01</span><h2>When to pick PostgreSQL</h2></div>
+  <p class="lead">Pick PostgreSQL when the data is related, the writes must be correct, and the questions you ask of the data will keep changing.</p>
+  <div class="wwh">
+    <div><b>What</b><span>A relational database: tables, SQL, transactions, on one primary server.</span></div>
+    <div><b>Why</b><span>You model the data once and ask new questions later, with correctness enforced by the database.</span></div>
+    <div><b>Cost</b><span>One node takes all writes. Scaling writes past that node is your job.</span></div>
+  </div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Reach for it when you have</h4>
+      <span class="chip Y">Related data: JOINs, CTEs, window functions</span>
+      <span class="chip Y">Money or stock: ACID transactions</span>
+      <span class="chip Y">Queries that will change: add an index later</span>
+      <span class="chip">Semi-structured fields: JSONB</span>
+      <span class="chip">Search that is good enough: full-text</span>
+      <span class="chip">Locations: PostGIS</span></div>
+    <div><h4>Look elsewhere when you need</h4>
+      <div class="flow v">
+        <span class="n">Millions of appends per second<small>Cassandra, ClickHouse</small></span>
+        <span class="n">Automatic sharding across hundreds of TB<small>CockroachDB, DynamoDB, Cassandra</small></span>
+        <span class="n">Only get and set by key<small>Redis, DynamoDB</small></span>
+        <span class="n">Heavy time-series<small>TimescaleDB, InfluxDB</small></span>
+        <span class="n">Sub-millisecond hot reads<small>Redis in front, not instead</small></span>
+      </div></div>
+  </div></div><figcaption>The left column is one database doing six jobs. The right column is where a specialist wins.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Interview system</th><th>Why PostgreSQL fits</th></tr>
+    <tr><td>Payments, ledger</td><td>Transactions stop double-spending. Audit trail.</td></tr>
+    <tr><td>E-commerce orders and stock</td><td>Related tables, atomic stock decrement.</td></tr>
+    <tr><td>Booking</td><td>The database itself can refuse overlapping bookings.</td></tr>
+    <tr><td>Content management</td><td>JSONB for flexible fields, built-in search.</td></tr>
+    <tr><td>Multi-tenant SaaS</td><td>Row-level security, or a schema per tenant.</td></tr>
+  </table></div>
+  <div class="tip"><b>In an interview.</b> Do not say “it is what I know”. Name the requirement, the feature that meets it, and the limit you accept.</div>
+  <details class="q"><summary>Name two workloads where PostgreSQL is the wrong first choice, and what you would reach for instead.</summary><div class="in">Append-only writes at millions per second (Cassandra or ClickHouse), and pure key-value lookups that need sub-millisecond latency (Redis). Also: automatic horizontal scaling across hundreds of terabytes (CockroachDB, DynamoDB).</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>The order touches three related tables and must change two of them together. That is the left column: related data plus a transaction.</p>
+  <pre class="code">users (42, Asha)  &lt;--  orders (9001)  --&gt;  inventory (123, Widget)
+                    user_id = 42       product_id = 123</pre></div></aside>
+</section>
+
+<section class="s" id="s2" data-t="The path of one query">
+  <div class="sh"><span class="off">02</span><h2>The path of one query</h2></div>
+  <p class="lead">Every statement is parsed, planned and executed by one backend process, which reads pages through a shared cache and logs every change before it counts.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">orders-api<small>app server</small></span><i data-t="SQL"></i>
+    <span class="n p">PgBouncer<small>shares connections</small></span><i></i>
+    <span class="n p">Parser<small>is it valid SQL?</small></span><i></i>
+    <span class="n p">Planner<small>cheapest way to run it</small></span><i></i>
+    <span class="n y">Executor<small>runs the plan</small></span><i data-t="pages"></i>
+    <span class="n">Buffer manager<small>cache of 8 kB pages</small></span><i></i>
+    <span class="n">Data files</span>
+  </div>
+  <div class="flow" style="margin-top:.8rem"><span class="n y">Executor</span><i data-t="every change"></i><span class="n">WAL<small>write-ahead log, flushed at COMMIT</small></span><i data-t="stream"></i><span class="n b">replica1<small>replays it</small></span></div>
+  </div><figcaption>Parser, planner and executor all live inside one backend process on pg-1. The WAL is the only thing that must reach disk before COMMIT returns.</figcaption></figure>
+  <ul>
+    <li><b>One process per connection.</b> The server forks a backend for each client connection. <span class="tag g">Guaranteed</span></li>
+    <li><b>The planner chooses by cost.</b> It uses table statistics to estimate each option, then picks the cheapest.</li>
+    <li><b>The executor never reads files directly.</b> It asks the buffer manager for pages, which come from memory when possible.</li>
+    <li><b>Writes go to the primary only.</b> Replicas are read-only copies fed by the WAL. <span class="tag g">Guaranteed</span></li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in"><p>Besides the backends, a few helper processes run all the time. The checkpointer and background writer push changed pages to the data files. The WAL writer flushes the log. The autovacuum launcher starts cleanup workers.</p></div></details>
+  <details class="q"><summary>Which part of PostgreSQL decides between an index scan and a sequential scan, and what does it base the decision on?</summary><div class="in">The planner (optimizer). It estimates the cost of each plan from table statistics (row counts, value frequencies) and cost settings, and picks the cheapest.</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>The processes on the server while the order ran. Backend 3228 served the session; the rest are the helpers.</p>
+  <pre class="code">$ ps aux | grep postgres          <i># trimmed</i>
+3205 /usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main
+3206 postgres: 16/main: checkpointer
+3207 postgres: 16/main: background writer
+3209 postgres: 16/main: walwriter
+3210 postgres: 16/main: autovacuum launcher
+3211 postgres: 16/main: logical replication launcher
+
+shop=# SELECT pg_backend_pid();   <i>-- the process serving this connection</i>
+ <b>3228</b></pre></div></aside>
+</section>
+
+<section class="s" id="s3" data-t="Pages, cache and the WAL">
+  <div class="sh"><span class="off">03</span><h2>Pages, the buffer cache and the WAL</h2></div>
+  <p class="lead">Tables are files of 8 kB pages. A change is made in memory and written to the WAL first; the data files catch up later.</p>
+  <div class="wwh">
+    <div><b>What</b><span>The WAL is an append-only log of every change, in order.</span></div>
+    <div><b>Why</b><span>Appending to one log is fast. Rewriting scattered 8 kB pages on every commit is not.</span></div>
+    <div><b>How</b><span>COMMIT returns once the WAL is flushed. Changed pages are written at the next checkpoint.</span></div>
+  </div>
+  <ol class="steps">
+    <li><b>Change the page in memory.</b> The executor edits the page inside shared buffers. The page is now “dirty”.</li>
+    <li><b>Append a WAL record.</b> It describes the change well enough to redo it.</li>
+    <li><b>COMMIT flushes the WAL.</b> Only now does the client get its answer. <a class="tag d" href="#c3">Default · check 3</a></li>
+    <li><b>Checkpoint, later.</b> Dirty pages are written to the data files, every 5 minutes or sooner. <a class="tag d" href="#c15">Default · check 15</a></li>
+  </ol>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>WAL, xid 741</label><div class="cell"><b>0/19FF528</b><span>Heap<br>HOT_UPDATE</span></div><div class="cell"><b>0/19FF5B0</b><span>Sequence<br>LOG</span></div><div class="cell"><b>0/19FF618</b><span>Heap<br>INSERT</span></div><div class="cell"><b>0/19FF6E0</b><span>Btree<br>INSERT_LEAF</span></div><div class="cell pend"><b>0/19FF790</b><span>Transaction<br>COMMIT</span></div></div>
+  </div><figcaption>Five of the ten records the order wrote. Each address is an LSN: a byte position in the log. The commit is just one more record.</figcaption></figure>
+  <ul>
+    <li><b>Page size is 8 kB.</b> Fixed when the server is built. <span class="tag d">Default</span></li>
+    <li><b>Shared buffers is the page cache.</b> 128 MB out of the box, usually raised to about a quarter of RAM. <a class="tag d" href="#c15">Default · check 15</a></li>
+    <li><b>The WAL does two jobs.</b> Crash recovery here, and <a href="#s16">replication</a> later.</li>
+  </ul>
+  <div class="fail"><b>If it breaks:</b> on a crash, memory is lost. At restart the server replays the WAL from the last checkpoint and rebuilds every committed change. Nothing acknowledged is lost.</div>
+  <div class="remember">Durable means “the WAL record is on disk”, not “the table file is updated”.</div>
+  <details class="q"><summary>A server loses power one millisecond after COMMIT returned, before the table file was updated. Why is the row still there after restart?</summary><div class="in">COMMIT only returns after the WAL records are flushed to disk. At startup PostgreSQL replays the WAL from the last checkpoint and redoes the change into the data pages.</div></details>
+  <aside class="trk"><h4 data-id="xid 741">Follow order 9001</h4><div class="in"><p>The whole order, as the log saw it: 720 bytes.</p>
+  <pre class="code">shop=# SELECT start_lsn, xid, resource_manager, record_type, record_length
+       FROM pg_get_wal_records_info('0/19FF4E8', '0/19FF7B8');
+ start_lsn | xid | resource_manager | record_type | record_length
+-----------+-----+------------------+-------------+---------------
+ 0/19FF4E8 |   0 | Heap2            | PRUNE       |            63
+ 0/19FF528 | 741 | Heap             | <b>HOT_UPDATE</b>  |            71   <i>-- inventory 5 to 4</i>
+ 0/19FF570 | 741 | Heap2            | PRUNE       |            59
+ 0/19FF5B0 | 741 | Sequence         | LOG         |            99   <i>-- orders_id_seq</i>
+ 0/19FF618 | 741 | Heap             | <b>INSERT+INIT</b> |           103   <i>-- order 9001</i>
+ 0/19FF680 | 741 | Btree            | NEWROOT     |            90   <i>-- orders_pkey</i>
+ 0/19FF6E0 | 741 | Btree            | INSERT_LEAF |            64
+ 0/19FF720 | 741 | Heap             | LOCK        |            54   <i>-- foreign-key checks</i>
+ 0/19FF758 | 741 | Heap             | LOCK        |            54
+ 0/19FF790 | 741 | Transaction      | <b>COMMIT</b>      |            34</pre></div></aside>
+</section>
+
+<section class="s" id="smap" data-t="Where it lives, who calls whom">
+  <div class="sh"><span class="off">04</span><h2>Where it lives and who calls whom</h2></div>
+  <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port each thing is in, and who opens each connection.</p>
+  <h3>Where each thing lives</h3>
+  <figure><div class="canvas"><div class="zones">
+    <div class="zone"><b>orders-api</b><small>10.0.1.10</small><h5>In memory</h5><span class="chip">app pool: a few open connections to pgb-1</span><span class="chip">the retry loop</span></div>
+    <div class="zone"><b>PgBouncer</b><small>pgb-1:6432</small><h5>On disk</h5><span class="chip C">pgbouncer.ini, userlist.txt</span><h5>In memory</h5><span class="chip C">client connections (many)</span><span class="chip C">server connections (few)</span></div>
+    <div class="zone"><b>Primary</b><small>pg-1:5432</small><h5>On disk</h5><span class="chip Y">base/16384/17138: orders rows</span><span class="chip Y">base/16384/17146: orders_pkey</span><span class="chip Y">pg_wal/0000…0001: the log</span><span class="chip Y">pg_xact: committed or aborted</span><h5>In memory</h5><span class="chip">shared buffers: cached pages</span><span class="chip">lock table, list of running transactions</span></div>
+    <div class="zone"><b>Replica</b><small>pg-2:5432 (replica1)</small><h5>On disk</h5><span class="chip F">the same files, replayed from WAL</span><span class="chip F">standby.signal</span><h5>In memory</h5><span class="chip">its own shared buffers</span></div>
+    <div class="zone"><b>Patroni and etcd</b><small>agent on each DB host, etcd:2379</small><h5>In etcd</h5><span class="chip C">leader key with a time limit</span><span class="chip C">cluster config</span></div>
+  </div></div><figcaption>Everything under “in memory” is lost on a crash. Shared buffers is rebuilt by replaying the WAL; locks and open transactions simply vanish, and their changes count as aborted.</figcaption></figure>
+  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For order 9001</th></tr>
+    <tr><td>The row</td><td>A heap file, one per table, in 8 kB pages</td><td><code>base/16384/17138</code>, page 0</td></tr>
+    <tr><td>Index entry</td><td>A separate file per index</td><td><code>base/16384/17146</code> (orders_pkey)</td></tr>
+    <tr><td>The change record</td><td>WAL segment files, 16 MB each</td><td><code>pg_wal/000000010000000000000001</code></td></tr>
+    <tr><td>Committed or not</td><td>The commit log, <code>pg_xact</code></td><td>xid 741: committed</td></tr>
+    <tr><td>Row versions and who sees them</td><td>In each row header: xmin, xmax</td><td>xmin = 741</td></tr>
+    <tr><td>Row locks</td><td>In the row header too, not in a lock table</td><td>xmax on the Widget row</td></tr>
+    <tr><td>Planner statistics</td><td><code>pg_statistic</code>, read via <code>pg_stats</code></td><td>status: paid 0.99, pending 0.01</td></tr>
+    <tr><td>Settings</td><td><code>postgresql.conf</code>, <code>postgresql.auto.conf</code></td><td><code>/etc/postgresql/16/main/</code></td></tr>
+    <tr><td>Who is primary</td><td>etcd leader key (with Patroni)</td><td>pg-1 <span class="tag x">Example value</span></td></tr>
+  </table></div>
+  <h3>Who calls whom</h3>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  A["orders-api"] --&gt;|"SQL on port 6432"| B["PgBouncer pgb-1"]:::ctl
+  B --&gt;|"SQL on port 5432"| P["Primary pg-1"]:::lead
+  B --&gt;|"read-only SQL"| R["Replica pg-2"]
+  R --&gt;|"walreceiver asks for WAL"| P
+  PA["Patroni agents"]:::ctl --&gt;|"renew leader key"| E["etcd"]:::ctl
+  PA --&gt;|"promote or demote"| P
+  H["HAProxy"]:::ctl -.-&gt;|"health check: are you primary?"| PA
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Every arrow points from the side that opens the connection to the side that answers. Note the replica: it dials the primary, not the other way round.</figcaption></figure>
+  <div class="tw"><table><tr><th>Caller</th><th>Calls</th><th>Request</th><th>Why</th></tr>
+    <tr><td>orders-api</td><td>PgBouncer :6432</td><td>Ordinary PostgreSQL protocol</td><td>The app thinks the pooler is the database.</td></tr>
+    <tr><td>PgBouncer</td><td>Primary :5432</td><td>The same SQL, on a shared connection</td><td>Few real connections serve many clients.</td></tr>
+    <tr><td>Replica (walreceiver)</td><td>Primary :5432 (walsender)</td><td>“Stream WAL from LSN X”</td><td>The replica knows how far it got, so it asks.</td></tr>
+    <tr><td>Patroni agent</td><td>etcd :2379</td><td>Renew or take the leader key</td><td>One key, one primary.</td></tr>
+    <tr><td>Patroni agent</td><td>Its local PostgreSQL</td><td>Promote, demote, restart</td><td>It manages the server next to it.</td></tr>
+    <tr><td>HAProxy</td><td>Patroni REST API :8008</td><td>Health check</td><td>Route writes to whoever holds the key. <span class="tag s">Simplified</span></td></tr>
+    <tr><td>Autovacuum launcher</td><td>Worker processes</td><td>“Vacuum this table”</td><td>Internal, no network.</td></tr>
+  </table></div>
+  <h3>What that means for your network</h3>
+  <ul>
+    <li><b>Apps only need to reach the pooler.</b> Port 6432 on pgb-1, nothing else.</li>
+    <li><b>Replicas must reach the primary on 5432.</b> The primary needs a <code>replication</code> line for them in <code>pg_hba.conf</code>.</li>
+    <li><b>Every database host must reach etcd.</b> A node that cannot renew its key must stop being primary.</li>
+    <li><b>PgBouncer does not read your SQL.</b> It cannot tell reads from writes. The app picks a read-only or read-write address. <a class="tag s" href="#c16">Simplified · check 16</a></li>
+  </ul>
+</section>
+<div class="part" data-part="Transactions"><h2>Part 2: Transactions</h2><p>Correct under concurrency</p></div>
+
+<section class="s" id="s4" data-t="ACID: the contract">
+  <div class="sh"><span class="off">05</span><h2>ACID: the contract</h2></div>
+  <p class="lead">A transaction is a promise of four things: all or nothing, always valid, as if alone, and never lost.</p>
+  <div class="cards">
+    <div class="card"><h4>Atomicity</h4><p>Stock goes down and the order appears, or neither happens. A crash in between rolls both back.</p></div>
+    <div class="card"><h4>Consistency</h4><p>Constraints hold at every commit: foreign keys, unique, CHECK. A violating statement is rejected.</p></div>
+    <div class="card"><h4>Isolation</h4><p>Concurrent transactions do not see each other’s half-done work. How strictly is a setting.</p></div>
+    <div class="card"><h4>Durability</h4><p>Once COMMIT returns, the change survives a crash. That is the WAL’s job.</p></div>
+  </div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Both statements commit</h4><div class="flow"><span class="n y">stock 5 to 4</span><i></i><span class="n y">order 9001</span><i></i><span class="n g">COMMIT</span></div></div>
+    <div><h4>Crash before COMMIT</h4><div class="flow"><span class="n y">stock 5 to 4</span><i></i><span class="n r">crash</span><i></i><span class="n">stock is 5, no order</span></div></div>
+  </div></div><figcaption>There is no state where the stock dropped but the order does not exist.</figcaption></figure>
+  <ul>
+    <li><b>Constraints are the C.</b> The table says <code>CHECK (quantity &gt;= 0)</code>, so stock cannot go negative whatever the app does. <span class="tag g">Guaranteed</span></li>
+    <li><b>Isolation is the adjustable one.</b> The next three lessons are about how much of it you buy.</li>
+    <li><b>Durability can be relaxed too.</b> <code>synchronous_commit = off</code> trades the last few commits for speed. <span class="tag d">Default</span> is on.</li>
+  </ul>
+  <details class="q"><summary>Which ACID letter does a CHECK (quantity &gt;= 0) constraint serve, and which letter does the WAL serve?</summary><div class="in">The CHECK constraint serves Consistency: no commit can leave an invalid row. The WAL serves Durability (and it is also how Atomicity survives a crash: uncommitted changes are simply not treated as committed).</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>With the Widget at quantity 0, the database refuses to oversell. The second form is the polite way: it matches no row instead of raising an error.</p>
+  <pre class="code">shop=# UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 123;
+<b>ERROR:  new row for relation "inventory" violates check constraint "inventory_quantity_check"</b>
+DETAIL:  Failing row contains (123, Widget, -1, 1).          <i>-- SQLSTATE 23514</i>
+
+shop=# UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 123 AND quantity &gt; 0;
+UPDATE 0                                                      <i>-- sold out, tell the user</i>
+
+shop=# INSERT INTO orders (user_id, product_id, total) VALUES (999, 123, 1);
+<b>ERROR:  insert or update on table "orders" violates foreign key constraint "orders_user_id_fkey"</b>
+DETAIL:  Key (user_id)=(999) is not present in table "users".</pre></div></aside>
+</section>
+
+<section class="s" id="s5" data-t="MVCC: row versions">
+  <div class="sh"><span class="off">06</span><h2>MVCC: every update writes a new row version</h2></div>
+  <p class="lead">PostgreSQL never edits a row in place. An UPDATE writes a new version and marks the old one as ended, so readers and writers do not block each other.</p>
+  <div class="wwh">
+    <div><b>What</b><span>Multi-version concurrency control: several versions of a row exist at once.</span></div>
+    <div><b>Why</b><span>A reader keeps seeing the version that was current when it started, with no lock.</span></div>
+    <div><b>How</b><span>Each version carries xmin (who created it) and xmax (who ended it).</span></div>
+  </div>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>inventory page 0</label><div class="cell gone"><b>(0,1)</b><span>qty 5<br>xmin 740<br>xmax 741</span></div><div class="cell pend"><b>(0,2)</b><span>qty 4<br>xmin 741</span></div></div>
+  </div><figcaption>After the order: the old Widget version is still on the page, ended by transaction 741. The new one was created by 741.</figcaption></figure>
+  <ul>
+    <li><b>A snapshot decides what you see.</b> A version is visible if its creator committed before your snapshot and nobody you can see has ended it. <span class="tag g">Guaranteed</span></li>
+    <li><b>Readers never block writers.</b> And writers never block readers. Only two writers on the same row wait. <span class="tag g">Guaranteed</span></li>
+    <li><b>DELETE is the same trick.</b> It only sets xmax. The bytes stay.</li>
+    <li><b>The bill comes later.</b> Ended versions are dead rows that <a href="#s25">vacuum</a> must clean up.</li>
+  </ul>
+  <div class="demo">
+    <h4>Try it: update the Widget and watch versions pile up</h4>
+    <div class="ctrls"><button class="btn on" id="mvUp">UPDATE quantity - 1</button><button class="btn" id="mvSnap">Open a long transaction</button><button class="btn" id="mvVac">VACUUM</button><button class="btn" id="mvReset">Reset</button></div>
+    <div class="scroll"><div class="log" id="mvLog"><label>inventory page 0</label></div></div>
+    <div class="out" id="mvOut" aria-live="polite"></div>
+    <p>Yellow is the live version. Green is a dead version an open transaction can still see. Struck out is dead to everyone. <span class="tag s">Simplified</span> Real pages also reuse freed slots.</p>
+  </div>
+  <details class="deep"><summary>What happens internally</summary><div class="in"><p>In the real output below the new version also shows xmax 741. That is not a delete. The order’s foreign-key check locked the Widget row, and a row lock is recorded in xmax too.</p><p>The WAL called this a HOT update: no indexed column changed, so no index entry had to be added.</p></div></details>
+  <details class="q"><summary>After one UPDATE of a row, how many physical copies of it are on the page, and who can still see the old one?</summary><div class="in">Two. The old version has xmax set to the updating transaction. Transactions whose snapshot was taken before that update committed still see the old version; everyone else sees the new one. <a href="#c2">Check 2</a> shows it.</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>The hidden columns <code>ctid</code> (page, slot), <code>xmin</code> and <code>xmax</code>, before and after the order. <a class="tag g" href="#c2">Guaranteed · check 2</a></p>
+  <pre class="code"><i>-- before</i>
+ ctid  | xmin | xmax | product_id |  name  | quantity
+ (0,1) |  740 |    0 |        123 | Widget |        5
+
+<i>-- after: a different slot, a different creator</i>
+ ctid  | xmin | xmax | product_id |  name  | quantity
+ <b>(0,2)</b> |  <b>741</b> |  741 |        123 | Widget |        4
+
+<i>-- both versions are still on the page</i>
+shop=# SELECT lp, t_xmin, t_xmax, t_ctid FROM heap_page_items(get_raw_page('inventory', 0));
+ lp | t_xmin | t_xmax | t_ctid
+  1 |    740 |    741 | (0,2)      <i>-- old version, points at its successor</i>
+  2 |    741 |    741 | (0,2)</pre></div></aside>
+</section>
+
+<section class="s" id="s6" data-t="Isolation levels">
+  <div class="sh"><span class="off">07</span><h2>Isolation levels</h2></div>
+  <p class="lead">The isolation level decides when a transaction takes its snapshot: at every statement, or once at the start.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Read committed: new snapshot per statement</h4><div class="flow"><span class="n y">T1 reads 4</span><i></i><span class="n b">T2 commits 3</span><i></i><span class="n y">T1 reads 3</span></div></div>
+    <div><h4>Repeatable read: one snapshot for the transaction</h4><div class="flow"><span class="n y">T1 reads 4</span><i></i><span class="n b">T2 commits 3</span><i></i><span class="n y">T1 reads 4</span></div></div>
+  </div></div><figcaption>Same three steps, different second read. T1 is Asha’s transaction, T2 is Ravi buying the same Widget.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Level</th><th>Dirty read</th><th>Non-repeatable read</th><th>Phantom</th><th>Write skew</th></tr>
+    <tr><td>Read uncommitted</td><td class="yes">No</td><td class="no">Possible</td><td class="no">Possible</td><td class="no">Possible</td></tr>
+    <tr><td>Read committed</td><td class="yes">No</td><td class="no">Possible</td><td class="no">Possible</td><td class="no">Possible</td></tr>
+    <tr><td>Repeatable read</td><td class="yes">No</td><td class="yes">No</td><td class="yes">No</td><td class="no">Possible</td></tr>
+    <tr><td>Serializable</td><td class="yes">No</td><td class="yes">No</td><td class="yes">No</td><td class="yes">No</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Read committed is the default.</b> Good for most work. <a class="tag d" href="#c1">Default · check 1</a></li>
+    <li><b>There are no dirty reads, ever.</b> PostgreSQL accepts “read uncommitted” but runs it as read committed. <a class="tag g" href="#c4">Guaranteed · check 4</a></li>
+    <li><b>Repeatable read also stops phantoms.</b> That is stricter than the SQL standard asks for. <span class="tag g">Guaranteed</span></li>
+    <li><b>Stricter levels can fail.</b> A transaction on an old snapshot that updates a row someone else changed gets error 40001 and must be retried. <a class="tag g" href="#c5">Guaranteed · check 5</a></li>
+  </ul>
+  <div class="demo">
+    <h4>Try it: the same four steps at three levels</h4>
+    <div class="ctrls"><label for="isoLvl">T1 runs at</label><select id="isoLvl"><option value="rc">Read committed</option><option value="rr">Repeatable read</option><option value="ser">Serializable</option></select><button class="btn on" id="isoStep">Next step</button><button class="btn" id="isoReset">Reset</button></div>
+    <div class="tw"><table id="isoTbl"></table></div>
+    <div class="out" id="isoOut" aria-live="polite"></div>
+    <p>The read committed and repeatable read results are the real ones from the box below. The serializable run was not captured. <span class="tag s">Simplified</span></p>
+  </div>
+  <div class="tip"><b>Rule of thumb.</b> Stay on read committed and make each write safe by itself (one atomic UPDATE, a row lock, or a constraint). Move a transaction to serializable when its correctness depends on something it read.</div>
+  <details class="q"><summary>In PostgreSQL, what does a transaction that asks for Read Uncommitted actually get?</summary><div class="in">Read committed. PostgreSQL has no dirty reads at any level, because MVCC always has a committed version to show.</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>Two real sessions. Quantity starts at 4.</p>
+  <pre class="code"><i>-- T1 at READ COMMITTED</i>
+T1: SELECT quantity FROM inventory WHERE product_id=123;        4
+T2: UPDATE inventory SET quantity=quantity-1 WHERE product_id=123;   <i>-- commits</i>
+T1: SELECT quantity FROM inventory WHERE product_id=123;        <b>3</b>
+T1: UPDATE inventory SET quantity=quantity-1 ... RETURNING quantity;  2
+
+<i>-- T1 at REPEATABLE READ</i>
+T1: SELECT quantity ...                                         4
+T2: UPDATE ... quantity-1                                        <i>-- commits</i>
+T1: SELECT quantity ...                                         <b>4</b>
+T1: UPDATE inventory SET quantity=quantity-1 ...
+<b>ERROR:  could not serialize access due to concurrent update</b>     <i>-- SQLSTATE 40001</i></pre></div></aside>
+</section>
+
+<section class="s" id="s7" data-t="Serializable and retries">
+  <div class="sh"><span class="off">08</span><h2>Serializable and the retry loop</h2></div>
+  <p class="lead">Serializable guarantees the result matches some one-at-a-time order of the transactions. It does that by aborting one of them, so your code must retry.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant A as T1 Asha
+  participant D as PostgreSQL
+  participant R as T2 Ravi
+  A-&gt;&gt;D: count orders for product 123
+  D--&gt;&gt;A: 1
+  R-&gt;&gt;D: count orders for product 123
+  D--&gt;&gt;R: 1
+  A-&gt;&gt;D: insert an order
+  R-&gt;&gt;D: insert an order
+  A-&gt;&gt;D: COMMIT
+  D--&gt;&gt;A: ok
+  R-&gt;&gt;D: COMMIT
+  Note over D: Each read what the other then changed
+  D--&gt;&gt;R: ERROR 40001, retry
+</pre></div><figcaption>Write skew: both decided from a count of 1, and neither touched a row the other wrote. Only serializable notices.</figcaption></figure>
+  <ul>
+    <li><b>No blocking, just detection.</b> PostgreSQL tracks what each serializable transaction read and aborts one when the pattern is dangerous. <span class="tag g">Guaranteed</span></li>
+    <li><b>Repeatable read lets this through.</b> In the same test at that level both commits succeeded. <a class="tag g" href="#c6">Guaranteed · check 6</a></li>
+    <li><b>Retry the whole transaction.</b> Not the last statement. Start again from BEGIN with fresh reads.</li>
+    <li><b>All parties must use it.</b> The guarantee only covers transactions that run at serializable.</li>
+  </ul>
+  <pre class="code"><i># psycopg2. Written for this guide, not run.</i>
+def place_order(conn, user_id, product_id, total, retries=3):
+    for attempt in range(retries):
+        try:
+            with conn:                                   <i># commit, or roll back on error</i>
+                with conn.cursor() as cur:
+                    cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+                    cur.execute("UPDATE inventory SET quantity = quantity - 1 "
+                                "WHERE product_id = %s AND quantity &gt; 0", (product_id,))
+                    if cur.rowcount == 0:
+                        raise OutOfStock()
+                    cur.execute("INSERT INTO orders (user_id, product_id, total) "
+                                "VALUES (%s, %s, %s) RETURNING id",
+                                (user_id, product_id, total))
+                    return cur.fetchone()[0]
+        except <b>psycopg2.errors.SerializationFailure</b>:      <i># SQLSTATE 40001</i>
+            time.sleep(random.uniform(0.01, 0.1) * 2 ** attempt)
+    raise TooManyRetries()</pre>
+  <div class="tw"><table>
+    <tr><th>Work</th><th>Level</th><th>Why</th></tr>
+    <tr><td>Most reads and simple writes</td><td>Read committed</td><td>The default. No retries.</td></tr>
+    <tr><td>A report made of several queries</td><td>Repeatable read</td><td>All queries see one snapshot.</td></tr>
+    <tr><td>Transfers, stock, “check then act”</td><td>Serializable, or explicit locks</td><td>The decision depends on what was read.</td></tr>
+    <tr><td>Append-only audit rows</td><td>Read committed</td><td>Nothing to conflict with.</td></tr>
+  </table></div>
+  <div class="fail"><b>If it breaks:</b> under heavy contention the same transaction can fail several times. Back off with jitter, cap the retries, and return a clear error. Never retry a transaction that already called an external service without an idempotency key.</div>
+  <details class="q"><summary>Two transactions each count the orders for a product and then insert one. Which isolation level catches this, and how does the loser find out?</summary><div class="in">Serializable. The second COMMIT fails with SQLSTATE 40001 (“could not serialize access due to read/write dependencies among transactions”). The application retries the whole transaction. At repeatable read both commit.</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>The diagram above, as it really ran.</p>
+  <pre class="code">T1: BEGIN ISOLATION LEVEL SERIALIZABLE;  SELECT count(*) FROM orders WHERE product_id=123;   1
+T2: BEGIN ISOLATION LEVEL SERIALIZABLE;  SELECT count(*) FROM orders WHERE product_id=123;   1
+T1: INSERT INTO orders (user_id,product_id,total) VALUES (42,123,499.00);   INSERT 0 1
+T2: INSERT INTO orders (user_id,product_id,total) VALUES (43,123,499.00);   INSERT 0 1
+T1: COMMIT;                                                                 COMMIT
+T2: COMMIT;
+<b>ERROR:  could not serialize access due to read/write dependencies among transactions</b>
+DETAIL:  Reason code: Canceled on identification as a pivot, during commit attempt.
+HINT:  The transaction might succeed if retried.</pre></div></aside>
+</section>
+
+<section class="s" id="s8" data-t="Row locks: FOR UPDATE">
+  <div class="sh"><span class="off">09</span><h2>Row locks: SELECT … FOR UPDATE</h2></div>
+  <p class="lead">When you must read a row, decide in the app, then write it back, lock the row as you read it so nobody changes it in between.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>No lock: one sale vanishes</h4><div class="flow v"><span class="n y">T1 reads 4</span><span class="n b">T2 reads 4</span><span class="n y">T1 writes 3, commits</span><span class="n b">T2 writes 3, commits</span><span class="n r">Two sales, stock says 3</span></div></div>
+    <div><h4>FOR UPDATE: T2 waits its turn</h4><div class="flow v"><span class="n y">T1 reads 4 and locks</span><span class="n b">T2 tries to lock: waits</span><span class="n y">T1 writes 3, commits</span><span class="n b">T2 reads 3, writes 2</span><span class="n g">Two sales, stock says 2</span></div></div>
+  </div></div><figcaption>The left side is the classic lost update. Read committed does not prevent it when the arithmetic happens in the app.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Lock</th><th>Use it when</th><th>Blocks</th></tr>
+    <tr><td><code>FOR UPDATE</code></td><td>You will update or delete the row</td><td>Every other row lock, and writers</td></tr>
+    <tr><td><code>FOR NO KEY UPDATE</code></td><td>You will update non-key columns</td><td>Writers, but not foreign-key checks</td></tr>
+    <tr><td><code>FOR SHARE</code></td><td>You need the row to stay as it is</td><td>Writers. Other sharers are fine</td></tr>
+    <tr><td><code>FOR KEY SHARE</code></td><td>Taken by foreign-key checks</td><td>Only deletes and key changes</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Plain SELECT is never blocked.</b> Row locks stop other lockers and writers, not readers. <a class="tag g" href="#c7">Guaranteed · check 7</a></li>
+    <li><b>NOWAIT fails fast.</b> It raises an error instead of waiting.</li>
+    <li><b>SKIP LOCKED skips busy rows.</b> That is how several workers share a job queue table.</li>
+    <li><b>The lock ends at COMMIT or ROLLBACK.</b> Keep the transaction short.</li>
+  </ul>
+  <div class="tip"><b>Simplest of all.</b> If the database can do the arithmetic, skip the lock: <code>UPDATE … SET quantity = quantity - 1 WHERE quantity &gt; 0</code> is atomic by itself.</div>
+  <div class="fail"><b>If it breaks:</b> two transactions that lock the same rows in opposite order deadlock. PostgreSQL detects it after about a second and aborts one. <span class="tag d">Default</span> Lock rows in a fixed order, for example by id.</div>
+  <details class="q"><summary>Does SELECT … FOR UPDATE on a row block another session’s plain SELECT of that row?</summary><div class="in">No. Plain reads use their snapshot and take no row lock. It blocks other FOR UPDATE / FOR SHARE requests and any UPDATE or DELETE of that row until the locker commits or rolls back.</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>T1 holds the Widget row. T2 tries four things.</p>
+  <pre class="code">T1: BEGIN;  SELECT quantity FROM inventory WHERE product_id=123 <b>FOR UPDATE</b>;      4
+T2: SELECT quantity FROM inventory WHERE product_id=123;                      4   <i>-- not blocked</i>
+T2: SELECT ... FOR UPDATE <b>NOWAIT</b>;
+ERROR:  could not obtain lock on row in relation "inventory"                  <i>-- SQLSTATE 55P03</i>
+T2: SELECT ... FOR UPDATE <b>SKIP LOCKED</b>;                                 (0 rows)
+T2: SET lock_timeout = '500ms';  UPDATE inventory SET quantity=quantity-1 WHERE product_id=123;
+ERROR:  canceling statement due to lock timeout
+CONTEXT:  while updating tuple (0,11) in relation "inventory"
+
+<i>-- the lost update on the left of the figure, for real: two sales, one decrement</i>
+T1: SELECT 4   T2: SELECT 4   T1: SET quantity=3, COMMIT   T2: SET quantity=3, COMMIT   <b>final: 3</b></pre></div></aside>
+</section>
+<div class="part" data-part="Indexes"><h2>Part 3: Indexes</h2><p>Finding rows without reading them all</p></div>
+
+<section class="s" id="s9" data-t="B-tree: the default index">
+  <div class="sh"><span class="off">10</span><h2>B-tree: the default index</h2></div>
+  <p class="lead">Without an index PostgreSQL reads every page of the table. A B-tree keeps the keys sorted in a shallow tree, so a lookup reads a handful of pages.</p>
+  <div class="wwh">
+    <div><b>What</b><span>A balanced tree of sorted keys. Each leaf entry points at a row’s ctid.</span></div>
+    <div><b>Why</b><span>One structure answers equality, ranges, sorting and prefix matches.</span></div>
+    <div><b>Cost</b><span>Every insert and most updates must also update each index. Indexes take space.</span></div>
+  </div>
+  <figure><div class="canvas"><div class="flow v">
+    <span class="n">Root page<small>“user 42? go to the second child”</small></span><i data-t="1 pointer"></i>
+    <span class="n">Internal page<small>“42 with a March date? that leaf”</small></span><i data-t="1 pointer"></i>
+    <span class="n y">Leaf page<small>(42, 2026-03-15 10:00) points at ctid (0,8)</small></span><i data-t="ctid"></i>
+    <span class="n g">Table page 0, slot 8<small>order 9001</small></span>
+  </div></div><figcaption>One million orders, and the index is three levels deep: three index pages and one table page per lookup.</figcaption></figure>
+  <ul>
+    <li><b>Equality and ranges.</b> <code>=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>BETWEEN</code>, and <code>ORDER BY … LIMIT</code> with no sort step. <span class="tag g">Guaranteed</span></li>
+    <li><b>Prefix LIKE, with a catch.</b> <code>LIKE 'asha%'</code> uses a plain B-tree only under the C collation. Otherwise build the index with <code>text_pattern_ops</code>. <a class="tag s" href="#c10">Simplified · check 10</a></li>
+    <li><b>Small tables skip it.</b> With one row in <code>orders</code> the planner chose a sequential scan even though an index existed. Reading one page is cheaper.</li>
+    <li><b>Hash indexes exist.</b> They only answer <code>=</code>, and are rarely worth giving up ranges and sorting for.</li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in"><p>A binary search over 1,000,000 keys needs about 20 comparisons (log₂ of 1,000,000 is 19.9). A B-tree page holds hundreds of keys, so most of those comparisons happen inside one page. That is why the tree is only three levels deep.</p></div></details>
+  <details class="q"><summary>A B-tree index on a table of one million rows: roughly how many pages does one lookup read, and why so few?</summary><div class="in">About four: root, one internal page, one leaf, then the table page. Each index page holds hundreds of keys, so the tree is very shallow. Measured here: 18 buffers for 12 matching rows, against 9,346 for the sequential scan.</div></details>
+  <aside class="trk"><h4 data-id="user 42">Follow order 9001</h4><div class="in"><p>Asha’s orders since January, among 1,000,001 rows: before and after <code>CREATE INDEX idx_orders_user_date ON orders(user_id, created_at)</code>. <a class="tag g" href="#c8">Guaranteed · check 8</a></p>
+  <pre class="code">shop=# EXPLAIN (ANALYZE, BUFFERS)
+       SELECT * FROM orders WHERE user_id = 42 AND created_at &gt; '2026-01-01';
+
+<i>-- before</i>
+ <b>Seq Scan</b> on orders  (cost=0.00..24346.01 rows=11 width=42) (actual time=0.013..64.851 rows=12 loops=1)
+   Rows Removed by Filter: <b>999989</b>
+   Buffers: shared hit=<b>9346</b>
+ Execution Time: <b>64.872 ms</b>
+
+<i>-- after</i>
+ Bitmap Heap Scan on orders  (cost=4.54..47.57 rows=11 width=42) (actual time=0.048..0.061 rows=12 loops=1)
+   Heap Blocks: exact=12
+   Buffers: shared hit=15 read=3
+   -&gt;  <b>Bitmap Index Scan on idx_orders_user_date</b>  (actual time=0.042..0.042 rows=12 loops=1)
+         Index Cond: ((user_id = 42) AND (created_at &gt; '2026-01-01 00:00:00+00'))
+ Execution Time: <b>0.085 ms</b></pre></div></aside>
+</section>
+
+<section class="s" id="s10" data-t="GIN and GiST">
+  <div class="sh"><span class="off">11</span><h2>GIN and GiST: indexes for values with parts</h2></div>
+  <p class="lead">A B-tree compares whole values. GIN indexes the pieces inside a value, and GiST indexes things that overlap or sit near each other.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>GIN: an inverted index</h4>
+      <span class="chip">color = red → products 8, 16, 24, 123, …</span>
+      <span class="chip">size = M → products 9, 10, 123, …</span>
+      <span class="chip Y">both → intersect the two lists → 123, …</span></div>
+    <div><h4>GiST: a tree of bounding boxes</h4>
+      <span class="chip">box A: 10:00 to 12:00</span>
+      <span class="chip">box B: 14:00 to 18:00</span>
+      <span class="chip Y">“overlaps 10:30 to 11:30?” → only look inside box A</span></div>
+  </div></div><figcaption>GIN goes from a piece to the rows that contain it. GiST throws away whole regions that cannot match.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Question</th><th>Index</th><th>Operator</th></tr>
+    <tr><td>Does this JSONB contain these keys and values?</td><td>GIN</td><td><code>@&gt;</code>, <code>?</code></td></tr>
+    <tr><td>Does this array contain these tags?</td><td>GIN</td><td><code>@&gt;</code></td></tr>
+    <tr><td>Does this text match this search?</td><td>GIN on a <code>tsvector</code></td><td><code>@@</code></td></tr>
+    <tr><td>Do these two ranges overlap?</td><td>GiST</td><td><code>&amp;&amp;</code></td></tr>
+    <tr><td>What is within 1 km of this point?</td><td>GiST with PostGIS</td><td><code>ST_DWithin</code></td></tr>
+  </table></div>
+  <ul>
+    <li><b>GIN is fast to read, slower to write.</b> One row with twenty keys means twenty index entries to maintain.</li>
+    <li><b>GiST powers exclusion constraints.</b> That is how <a href="#s22">double-booking is prevented</a> later.</li>
+  </ul>
+  <details class="q"><summary>Which index type serves a JSONB containment query (attributes @&gt; …), and which serves “do these two time ranges overlap”?</summary><div class="in">GIN for JSONB containment (also arrays and full-text search). GiST for range overlap and geospatial queries.</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>The Widget has <code>attributes = {"color": "red", "size": "M"}</code>. Finding all red, size M products among 100,000:</p>
+  <pre class="code">shop=# SELECT product_id FROM inventory WHERE attributes @&gt; '{"color":"red","size":"M"}';
+
+<i>-- no index</i>
+ Seq Scan on inventory  (actual time=0.005..21.021 rows=3126 loops=1)
+   Rows Removed by Filter: 96874
+ Execution Time: <b>21.117 ms</b>
+
+shop=# CREATE INDEX idx_inventory_attrs ON inventory USING gin(attributes);   <i>-- 608 kB on a 15 MB table</i>
+
+ Bitmap Heap Scan on inventory  (actual time=2.075..4.130 rows=3126 loops=1)
+   -&gt;  <b>Bitmap Index Scan on idx_inventory_attrs</b>  (actual time=1.936..1.936 rows=3126 loops=1)
+         Index Cond: (attributes @&gt; '{"size": "M", "color": "red"}'::jsonb)
+ Execution Time: <b>4.223 ms</b></pre></div></aside>
+</section>
+
+<section class="s" id="s11" data-t="BRIN: tiny index for ordered data">
+  <div class="sh"><span class="off">12</span><h2>BRIN: a tiny index for data stored in order</h2></div>
+  <p class="lead">When rows sit on disk in roughly the same order as a column’s values, it is enough to remember the minimum and maximum of each block of pages.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>orders pages</label><div class="cell pend"><b>0 to 127</b><span>2024-01-01 …<br>2026-03-15</span></div><div class="cell"><b>128 to 255</b><span>2024-01-12 …<br>2024-01-23</span></div><div class="cell"><b>256 to 383</b><span>2024-01-23 …<br>2024-02-03</span></div><div class="cell ghost"><b>…</b><span>…</span></div><div class="cell pend"><b>a later range</b><span>holds<br>2026-03-15</span></div><div class="cell ghost"><b>…</b><span>…</span></div></div>
+  </div><figcaption>One entry per 128 pages. The query for 15 March 2026 reads only the two yellow ranges: the one that holds that day, and the first one, which order 9001 stretched.</figcaption></figure>
+  <ul>
+    <li><b>Very small.</b> 24 kB here, against 21 MB for a B-tree on the same column: about 900 times smaller. <a class="tag g" href="#c11">Guaranteed · check 11</a></li>
+    <li><b>Imprecise by design.</b> It returns whole ranges of pages. Every row in them is rechecked.</li>
+    <li><b>Only as good as the ordering.</b> Order 9001 was inserted first but dated March 2026. Its range now spans two years, so it can never be skipped.</li>
+    <li><b>Good for append-only time data.</b> Logs, events, measurements, queried by time window.</li>
+  </ul>
+  <div class="tip"><b>Rule of thumb.</b> BRIN when the table is huge, append-only and queried by range. B-tree when you need single rows fast, or the data arrives out of order. <span class="tag s">Simplified</span></div>
+  <details class="q"><summary>A BRIN scan for one day rechecked and threw away 26,174 rows that a B-tree scan never touched. Why?</summary><div class="in">BRIN only knows the minimum and maximum per block range (128 pages by default). It returns every page of each range that might match, and each row on those pages must be rechecked against the condition. A B-tree points at exactly the matching rows.</div></details>
+  <aside class="trk"><h4 data-id="2026-03-15">Follow order 9001</h4><div class="in"><p>Counting the orders placed on the day of order 9001, with each index in turn.</p>
+  <pre class="code">shop=# SELECT count(*) FROM orders WHERE created_at &gt;= '2026-03-15' AND created_at &lt; '2026-03-16';   <i>-- 1218</i>
+
+<i>-- BRIN, 24 kB</i>
+ Bitmap Heap Scan on orders  (actual time=0.052..2.556 rows=1218 loops=1)
+   Rows Removed by Index Recheck: <b>26174</b>
+   Heap Blocks: <b>lossy=256</b>
+   -&gt;  Bitmap Index Scan on idx_orders_created_brin
+ Execution Time: <b>2.641 ms</b>
+
+<i>-- B-tree, 21 MB</i>
+ Index Only Scan using idx_orders_created_btree on orders  (actual time=0.032..0.133 rows=1218 loops=1)
+   Heap Fetches: 0
+ Execution Time: <b>0.204 ms</b>
+
+<i>-- what the BRIN index actually stores</i>
+ blknum |                       value
+      0 | {2024-01-01 00:01:11+00 .. <b>2026-03-15 10:00:00+00</b>}   <i>-- order 9001 stretched this range</i>
+    128 | {2024-01-12 06:06:56+00 .. 2024-01-23 12:12:41+00}
+    256 | {2024-01-23 12:13:52+00 .. 2024-02-03 18:19:37+00}</pre></div></aside>
+</section>
+
+<section class="s" id="s12" data-t="Composite, partial, covering">
+  <div class="sh"><span class="off">13</span><h2>Composite, partial and covering indexes</h2></div>
+  <p class="lead">Three ways to shape a B-tree to the query: index several columns in a chosen order, index only some rows, or carry extra columns so the table is never visited.</p>
+  <h3>Composite: column order matters</h3>
+  <p>An index on <code>(user_id, created_at)</code> is sorted like a phone book: by user first, then by date within each user. You can find all of one user’s entries, but not “everyone’s March entries” without reading the lot.</p>
+  <div class="demo">
+    <h4>Try it: which queries can use the index on (user_id, created_at)?</h4>
+    <div class="ctrls" id="ciBtns">
+      <button class="btn on" data-q="a">user_id = 42</button>
+      <button class="btn" data-q="b">user_id = 42 AND created_at &gt; '2026-01-01'</button>
+      <button class="btn" data-q="c">created_at &gt; '2026-03-01'</button>
+      <button class="btn" data-q="d">user_id = 42 ORDER BY created_at DESC LIMIT 2</button>
+    </div>
+    <div class="scroll"><div class="log" id="ciLog"><label>index order</label></div></div>
+    <div class="out" id="ciOut" aria-live="polite"></div>
+    <p>Ten index entries in sorted order. Asha’s three 2026 dates are real, the rest are made up. <span class="tag x">Example value</span></p>
+  </div>
+  <ul>
+    <li><b>Equality columns first, then the range column.</b> The matches then form one contiguous run.</li>
+    <li><b>Leading column missing means no shortcut.</b> On PostgreSQL 16 the date-only query fell back to a sequential scan. PostgreSQL 18 can “skip scan” when the leading column has few distinct values. <a class="tag s" href="#c9">Simplified · check 9</a></li>
+  </ul>
+  <h3>Partial: index only the rows you query</h3>
+  <figure><div class="canvas"><div class="flow"><span class="n">1,000,001 orders</span><i data-t="WHERE status = 'pending'"></i><span class="n y">10,000 pending<small>the only rows indexed</small></span><i></i><span class="n g">328 kB<small>the full index is 30 MB</small></span></div></div><figcaption>One percent of the rows are pending, and the worker queue only ever asks for those.</figcaption></figure>
+  <h3>Covering: answer from the index alone</h3>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Ordinary index</h4><div class="flow"><span class="n y">index: user_id</span><i data-t="ctid"></i><span class="n">table page<small>fetch total, status</small></span></div></div>
+    <div><h4>INCLUDE (total, status)</h4><div class="flow"><span class="n y">index: user_id + total, status</span><i></i><span class="n g">done</span></div></div>
+  </div></div><figcaption>An index-only scan skips the table when every needed column is in the index and the pages are marked all-visible by vacuum.</figcaption></figure>
+  <details class="q"><summary>There is an index on (user_id, created_at). Which can use it well: WHERE user_id = 42; WHERE created_at &gt; X; or both conditions together?</summary><div class="in">The first and the third. The index is sorted by user_id first, so a query without user_id finds its matches scattered through the whole index. (PostgreSQL 18’s skip scan helps only when the leading column has few distinct values.)</div></details>
+  <aside class="trk"><h4 data-id="user 42">Follow order 9001</h4><div class="in"><p>Three real plans on the 1,000,001-row table.</p>
+  <pre class="code"><i>-- leading column missing: the composite index is ignored</i>
+shop=# SELECT * FROM orders WHERE created_at &gt; '2026-03-31';
+ <b>Seq Scan</b> on orders  (actual time=70.018..70.338 rows=2141 loops=1)
+   Rows Removed by Filter: 997860            Execution Time: 70.449 ms
+
+<i>-- partial: CREATE INDEX idx_orders_pending ON orders(user_id, created_at) WHERE status = 'pending';</i>
+shop=# SELECT * FROM orders WHERE user_id = 42 AND status = 'pending';
+ Index Scan using <b>idx_orders_pending</b> on orders       Execution Time: 0.019 ms
+
+<i>-- covering: CREATE INDEX idx_orders_covering ON orders(user_id) INCLUDE (total, status);</i>
+shop=# SELECT user_id, total, status FROM orders WHERE user_id = 42;
+ <b>Index Only Scan</b> using idx_orders_covering on orders  (actual time=0.022..0.031 rows=101 loops=1)
+   <b>Heap Fetches: 0</b>                           Execution Time: 0.046 ms</pre></div></aside>
+</section>
+
+<section class="s" id="s13" data-t="Choosing an index">
+  <div class="sh"><span class="off">14</span><h2>Choosing an index</h2></div>
+  <p class="lead">Start from the query’s operator, not from the column. Then ask whether the index is worth what it costs on every write.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TD
+  Q["What does the WHERE clause do?"] --&gt; E["=, ranges, ORDER BY, prefix LIKE"]
+  Q --&gt; J["Looks inside JSONB, an array or text"]
+  Q --&gt; O["Overlap or distance"]
+  Q --&gt; T["Time window on a huge append-only table"]
+  E --&gt; B["B-tree"]:::lead
+  J --&gt; G["GIN"]:::lead
+  O --&gt; S["GiST"]:::lead
+  T --&gt; R["BRIN"]:::lead
+  B --&gt; M["Then shape it: column order, partial, INCLUDE"]
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Four questions, four index types. Most of the time the answer is the first branch.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Index on orders</th><th>Size</th><th>Earns its keep?</th></tr>
+    <tr><td>The table itself</td><td>73 MB</td><td></td></tr>
+    <tr><td><code>idx_orders_covering</code> (user_id) INCLUDE (total, status)</td><td>39 MB</td><td>Only for one hot query</td></tr>
+    <tr><td><code>idx_orders_user_hash</code> hash(user_id)</td><td>33 MB</td><td class="no">No: the B-tree below does the same and more</td></tr>
+    <tr><td><code>idx_orders_user_date</code> (user_id, created_at)</td><td>30 MB</td><td class="yes">Yes</td></tr>
+    <tr><td><code>orders_pkey</code> (id)</td><td>21 MB</td><td class="yes">Yes</td></tr>
+    <tr><td><code>idx_orders_created_btree</code> (created_at)</td><td>21 MB</td><td>If single-day lookups matter</td></tr>
+    <tr><td><code>idx_orders_pending</code> partial</td><td>328 kB</td><td class="yes">Yes</td></tr>
+    <tr><td><code>idx_orders_created_brin</code></td><td>24 kB</td><td class="yes">Nearly free</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Indexes can outweigh the table.</b> These seven add up to 145 MB on a 73 MB table.</li>
+    <li><b>Every one is updated on every insert.</b> Seven indexes means eight writes per new order.</li>
+    <li><b>Drop the ones nobody uses.</b> <code>pg_stat_user_indexes.idx_scan</code> counts how often each index was used.</li>
+  </ul>
+  <div class="remember">Match the index type to the operator, the column order to the query, and delete what is not used.</div>
+  <details class="q"><summary>A table has seven indexes. What does that cost, and how do you find the ones to drop?</summary><div class="in">Every insert, and most updates, must maintain all seven; they use disk and cache (here 145 MB of indexes on a 73 MB table). Look at idx_scan in pg_stat_user_indexes: an index that is never scanned is pure cost.</div></details>
+  <aside class="trk"><h4 data-id="orders">Follow order 9001</h4><div class="in"><p>The sizes in the table above, as measured.</p>
+  <pre class="code">shop=# SELECT relname, pg_size_pretty(pg_relation_size(oid)) FROM pg_class WHERE relname LIKE '%orders%' ORDER BY pg_relation_size(oid) DESC;
+ orders                   | 73 MB
+ idx_orders_covering      | 39 MB
+ idx_orders_user_hash     | 33 MB
+ idx_orders_user_date     | 30 MB
+ orders_pkey              | 21 MB
+ idx_orders_created_btree | 21 MB
+ idx_orders_pending       | 328 kB
+ idx_orders_created_brin  | 24 kB</pre></div></aside>
+</section>
+<div class="part" data-part="Scale and availability"><h2>Part 4: Scale and availability</h2><p>Bigger tables, more servers</p></div>
+
+<section class="s" id="s14" data-t="Partitioning">
+  <div class="sh"><span class="off">15</span><h2>Partitioning: one table, many smaller ones</h2></div>
+  <p class="lead">A partitioned table looks like one table to the application, but each row is stored in a smaller child table chosen by a key.</p>
+  <div class="wwh">
+    <div><b>What</b><span>The parent holds no rows. Children hold them, split by range, list or hash.</span></div>
+    <div><b>Why</b><span>Queries skip children that cannot match. Maintenance and deletion work per child.</span></div>
+    <div><b>How</b><span>The planner compares the WHERE clause with each child’s bounds: partition pruning.</span></div>
+  </div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Range: by time</h4><span class="chip">2025q4: Oct to Dec</span><span class="chip Y">2026q1: Jan to Mar</span><span class="chip">2026q2: Apr to Jun</span></div>
+    <div><h4>List: by named value</h4><span class="chip">us-east, us-west</span><span class="chip">eu-west, eu-central</span></div>
+    <div><h4>Hash: spread evenly</h4><span class="chip">user_id mod 4 = 0</span><span class="chip">user_id mod 4 = 1</span><span class="chip">… 2 and 3</span></div>
+  </div></div><figcaption>Range for time-series, list for regions or tenants, hash when there is no natural boundary. Order 9001 lands in the yellow one.</figcaption></figure>
+  <div class="demo">
+    <h4>Try it: which partitions does the query touch?</h4>
+    <div class="ctrls"><label for="ppFrom">created_at from</label><input type="date" id="ppFrom" value="2026-03-15"><label for="ppTo">up to</label><input type="date" id="ppTo" value="2026-03-16"><button class="btn on" id="ppRun">Run with date filter</button><button class="btn" id="ppId">WHERE id = 9001 only</button><button class="btn warn" id="ppDrop">Drop oldest partition</button><button class="btn" id="ppReset">Reset</button></div>
+    <div class="row" id="ppRow"></div>
+    <div class="out" id="ppOut" aria-live="polite"></div>
+    <p>Partition names and row counts are the real ones from the box below.</p>
+  </div>
+  <ul>
+    <li><b>Pruning needs the key in the WHERE clause.</b> Without it every partition is searched. <a class="tag g" href="#c12">Guaranteed · check 12</a></li>
+    <li><b>Smaller pieces are easier to keep.</b> Vacuum, reindex and backup run per partition.</li>
+    <li><b>Hash partitions cannot be dropped by age.</b> Each one holds a slice of every period.</li>
+  </ul>
+  <div class="tip"><b>Rule of thumb.</b> Partition by the column most queries filter on. Keep it under about a thousand partitions, each in the tens of gigabytes. <span class="tag s">Simplified</span></div>
+  <details class="q"><summary>A table is partitioned by created_at. A query filters only on id. How many partitions are searched, and why?</summary><div class="in">All of them. Pruning works by comparing the WHERE clause with each partition’s bounds on the partition key; with no condition on created_at nothing can be ruled out.</div></details>
+  <aside class="trk"><h4 data-id="orders_p_2026q1">Follow order 9001</h4><div class="in"><p>The orders copied into <code>orders_p</code>, partitioned by quarter.</p>
+  <pre class="code">CREATE TABLE orders_p ( … , PRIMARY KEY (id, created_at)) <b>PARTITION BY RANGE (created_at)</b>;
+CREATE TABLE orders_p_2026q1 PARTITION OF orders_p FOR VALUES FROM ('2026-01-01') TO ('2026-04-01');
+
+shop=# SELECT tableoid::regclass, id, created_at FROM orders_p WHERE id = 9001;
+ <b>orders_p_2026q1</b> | 9001 | 2026-03-15 10:00:00+00
+
+shop=# EXPLAIN (COSTS OFF) SELECT * FROM orders_p
+       WHERE created_at &gt;= '2026-03-15' AND created_at &lt; '2026-03-16';
+ Seq Scan on <b>orders_p_2026q1</b> orders_p          <i>-- one partition out of ten</i>
+
+shop=# EXPLAIN (COSTS OFF) SELECT * FROM orders_p WHERE id = 9001;
+ Append
+   -&gt;  Index Scan using orders_p_2024q1_pkey on orders_p_2024q1 orders_p_1
+   -&gt;  Index Scan using orders_p_2024q2_pkey on orders_p_2024q2 orders_p_2
+   <i>… all ten partitions (trimmed)</i></pre></div></aside>
+</section>
+
+<section class="s" id="s15" data-t="Partition upkeep and limits">
+  <div class="sh"><span class="off">16</span><h2>Partition upkeep and limits</h2></div>
+  <p class="lead">Partitions make old data cheap to remove, in exchange for a few rules about keys and some housekeeping.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>DELETE a quarter</h4><div class="flow"><span class="n">110,738 rows</span><i data-t="mark each dead, log each"></i><span class="n r">82.9 ms, then vacuum</span></div></div>
+    <div><h4>DROP the partition</h4><div class="flow"><span class="n">110,738 rows</span><i data-t="remove one file"></i><span class="n g">3.3 ms, nothing to vacuum</span></div></div>
+  </div></div><figcaption>The same quarter of data, removed two ways. DROP does not get slower as the partition grows. DETACH (0.9 ms) keeps the data as a standalone table to archive.</figcaption></figure>
+  <ul>
+    <li><b>Create partitions ahead of time.</b> A row with no matching partition is rejected. A scheduled job, or a DEFAULT partition, avoids that.</li>
+    <li><b>Unique keys must include the partition key.</b> Each child enforces uniqueness on its own. <span class="tag g">Guaranteed</span></li>
+    <li><b>Changing the key moves the row.</b> An UPDATE of <code>created_at</code> across a boundary becomes a delete plus an insert, automatically. Older guides say it is not allowed. <a class="tag g" href="#c13">Guaranteed · check 13</a></li>
+    <li><b>Many partitions slow planning.</b> Each one is another table the planner must consider.</li>
+  </ul>
+  <div class="fail"><b>If it breaks:</b> the usual incident is “no partition found” at midnight on the first of the quarter, because nobody created the next one.</div>
+  <details class="q"><summary>Why must the primary key of a table partitioned by created_at include created_at?</summary><div class="in">Uniqueness is enforced by an index in each partition separately. There is no index spanning all partitions, so the key must contain the partition column to guarantee that two equal keys always land in the same partition.</div></details>
+  <aside class="trk"><h4 data-id="orders_p">Follow order 9001</h4><div class="in"><p>Each limit, as a real message.</p>
+  <pre class="code">shop=# CREATE TABLE fail_p (id bigint <b>PRIMARY KEY</b>, created_at timestamptz NOT NULL) PARTITION BY RANGE (created_at);
+ERROR:  unique constraint on partitioned table must include all partitioning columns
+DETAIL:  PRIMARY KEY constraint on table "fail_p" lacks column "created_at" which is part of the partition key.
+
+shop=# INSERT INTO orders_p VALUES (1, 42, 123, 1, 'paid', '2027-01-01');
+ERROR:  no partition of relation "orders_p" found for row
+
+shop=# UPDATE orders_p SET created_at = '2026-04-02 10:00:00+00' WHERE id = 9001
+       RETURNING tableoid::regclass, id;
+ <b>orders_p_2026q2</b> | 9001                       <i>-- the row moved partitions (then rolled back)</i>
+
+shop=# DELETE FROM orders_p WHERE created_at &lt; '2024-04-01';     DELETE 110738   Time: 82.935 ms
+shop=# DROP TABLE orders_p_2024q2;                                DROP TABLE      Time: 3.341 ms
+shop=# ALTER TABLE orders_p DETACH PARTITION orders_p_2024q3;     ALTER TABLE     Time: 0.856 ms</pre></div></aside>
+</section>
+
+<section class="s" id="s16" data-t="Streaming replication">
+  <div class="sh"><span class="off">17</span><h2>Streaming replication: shipping the WAL</h2></div>
+  <p class="lead">A replica is a copy of the server that keeps itself current by receiving the primary’s WAL and replaying it.</p>
+  <figure><div class="canvas"><div class="cluster"><em>shop cluster</em><div class="row nowrap">
+    <div class="bk"><b>pg-1</b><small>walsender</small><span class="chip L">primary</span><span class="chip">WAL up to 0/41000060</span></div>
+    <div class="bk"><b>pg-2 (replica1)</b><small>walreceiver + startup process</small><span class="chip F">replica</span><span class="chip">replayed up to 0/41000060</span></div>
+  </div></div></div><figcaption>The replica connects to the primary and asks for WAL from where it left off. Reads work on the replica; writes are refused.</figcaption></figure>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant A as orders-api
+  participant P as pg-1 primary
+  participant R as replica1
+  A-&gt;&gt;P: COMMIT
+  P-&gt;&gt;P: flush WAL to local disk
+  Note over P: Async mode answers the client here
+  P-&gt;&gt;R: WAL records
+  R-&gt;&gt;R: flush WAL to disk
+  R--&gt;&gt;P: flushed up to this LSN
+  Note over P: Sync mode answers the client here
+  P--&gt;&gt;A: COMMIT ok
+</pre></div><figcaption>The only difference between the two modes is the moment the client gets its answer.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th></th><th>Asynchronous</th><th>Synchronous</th></tr>
+    <tr><td>Commit waits for</td><td>Local disk</td><td>Local disk and one replica</td></tr>
+    <tr><td>Extra latency</td><td>None</td><td>A round trip to the replica</td></tr>
+    <tr><td>Primary dies</td><td class="no">Last commits may be lost</td><td class="yes">Nothing acknowledged is lost</td></tr>
+    <tr><td>Replica dies</td><td class="yes">Primary carries on</td><td class="no">Commits hang until it returns</td></tr>
+    <tr><td>Setting</td><td>The default <a class="tag d" href="#c14">Default · check 14</a></td><td><code>synchronous_standby_names = 'replica1'</code></td></tr>
+  </table></div>
+  <div class="demo">
+    <h4>Try it: commit a few orders, then crash the primary</h4>
+    <div class="ctrls"><button class="btn on" id="rpMode">Mode: async</button><button class="btn" id="rpCommit">Commit an order</button><button class="btn" id="rpShip">Replica catches up</button><button class="btn warn" id="rpCrash">Crash primary</button><button class="btn" id="rpReset">Reset</button></div>
+    <div class="scroll"><div class="log" id="rpP"><label>pg-1 WAL</label></div><div class="log" id="rpR"><label>replica1 WAL</label></div></div>
+    <div class="out" id="rpOut" aria-live="polite"></div>
+    <p>Real replicas catch up continuously, within milliseconds. Here you control it by hand to make the gap visible. <span class="tag s">Simplified</span></p>
+  </div>
+  <div class="fail"><b>If it breaks:</b> with one synchronous replica and that replica down, every commit on the primary waits. List two candidates (<code>ANY 1 (r1, r2)</code>) so one can fail without stopping writes.</div>
+  <details class="q"><summary>With asynchronous replication, the primary dies right after acknowledging a commit. What can happen to that commit?</summary><div class="in">It can be lost. Async commits return once the WAL is on the primary’s disk; if the WAL had not reached the replica yet, the promoted replica never saw it. Synchronous replication closes that gap at the price of latency.</div></details>
+  <aside class="trk"><h4 data-id="replica1">Follow order 9001</h4><div class="in"><p>A real replica built with <code>pg_basebackup -R</code>, first async, then switched to sync and stopped.</p>
+  <pre class="code">shop=# SELECT usename, state, sent_lsn, replay_lsn, sync_state FROM pg_stat_replication;
+ replica_user | streaming | 0/41000060 | 0/41000060 | <b>async</b>
+
+<i>-- on the replica</i>
+shop=# SELECT id, status FROM orders WHERE id = 9001;         9001 | paid
+shop=# UPDATE orders SET status = 'shipped' WHERE id = 9001;
+<b>ERROR:  cannot execute UPDATE in a read-only transaction</b>
+
+<i>-- primary: ALTER SYSTEM SET synchronous_standby_names = 'replica1'; then reload</i>
+ replica1 | streaming | <b>sync</b>
+
+<i>-- stop the replica, then commit on the primary: the session just waits</i>
+ pid  | state  | wait_event_type | wait_event |                     query
+ 3478 | active | IPC             | <b>SyncRep</b>    | UPDATE users SET updated_at=now() WHERE id=43
+<i>-- cancelling the wait is honest about what you get</i>
+WARNING:  canceling wait for synchronous replication due to user request
+DETAIL:  The transaction has already committed locally, but might not have been replicated to the standby.</pre></div></aside>
+</section>
+
+<section class="s" id="s17" data-t="Failover and Patroni">
+  <div class="sh"><span class="off">18</span><h2>Failover: promoting a replica</h2></div>
+  <p class="lead">When the primary dies, one replica must become the new primary, and exactly one. The hard part is agreeing who.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant P as Patroni on pg-1
+  participant E as etcd
+  participant Q as Patroni on pg-2
+  participant H as HAProxy
+  P-&gt;&gt;E: renew leader key every few seconds
+  Note over P: pg-1 crashes
+  Note over E: leader key expires
+  Q-&gt;&gt;E: take the leader key
+  E--&gt;&gt;Q: yours
+  Q-&gt;&gt;Q: promote local PostgreSQL
+  H-&gt;&gt;Q: are you the primary?
+  Q--&gt;&gt;H: yes
+  Note over H: writes now go to pg-2
+</pre></div><figcaption>The leader key in etcd is the single source of truth. Whoever holds it is primary; nobody else may accept writes.</figcaption></figure>
+  <ul>
+    <li><b>Manual failover is one command.</b> <code>SELECT pg_promote()</code> on the replica, then repoint the clients. Simple, slow, and error-prone at 3 a.m.</li>
+    <li><b>Patroni automates it.</b> An agent beside each server holds or watches a leader key in etcd, Consul or ZooKeeper.</li>
+    <li><b>The key has a time limit.</b> A primary that cannot renew it demotes itself. That is what prevents two primaries.</li>
+    <li><b>Clients follow through a proxy.</b> HAProxy asks each Patroni agent who is primary and routes there.</li>
+  </ul>
+  <div class="tw"><table>
+    <tr><th>Setup</th><th>Failover time</th><th>Data loss risk</th><th>You operate</th></tr>
+    <tr><td>Manual promote</td><td>Minutes</td><td>Whatever the lag was</td><td>Everything</td></tr>
+    <tr><td>Patroni + etcd</td><td>Seconds to tens of seconds</td><td>Configurable (sync or async)</td><td>Patroni, etcd, proxy</td></tr>
+    <tr><td>AWS RDS Multi-AZ</td><td>About a minute</td><td>None (synchronous standby)</td><td>Nothing</td></tr>
+    <tr><td>Aurora PostgreSQL</td><td>About half a minute</td><td>None (shared storage)</td><td>Nothing</td></tr>
+  </table></div>
+  <p>The times are typical figures, not promises. <span class="tag s">Simplified</span></p>
+  <div class="fail"><b>If it breaks:</b> the old primary comes back still believing it is in charge. It must be fenced off, then rewound (<code>pg_rewind</code>) or rebuilt to rejoin as a replica of the new one.</div>
+  <details class="q"><summary>In a Patroni cluster, what stops two nodes from both believing they are the primary (split brain)?</summary><div class="in">A leader key with a time limit in a consensus store (etcd, Consul or ZooKeeper). Only the holder may be primary. A primary that cannot renew the key in time demotes itself before another node can take it.</div></details>
+  <aside class="trk"><h4 data-id="replica1">Follow order 9001</h4><div class="in"><p>Promoting the real replica by hand. It starts a new timeline and accepts writes.</p>
+  <pre class="code">replica$ psql -p 5433 -d shop
+shop=# SELECT pg_promote();            t
+shop=# SELECT pg_is_in_recovery();     <b>f</b>
+shop=# UPDATE users SET updated_at = NULL WHERE id = 43;     UPDATE 1
+
+<i>-- replica log</i>
+LOG:  selected new timeline ID: <b>2</b>
+LOG:  archive recovery complete
+LOG:  database system is ready to accept connections</pre></div></aside>
+</section>
+
+<section class="s" id="s18" data-t="Read replicas and lag">
+  <div class="sh"><span class="off">19</span><h2>Read replicas, lag and logical replication</h2></div>
+  <p class="lead">Replicas multiply read capacity, but each one is a moment behind the primary, and your application has to tolerate that moment.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">orders-api</span><i data-t="writes"></i><span class="n y">pg-1 primary</span><i data-t="WAL"></i><span class="n b">pg-2<small>reads</small></span>
+  </div><div class="flow" style="margin-top:.6rem"><span class="n g">orders-api</span><i data-t="reads"></i><span class="n b">pg-2, pg-3<small>each slightly behind</small></span></div></div><figcaption>Writes have one home. Reads can go anywhere, if slightly stale answers are acceptable.</figcaption></figure>
+  <ul>
+    <li><b>Lag is normally milliseconds.</b> Measured here: 0.057 s. A long query on the replica or a burst of writes stretches it. <a class="tag s" href="#c14">Simplified · check 14</a></li>
+    <li><b>Read your own writes.</b> After a user writes, send that user’s reads to the primary for a short while, or until the replica has replayed past the write’s LSN.</li>
+    <li><b>Routing is the application’s job.</b> Two connection strings (read-write, read-only), or a proxy that exposes two ports.</li>
+  </ul>
+  <h3>Logical replication</h3>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Physical (streaming)</h4><span class="chip">Whole cluster, byte for byte</span><span class="chip">Same major version</span><span class="chip">Replica is read-only</span></div>
+    <div><h4>Logical (publish and subscribe)</h4><span class="chip Y">Chosen tables only</span><span class="chip Y">Different major versions</span><span class="chip Y">Subscriber is a normal writable database</span></div>
+  </div></div><figcaption>Logical replication sends row changes, not disk blocks. That is what makes near-zero-downtime major upgrades possible.</figcaption></figure>
+  <pre class="code"><i>-- publisher (needs wal_level = logical). Not run for this guide.</i>
+CREATE PUBLICATION shop_pub FOR TABLE users, orders;
+<i>-- subscriber</i>
+CREATE SUBSCRIPTION shop_sub CONNECTION 'host=pg-1 dbname=shop' PUBLICATION shop_pub;</pre>
+  <details class="q"><summary>A user saves their profile and reloads at once. The read goes to a replica and shows the old value. Name two fixes.</summary><div class="in">Route that user’s reads to the primary for a short window after any write; or remember the LSN of the write and only use a replica that has replayed past it. (Making that replica synchronous with remote_apply also works, at a latency cost.)</div></details>
+  <aside class="trk"><h4 data-id="replica1">Follow order 9001</h4><div class="in"><p>A payment row written on the primary, read on the replica a moment later.</p>
+  <pre class="code">primary=# INSERT INTO payments VALUES ('pay-9001-b2', 9001, 0);       INSERT 0 1
+
+replica=# SELECT * FROM payments WHERE idempotency_key = 'pay-9001-b2';
+ pay-9001-b2 | 9001 | 0.00
+replica=# SELECT pg_last_wal_replay_lsn(),
+                 EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())) AS lag_seconds;
+ 0/41000220 | <b>0.057</b></pre></div></aside>
+</section>
+
+<section class="s" id="s19" data-t="Connection pooling">
+  <div class="sh"><span class="off">20</span><h2>Connection pooling with PgBouncer</h2></div>
+  <p class="lead">Each PostgreSQL connection is a whole operating-system process. A pooler lets thousands of clients share a few dozen of them.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Without a pooler</h4><div class="flow v"><span class="n g">50 services × 10 instances × 10 connections</span><span class="n r">5,000 backend processes<small>the stock limit is 100</small></span></div></div>
+    <div><h4>With PgBouncer</h4><div class="flow v"><span class="n g">5,000 client connections</span><span class="n p">PgBouncer<small>hands out a server connection per transaction</small></span><span class="n y">about 100 backend processes</span></div></div>
+  </div></div><figcaption>50 × 10 × 10 = 5,000. Most of those connections are idle at any instant, which is why sharing works.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Pool mode</th><th>Server connection is returned</th><th>Use for</th></tr>
+    <tr><td>Session</td><td>When the client disconnects</td><td>Code that needs session state. Little sharing. <a class="tag d" href="#c16">Default · check 16</a></td></tr>
+    <tr><td>Transaction</td><td>At COMMIT or ROLLBACK</td><td>Most applications. The usual choice.</td></tr>
+    <tr><td>Statement</td><td>After every statement</td><td>Autocommit-only workloads. No multi-statement transactions.</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Connections are expensive.</b> Each costs a process, memory in the megabytes, and tens of milliseconds to open. <span class="tag s">Simplified</span></li>
+    <li><b>max_connections is 100 by default.</b> Raising it far is the wrong fix; pool instead. <a class="tag d" href="#c15">Default · check 15</a></li>
+    <li><b>Use both pools.</b> A small pool inside each app instance, and PgBouncer as the global cap for the fleet.</li>
+    <li><b>Watch for queueing.</b> <code>cl_waiting &gt; 0</code> in <code>SHOW POOLS</code> means clients are waiting for a server connection.</li>
+  </ul>
+  <div class="fail"><b>If it breaks:</b> in transaction mode, session state does not follow you to the next transaction. <code>SET</code>, session advisory locks, <code>LISTEN</code> and temp tables misbehave. Use <code>SET LOCAL</code> and transaction-level advisory locks instead.</div>
+  <details class="q"><summary>What stops working under PgBouncer’s transaction pooling that worked under session pooling?</summary><div class="in">Anything that relies on the session living across transactions: SET without LOCAL, session-level advisory locks, LISTEN/NOTIFY, temporary tables, WITH HOLD cursors. Each transaction may run on a different server connection.</div></details>
+  <aside class="trk"><h4 data-id="pgb-1:6432">Follow order 9001</h4><div class="in"><p>The pooler in front of <code>shop</code>. This file was written for the guide and not run. <span class="tag x">Example value</span></p>
+  <pre class="code"><i>; pgbouncer.ini</i>
+[databases]
+shop    = host=pg-1 port=5432 dbname=shop
+shop_ro = host=pg-2 port=5432 dbname=shop     <i>; the app picks: PgBouncer does not split reads</i>
+
+[pgbouncer]
+listen_port = 6432
+<b>pool_mode = transaction</b>
+max_client_conn = 5000          <i>; clients that may connect</i>
+default_pool_size = 80          <i>; server connections per database and user</i>
+reserve_pool_size = 5
+server_idle_timeout = 600</pre></div></aside>
+</section>
+<div class="part" data-part="Patterns"><h2>Part 5: Patterns</h2><p>Small tools, sharp edges</p></div>
+
+<section class="s" id="s20" data-t="Optimistic and advisory locks">
+  <div class="sh"><span class="off">21</span><h2>Optimistic locking and advisory locks</h2></div>
+  <p class="lead">Two ways to coordinate without holding a row lock: detect a conflict after the fact with a version number, or lock an idea instead of a row.</p>
+  <h3>Optimistic locking</h3>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">T1 reads<small>qty 4, version 1</small></span><i></i><span class="n b">T2 reads<small>qty 4, version 1</small></span><i></i><span class="n y">T1 writes<small>WHERE version = 1: 1 row</small></span><i></i><span class="n r">T2 writes<small>WHERE version = 1: 0 rows</small></span>
+  </div></div><figcaption>Nobody waited. The second writer learns from “0 rows” that the row changed, reloads and tries again.</figcaption></figure>
+  <ul>
+    <li><b>Detect, do not prevent.</b> No lock is held while the user thinks. Best when conflicts are rare.</li>
+    <li><b>The check and the write are one statement.</b> That is what makes it safe. <span class="tag g">Guaranteed</span></li>
+  </ul>
+  <h3>Advisory locks</h3>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">Worker A<small>try lock “payout_user_42”: true</small></span><i></i><span class="n b">Worker B<small>try lock: false, skip</small></span><i></i><span class="n y">Worker A<small>pays out, unlocks</small></span>
+  </div></div><figcaption>The lock key is just a number you choose. PostgreSQL does not know or care what it stands for.</figcaption></figure>
+  <ul>
+    <li><b>For things that are not rows.</b> “Only one payout job per user”, “only one migration at a time”.</li>
+    <li><b>Prefer the transaction-level form.</b> <code>pg_advisory_xact_lock</code> releases itself at commit, and is the only form that is safe behind a transaction-mode pooler.</li>
+  </ul>
+  <div class="fail"><b>If it breaks:</b> a session-level advisory lock is held until unlock or disconnect. A worker that forgets to unlock, on a pooled connection that never closes, blocks that key forever.</div>
+  <details class="q"><summary>With optimistic locking, an UPDATE … WHERE id = 123 AND version = 5 reports “UPDATE 0”. What does that mean, and what should the application do?</summary><div class="in">Someone else updated the row first, so its version is no longer 5. Nothing was written. Reload the row, reapply the change (or show the user the conflict) and retry with the new version.</div></details>
+  <aside class="trk"><h4 data-id="product 123">Follow order 9001</h4><div class="in"><p>Both patterns on the Widget.</p>
+  <pre class="code">read: product_id 123 | quantity 4 | version 1
+T1: UPDATE inventory SET quantity = 3, version = version + 1 WHERE product_id = 123 <b>AND version = 1</b>;   UPDATE 1
+T2: UPDATE inventory SET quantity = 3, version = version + 1 WHERE product_id = 123 <b>AND version = 1</b>;   <b>UPDATE 0</b>
+read: product_id 123 | quantity 3 | version 2
+
+T1: SELECT hashtext('payout_user_42');                              1589295591
+T1: SELECT pg_try_advisory_lock(hashtext('payout_user_42'));        t
+T2: SELECT pg_try_advisory_lock(hashtext('payout_user_42'));        <b>f</b>
+T1: SELECT pg_advisory_unlock(hashtext('payout_user_42'));          t
+T2: SELECT pg_try_advisory_lock(hashtext('payout_user_42'));        t</pre></div></aside>
+</section>
+
+<section class="s" id="s21" data-t="UPSERT and RETURNING">
+  <div class="sh"><span class="off">22</span><h2>Idempotent writes: UPSERT and RETURNING</h2></div>
+  <p class="lead">Networks retry. A write is safe to retry when running it twice leaves the same result as running it once.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">orders-api<small>pay, key pay-9001-a1</small></span><i data-t="INSERT … ON CONFLICT DO NOTHING"></i><span class="n y">payments<small>1 row inserted</small></span>
+  </div><div class="flow" style="margin-top:.6rem">
+    <span class="n g">orders-api<small>timeout, retries the same key</small></span><i data-t="same statement"></i><span class="n y">payments<small>0 rows inserted, still 1 payment</small></span>
+  </div></div><figcaption>The unique key turns the second attempt into a no-op. Asha is charged once.</figcaption></figure>
+  <ul>
+    <li><b>ON CONFLICT DO UPDATE.</b> Insert, or update the existing row, in one atomic statement. <code>EXCLUDED</code> is the row you tried to insert.</li>
+    <li><b>ON CONFLICT DO NOTHING.</b> Insert unless it is already there. The basis of idempotency keys and deduplication.</li>
+    <li><b>It needs a unique index.</b> The conflict is detected by a unique or exclusion constraint. <span class="tag g">Guaranteed</span></li>
+    <li><b>RETURNING hands back what was written.</b> Generated ids, defaults, new values, with no second query and no race.</li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in"><p>Since PostgreSQL 15 there is also the standard <code>MERGE</code> statement. For a plain “insert or update one row” under concurrency, <code>ON CONFLICT</code> remains the safer tool, because it is built on the unique index.</p></div></details>
+  <details class="q"><summary>How does an idempotency key with INSERT … ON CONFLICT DO NOTHING make a payment retry safe?</summary><div class="in">The key is the primary key (or has a unique index). The first attempt inserts the row. Any retry with the same key conflicts and inserts nothing, so the payment exists exactly once; the app checks the row count or reads the existing row.</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>The order’s id came back from RETURNING. Its payment is retried, and Asha’s profile is upserted.</p>
+  <pre class="code">shop=# INSERT INTO orders (user_id, product_id, total, created_at) VALUES (42, 123, 499.00, '2026-03-15 10:00:00+00')
+       <b>RETURNING id, status, created_at</b>;
+ 9001 | paid | 2026-03-15 10:00:00+00
+
+shop=# INSERT INTO payments VALUES ('pay-9001-a1', 9001, 499.00) ON CONFLICT DO NOTHING;   INSERT 0 <b>1</b>
+shop=# INSERT INTO payments VALUES ('pay-9001-a1', 9001, 499.00) ON CONFLICT DO NOTHING;   INSERT 0 <b>0</b>   <i>-- the retry</i>
+
+shop=# INSERT INTO users (id, email, name, updated_at) VALUES (42, 'asha@example.com', 'Asha Rao', '2026-03-15 10:05:00+00')
+       <b>ON CONFLICT (email) DO UPDATE</b> SET name = EXCLUDED.name, updated_at = EXCLUDED.updated_at
+       RETURNING id, name;
+ 42 | Asha Rao                                   <i>-- updated, not duplicated</i>
+
+<i>-- the same row with a plain INSERT</i>
+ERROR:  duplicate key value violates unique constraint "users_pkey"</pre></div></aside>
+</section>
+
+<section class="s" id="s22" data-t="No double-booking">
+  <div class="sh"><span class="off">23</span><h2>No double-booking: exclusion constraints</h2></div>
+  <p class="lead">A unique constraint says “no two rows are equal”. An exclusion constraint says “no two rows overlap”, and the database enforces it even when two requests race.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>room 7</label><div class="cell done"><b>10:00 to 11:00</b><span>Asha: booked</span></div><div class="cell done"><b>11:00 to 12:00</b><span>Ravi: booked</span></div></div>
+    <div class="log"><label>rejected</label><div class="cell ghost"><b>10:00</b><span>&nbsp;</span></div><div class="cell gone"><b>10:30 to 11:30</b><span>Ravi: overlaps</span></div></div>
+  </div><figcaption>Back-to-back bookings are fine. The range includes its start and excludes its end, so 11:00 belongs only to the second one.</figcaption></figure>
+  <pre class="code">CREATE EXTENSION btree_gist;             <i>-- lets "=" on a bigint join the GiST index</i>
+CREATE TABLE reservations (
+  id          bigserial PRIMARY KEY,
+  resource_id bigint    NOT NULL,
+  time_range  tstzrange NOT NULL,
+  user_id     bigint    NOT NULL,
+  <b>EXCLUDE USING gist (resource_id WITH =, time_range WITH &amp;&amp;)</b>
+);</pre>
+  <ul>
+    <li><b>Read it as a sentence.</b> No two rows may have an equal resource and overlapping time ranges.</li>
+    <li><b>It is backed by a GiST index.</b> The check is an index lookup, not a table scan.</li>
+    <li><b>It cannot be bypassed.</b> No application bug or race can insert an overlap. <span class="tag g">Guaranteed</span></li>
+  </ul>
+  <div class="tip"><b>In an interview.</b> For a booking system, say “the constraint lives in the database” before describing any application-level locking. It is the strongest answer and the shortest.</div>
+  <details class="q"><summary>With range bookings, why does [10:00, 11:00) followed by [11:00, 12:00) not count as an overlap?</summary><div class="in">The ranges are half-open: the start is included, the end is not. The first booking ends just before 11:00 and the second starts at 11:00, so they share no instant.</div></details>
+  <aside class="trk"><h4 data-id="room 7">Follow order 9001</h4><div class="in"><p>Asha books a pickup slot for her order. Ravi tries two slots.</p>
+  <pre class="code">shop=# INSERT INTO reservations (resource_id, time_range, user_id)
+       VALUES (7, '[2026-03-16 10:00+00, 2026-03-16 11:00+00)', 42);        <i>-- Asha: ok</i>
+
+shop=# INSERT INTO reservations (resource_id, time_range, user_id)
+       VALUES (7, '[2026-03-16 10:30+00, 2026-03-16 11:30+00)', 43);        <i>-- Ravi</i>
+<b>ERROR:  conflicting key value violates exclusion constraint "reservations_resource_id_time_range_excl"</b>
+DETAIL:  Key (resource_id, time_range)=(7, ["2026-03-16 10:30:00+00","2026-03-16 11:30:00+00")) conflicts
+         with existing key (resource_id, time_range)=(7, ["2026-03-16 10:00:00+00","2026-03-16 11:00:00+00")).
+
+shop=# INSERT INTO reservations (resource_id, time_range, user_id)
+       VALUES (7, '[2026-03-16 11:00+00, 2026-03-16 12:00+00)', 43);        <i>-- Ravi, back to back: ok</i></pre></div></aside>
+</section>
+
+<section class="s" id="s23" data-t="CTEs and audit triggers">
+  <div class="sh"><span class="off">24</span><h2>CTEs and audit triggers</h2></div>
+  <p class="lead">Two tools for keeping things understandable: name the steps of a long query, and let the database record who changed what.</p>
+  <h3>CTEs: a query as named steps</h3>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">orders<small>last 12 months</small></span><i data-t="GROUP BY user"></i><span class="n y">user_orders<small>count, total spent</small></span><i data-t="CASE"></i><span class="n y">user_segments<small>platinum, gold, standard</small></span><i data-t="JOIN users"></i><span class="n g">result</span>
+  </div></div><figcaption>Each WITH block is one box. The final SELECT joins them.</figcaption></figure>
+  <pre class="code"><i>-- Not run for this guide.</i>
+WITH user_orders AS (
+  SELECT user_id, count(*) AS order_count, sum(total) AS total_spent
+  FROM orders WHERE created_at &gt; now() - interval '1 year' GROUP BY user_id
+), user_segments AS (
+  SELECT user_id, CASE WHEN total_spent &gt; 10000 THEN 'platinum'
+                       WHEN total_spent &gt; 1000  THEN 'gold' ELSE 'standard' END AS segment
+  FROM user_orders
+)
+SELECT u.id, u.name, s.segment, o.order_count
+FROM users u JOIN user_orders o ON o.user_id = u.id JOIN user_segments s ON s.user_id = u.id;</pre>
+  <h3>Audit triggers: history nobody can forget to write</h3>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">any client<small>UPDATE orders …</small></span><i></i><span class="n y">orders<small>row changes</small></span><i data-t="trigger, same transaction"></i><span class="n p">audit_log<small>old row, new row, who, when</small></span>
+  </div></div><figcaption>The log row commits or rolls back together with the change it describes.</figcaption></figure>
+  <ul>
+    <li><b>Every path is covered.</b> App code, admin scripts and manual psql sessions all fire the trigger.</li>
+    <li><b>It costs a write per change.</b> Do not put it on a table you bulk-load. Loading a million orders here meant dropping the trigger first.</li>
+  </ul>
+  <details class="q"><summary>Why record changes to a sensitive table with a database trigger rather than in application code?</summary><div class="in">The trigger fires for every write regardless of where it comes from (services, scripts, a person in psql), and the audit row is written in the same transaction as the change, so the two can never disagree.</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>The order ships, and the trigger notices.</p>
+  <pre class="code">CREATE FUNCTION audit_trigger() RETURNS trigger AS $$
+BEGIN
+  INSERT INTO audit_log (table_name, operation, old_data, new_data, changed_by)
+  VALUES (TG_TABLE_NAME, TG_OP,
+          CASE WHEN TG_OP &lt;&gt; 'INSERT' THEN to_jsonb(OLD) END,
+          CASE WHEN TG_OP &lt;&gt; 'DELETE' THEN to_jsonb(NEW) END,
+          current_user);
+  RETURN COALESCE(NEW, OLD);
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER orders_audit AFTER INSERT OR UPDATE OR DELETE ON orders
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
+
+shop=# UPDATE orders SET status = 'shipped' WHERE id = 9001;
+shop=# SELECT id, table_name, operation, old_data-&gt;&gt;'status', new_data-&gt;&gt;'status', changed_by FROM audit_log;
+ 1 | orders | UPDATE | <b>paid</b> | <b>shipped</b> | postgres</pre></div></aside>
+</section>
+
+<div class="part" data-part="Performance"><h2>Part 6: Performance</h2><p>Observe, explain, fix, verify</p></div>
+
+<section class="s" id="s24" data-t="Find it, explain it">
+  <div class="sh"><span class="off">25</span><h2>Find the slow query, then explain it</h2></div>
+  <p class="lead">“Add an index” is a guess. First find which queries cost the most in total, then read their plans.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n p">Observe<small>pg_stat_statements</small></span><i></i><span class="n p">Explain<small>EXPLAIN (ANALYZE, BUFFERS)</small></span><i></i><span class="n y">Fix<small>index, rewrite, ANALYZE</small></span><i></i><span class="n g">Verify<small>run EXPLAIN again</small></span>
+  </div></div><figcaption>A loop, not a one-off. The verify step is the one people skip.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>In the plan</th><th>Means</th><th>Usual response</th></tr>
+    <tr><td>Seq Scan</td><td>Read the whole table</td><td>Fine on small tables. On big ones, index the filter.</td></tr>
+    <tr><td>Index Scan / Index Only Scan</td><td>Walk the index, fetch rows (or not)</td><td>Good.</td></tr>
+    <tr><td>Bitmap Heap Scan</td><td>Collect matches from the index, then read pages in order</td><td>Normal for many rows.</td></tr>
+    <tr><td>Nested Loop</td><td>For each outer row, look up the inner side</td><td>Good when the outer side is small.</td></tr>
+    <tr><td>Hash Join</td><td>Build a hash table of one side</td><td>Good for big joins.</td></tr>
+    <tr><td>Sort … Disk</td><td>The sort did not fit in work_mem</td><td>Add an index that gives the order, or more memory.</td></tr>
+    <tr><td>rows=11 … actual rows=12</td><td>Estimate against reality</td><td>If they differ by 10× or more, run ANALYZE.</td></tr>
+    <tr><td>Buffers: hit / read</td><td>Pages from cache / from disk</td><td>Many reads means I/O is the cost.</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Rank by total time.</b> A query run 10,000 times at 50 ms costs 500 s. One run at 2 s costs 2 s.</li>
+    <li><b>The planner trusts statistics.</b> <code>ANALYZE</code> refreshes them. Run it after bulk loads; autovacuum does it otherwise.</li>
+    <li><b>Fix the slowest node.</b> Find the line with the biggest actual time, not the one that looks unusual.</li>
+    <li><b>Column names changed in version 13.</b> <code>mean_time</code> and <code>total_time</code> became <code>mean_exec_time</code> and <code>total_exec_time</code>. <span class="tag g">Guaranteed</span></li>
+  </ul>
+  <details class="deep"><summary>What happens internally</summary><div class="in"><p><code>EXPLAIN ANALYZE</code> really runs the statement. Wrap a write in <code>BEGIN … ROLLBACK</code> if you only want the plan. From PostgreSQL 18, ANALYZE shows buffer counts without asking.</p></div></details>
+  <details class="q"><summary>One query runs 10,000 times a day at 50 ms. Another runs once a day at 2 s. Which do you optimise first, and why?</summary><div class="in">The 50 ms one: 10,000 × 50 ms is 500 seconds of database time a day, against 2 seconds. Rank by total time (calls × mean), which is what pg_stat_statements gives you.</div></details>
+  <aside class="trk"><h4 data-id="orders">Follow order 9001</h4><div class="in"><p>What the server remembers about this guide’s own work, and what the planner knows about <code>orders</code>.</p>
+  <pre class="code">shop=# SELECT left(query, 50), calls, round(mean_exec_time) AS mean_ms, round(total_exec_time) AS total_ms
+       FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 4;     <i>-- trimmed</i>
+ INSERT INTO orders (user_id, product_id, total, st |     1 |  14381 |    14381   <i>-- the bulk load</i>
+ UPDATE orders SET status=$1 WHERE created_at &lt; $2  |     1 |   5831 |     5831
+ INSERT INTO orders_p SELECT * FROM orders          |     1 |   2318 |     2318
+ CREATE INDEX idx_orders_user_hash ON orders USING  |     2 |    833 |     1666
+
+shop=# SELECT attname, n_distinct, most_common_vals, most_common_freqs FROM pg_stats WHERE tablename = 'orders';
+ status  |     2 | {paid,pending} | <b>{0.99,0.01}</b>      <i>-- why the planner expects few pending rows</i>
+ user_id | 10073 | …                                 <i>-- an estimate: the truth is 10,000</i></pre></div></aside>
+</section>
+
+<section class="s" id="s25" data-t="Vacuum and bloat">
+  <div class="sh"><span class="off">26</span><h2>Vacuum: cleaning up dead row versions</h2></div>
+  <p class="lead">MVCC leaves the old version of every updated or deleted row behind. Vacuum marks that space reusable; if it falls behind, the table bloats.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>after UPDATEs</label><div class="cell gone"><b>dead</b><span>v1</span></div><div class="cell gone"><b>dead</b><span>v2</span></div><div class="cell pend"><b>live</b><span>v3</span></div><div class="cell pend"><b>live</b><span>other row</span></div></div>
+    <div class="log"><label>after VACUUM</label><div class="cell ghost"><b>free</b><span>reusable</span></div><div class="cell ghost"><b>free</b><span>reusable</span></div><div class="cell pend"><b>live</b><span>v3</span></div><div class="cell pend"><b>live</b><span>other row</span></div></div>
+  </div><figcaption>Vacuum frees the slots for new rows in this table. It does not shrink the file.</figcaption></figure>
+  <ul>
+    <li><b>Autovacuum does it for you.</b> It vacuums a table once dead rows exceed 50 plus 20% of the table: 200,050 dead rows for our million orders. <a class="tag d" href="#c15">Default · check 15</a></li>
+    <li><b>Space is reused, not returned.</b> The file stays the same size and fills up again from inside.</li>
+    <li><b>VACUUM FULL does shrink it.</b> By rewriting the whole table under an exclusive lock. Avoid on a live system.</li>
+    <li><b>On busy tables, vacuum sooner.</b> Lower <code>autovacuum_vacuum_scale_factor</code> per table so cleanup starts earlier.</li>
+  </ul>
+  <div class="fail"><b>If it breaks:</b> one forgotten open transaction pins every row version newer than its snapshot. Vacuum runs but reports them “dead but not yet removable”, and the table keeps growing. Try it in the <a href="#s5">MVCC demo</a>.</div>
+  <details class="deep"><summary>What happens internally</summary><div class="in"><p>Vacuum has a second job. Transaction IDs are 32-bit and wrap around, so old rows are “frozen” to mark them visible to everyone. If vacuum is blocked for long enough, PostgreSQL stops accepting writes to protect the data.</p></div></details>
+  <details class="q"><summary>VACUUM finished and removed 221,476 dead rows, yet the table file did not get smaller. Why, and is that a problem?</summary><div class="in">Plain VACUUM marks the space as free for reuse inside the same table; it only gives space back to the operating system when the empty pages are at the very end. It is not a problem: later inserts and updates fill the free space. Only VACUUM FULL (or pg_repack) rewrites the table smaller.</div></details>
+  <aside class="trk"><h4 data-id="orders">Follow order 9001</h4><div class="in"><p>Marking six months of orders as shipped, with autovacuum switched off for the table.</p>
+  <pre class="code">shop=# UPDATE orders SET status = 'shipped' WHERE created_at &lt; '2024-07-01';      UPDATE 221476
+ relname | n_live_tup | n_dead_tup | dead_pct
+ orders  |    1000001 |     <b>221476</b> |    22.15
+ table size: 73 MB before, <b>89 MB</b> after
+
+shop=# VACUUM (VERBOSE) orders;                                                    <i>-- trimmed</i>
+INFO:  finished vacuuming "shop.public.orders": index scans: 1
+tuples: <b>221476 removed</b>, 999985 remain, 0 are dead but not yet removable
+ table size: still <b>89 MB</b>
+
+shop=# UPDATE orders SET status = 'paid' WHERE created_at &lt; '2024-07-01' AND …;    UPDATE 219262
+ table size: still <b>89 MB</b>              <i>-- the new versions went into the freed space</i></pre></div></aside>
+</section>
+
+<section class="s" id="s26" data-t="Settings and anti-patterns">
+  <div class="sh"><span class="off">27</span><h2>Settings and anti-patterns</h2></div>
+  <p class="lead">A handful of settings matter, the defaults are sized for a laptop, and most slow systems are slow because of a few repeated query habits.</p>
+  <div class="tw"><table>
+    <tr><th>Setting</th><th>Out of the box</th><th>Starting point, 16 GB server on SSD</th><th>What it is</th></tr>
+    <tr><td><code>shared_buffers</code></td><td>128 MB</td><td>4 GB (about 25% of RAM)</td><td>The page cache</td></tr>
+    <tr><td><code>effective_cache_size</code></td><td>4 GB</td><td>12 GB (about 75%)</td><td>A hint to the planner, not an allocation</td></tr>
+    <tr><td><code>work_mem</code></td><td>4 MB</td><td>16 to 64 MB</td><td>Per sort or hash, per query node</td></tr>
+    <tr><td><code>maintenance_work_mem</code></td><td>64 MB</td><td>1 GB</td><td>For VACUUM and CREATE INDEX</td></tr>
+    <tr><td><code>max_wal_size</code></td><td>1 GB</td><td>4 GB</td><td>WAL allowed between checkpoints</td></tr>
+    <tr><td><code>checkpoint_timeout</code></td><td>5 min</td><td>15 min</td><td>Longest gap between checkpoints</td></tr>
+    <tr><td><code>random_page_cost</code></td><td>4.0</td><td>1.1</td><td>How costly a random read is. 4.0 assumes spinning disks</td></tr>
+    <tr><td><code>max_connections</code></td><td>100</td><td>100 to 200, plus a pooler</td><td>Backend processes allowed</td></tr>
+  </table></div>
+  <p>The first column is what <code>SHOW</code> returned on the test server. <a class="tag d" href="#c15">Default · check 15</a> The second is a common starting point, to be tuned by measuring. <span class="tag s">Simplified</span></p>
+  <div class="fail"><b>If it breaks:</b> <code>work_mem</code> is per operation, not per connection. A query with four sorts on each of 100 connections can ask for 400 times the setting. Set it high and the server runs out of memory.</div>
+  <div class="tw"><table>
+    <tr><th>Habit</th><th>What goes wrong</th><th>Instead</th></tr>
+    <tr><td><code>SELECT *</code></td><td>Ships unused columns, defeats index-only scans</td><td>Name the columns</td></tr>
+    <tr><td>N+1 queries</td><td>One query per row of a list</td><td>A JOIN, or one <code>WHERE id = ANY($1)</code></td></tr>
+    <tr><td>Missing index</td><td>Sequential scans on big tables</td><td>Index the filter</td></tr>
+    <tr><td>Too many indexes</td><td>Every write pays for each</td><td>Drop unused ones</td></tr>
+    <tr><td>Long transactions</td><td>Hold locks, block vacuum</td><td>Keep them short. No network calls inside</td></tr>
+    <tr><td><code>OFFSET</code> pagination</td><td>Reads and discards every skipped row</td><td>Keyset: <code>WHERE id &gt; last_seen</code></td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>OFFSET 900000 LIMIT 20</h4><div class="flow"><span class="n r">walk 900,020 index entries</span><i></i><span class="n">keep 20</span></div><p><b>88.9 ms</b></p></div>
+    <div><h4>WHERE id &gt; 909001 LIMIT 20</h4><div class="flow"><span class="n g">seek to 909001</span><i></i><span class="n">read 20</span></div><p><b>0.037 ms</b></p></div>
+  </div></div><figcaption>The same page of results. Keyset pagination stays fast on page 45,000; OFFSET gets slower with every page.</figcaption></figure>
+  <details class="q"><summary>Why is ORDER BY id LIMIT 20 OFFSET 900000 slow even though id is indexed?</summary><div class="in">OFFSET cannot jump: the server walks the index through all 900,000 skipped entries and throws them away. Keyset pagination (WHERE id &gt; last_seen ORDER BY id LIMIT 20) descends the B-tree straight to the starting point.</div></details>
+  <aside class="trk"><h4 data-id="orders">Follow order 9001</h4><div class="in"><p>Both forms of pagination on the orders table.</p>
+  <pre class="code">shop=# EXPLAIN (ANALYZE, COSTS OFF) SELECT id FROM orders ORDER BY id LIMIT 20 OFFSET 900000;
+ Limit (actual time=88.864..88.867 rows=20 loops=1)
+   -&gt;  Index Only Scan using orders_pkey on orders (actual time=0.006..67.185 <b>rows=900020</b> loops=1)
+ Execution Time: <b>88.881 ms</b>
+
+shop=# EXPLAIN (ANALYZE, COSTS OFF) SELECT id FROM orders WHERE id &gt; 909001 ORDER BY id LIMIT 20;
+ Limit (actual time=0.013..0.027 rows=20 loops=1)
+   -&gt;  Index Only Scan using orders_pkey on orders (actual time=0.012..0.025 <b>rows=20</b> loops=1)
+         Index Cond: (id &gt; 909001)
+ Execution Time: <b>0.037 ms</b></pre></div></aside>
+</section>
+<div class="part" data-part="Choose and revise"><h2>Part 7: Choose and revise</h2><p>Trade-offs, then prove it</p></div>
+
+<section class="s" id="s27" data-t="PostgreSQL vs the others">
+  <div class="sh"><span class="off">28</span><h2>PostgreSQL vs MySQL, MongoDB and DynamoDB</h2></div>
+  <p class="lead">Every database gives something up. A good answer names what the alternative is better at and why that does not matter for this problem.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TD
+  S["What does the workload need?"] --&gt; A["JOINs, transactions, changing queries"]
+  S --&gt; B["Key lookups at any scale, no operations work"]
+  S --&gt; C["Documents with no fixed shape, built-in sharding"]
+  S --&gt; D["Huge append-only write volume"]
+  A --&gt; PG["PostgreSQL"]:::lead
+  B --&gt; DY["DynamoDB"]
+  C --&gt; MO["MongoDB"]
+  D --&gt; CA["Cassandra or ClickHouse"]
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Start from the access pattern and the scaling need, not from the product name.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th></th><th>PostgreSQL</th><th>MySQL (InnoDB)</th><th>MongoDB</th><th>DynamoDB</th></tr>
+    <tr><td>Data model</td><td>Relational plus JSONB</td><td>Relational plus JSON</td><td>Documents</td><td>Key-value, documents</td></tr>
+    <tr><td>Queries</td><td>Full SQL, rich JOINs</td><td>SQL</td><td>Query language, limited joins</td><td>By key and declared indexes</td></tr>
+    <tr><td>Transactions</td><td>ACID</td><td>ACID</td><td>ACID across documents since 4.0</td><td>Supported, with limits</td></tr>
+    <tr><td>Scaling writes</td><td>One primary. Sharding is your job (or Citus)</td><td>One primary. Sharding via Vitess</td><td>Built-in sharding</td><td>Automatic</td></tr>
+    <tr><td>Extensions</td><td>Many: PostGIS, pgvector, Timescale</td><td>Few</td><td>n/a</td><td>n/a</td></tr>
+    <tr><td>Operations</td><td>Yours, or a managed service</td><td>Yours, or managed</td><td>Yours, or Atlas</td><td>Fully managed</td></tr>
+  </table></div>
+  <p>A one-screen comparison flattens a lot. <span class="tag s">Simplified</span></p>
+  <ul>
+    <li><b>Over MySQL:</b> richer SQL and index types, strict by default, extensions. MySQL wins on existing team expertise and some hosting ecosystems.</li>
+    <li><b>Over MongoDB:</b> JOINs and constraints. JSONB covers most “flexible schema” needs. MongoDB wins on built-in horizontal scaling.</li>
+    <li><b>Over DynamoDB:</b> ad hoc queries. DynamoDB wins when access is by key, scale is unbounded and nobody wants to run a database.</li>
+  </ul>
+  <details class="q"><summary>An interviewer asks “why PostgreSQL and not DynamoDB?” for an order system. Give the shape of a good answer.</summary><div class="in">Name the requirement (orders, stock and users must change together; queries will evolve), the feature that meets it (transactions, JOINs, add indexes later), and the limit you accept with a plan (one write primary: replicas for reads, partitioning for size, sharding only if needed). Then say when you would choose DynamoDB instead.</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>What the order asked of the database, lesson by lesson.</p>
+  <pre class="code">stock and order change together      transaction, CHECK constraint     <i>lessons 05 to 09</i>
+Asha's recent orders in 0.085 ms     B-tree on (user_id, created_at)   <i>lessons 10 to 14</i>
+drop a quarter of old orders         range partitioning                <i>lessons 15, 16</i>
+survive losing pg-1                  streaming replication, Patroni    <i>lessons 17 to 19</i>
+5,000 clients, 100 backends          PgBouncer                         <i>lesson 20</i>
+payment retried, charged once        ON CONFLICT DO NOTHING            <i>lesson 22</i></pre></div></aside>
+</section>
+
+<section class="s" id="smyth" data-t="Misconceptions">
+  <div class="sh"><span class="off">29</span><h2>Common misconceptions</h2></div>
+  <p class="lead">Eight beliefs that sound right and cost marks in interviews.</p>
+  <div class="cards">
+    <div class="card myth"><p class="w">Read uncommitted lets you see uncommitted data in PostgreSQL.</p><p class="c">It runs as read committed. There are no dirty reads at any level.</p></div>
+    <div class="card myth"><p class="w">An UPDATE changes the row in place.</p><p class="c">It writes a new version and ends the old one. The old one stays until vacuum.</p></div>
+    <div class="card myth"><p class="w">COMMIT means the table file was written.</p><p class="c">It means the WAL was flushed. The table file follows at a checkpoint.</p></div>
+    <div class="card myth"><p class="w">VACUUM makes the table smaller.</p><p class="c">It makes dead space reusable. Only VACUUM FULL shrinks the file, and it locks the table.</p></div>
+    <div class="card myth"><p class="w">More indexes make the database faster.</p><p class="c">Faster for the reads that use them, slower for every write. Here seven indexes were twice the size of the table.</p></div>
+    <div class="card myth"><p class="w">A replica gives me the same data as the primary.</p><p class="c">It gives the primary’s data from a moment ago. With async replication, a failover can lose the last commits.</p></div>
+    <div class="card myth"><p class="w">Need more connections? Raise max_connections.</p><p class="c">Each connection is a process. Put PgBouncer in front and keep the number of backends small.</p></div>
+    <div class="card myth"><p class="w">You cannot update the partition key.</p><p class="c">You can. PostgreSQL moves the row to the right partition.</p></div>
+  </div>
+</section>
+
+<section class="s" id="srev" data-t="Revision and glossary">
+  <div class="sh"><span class="off">30</span><h2>Quick revision and glossary</h2></div>
+  <p class="lead">Test yourself, then look up any term.</p>
+  <div class="demo selftest" id="selftest"></div>
+  <details class="q"><summary>At repeatable read, T1 reads a row, T2 updates it and commits, then T1 tries to update the same row. What happens?</summary><div class="in">T1’s UPDATE fails with SQLSTATE 40001, “could not serialize access due to concurrent update”. T1 must roll back and retry. At read committed the UPDATE would simply apply on top of T2’s value.</div></details>
+  <details class="q"><summary>What do xmin and xmax on a row version record?</summary><div class="in">xmin is the ID of the transaction that created the version. xmax is the ID of the transaction that ended it (by UPDATE or DELETE), or that locked it; 0 means nobody has.</div></details>
+  <details class="q"><summary>When would you choose a BRIN index over a B-tree?</summary><div class="in">On a very large, append-only table whose physical order follows the column (typically a timestamp), queried by range. BRIN is hundreds of times smaller but returns whole block ranges that must be rechecked.</div></details>
+  <details class="q"><summary>In streaming replication, which side opens the connection: the primary or the replica?</summary><div class="in">The replica. Its walreceiver connects to the primary and asks for WAL from the position it has reached; the primary’s walsender answers.</div></details>
+  <details class="q"><summary>Name three ways to stop two shoppers both buying the last unit of stock.</summary><div class="in">One atomic statement (UPDATE … SET quantity = quantity - 1 WHERE quantity &gt; 0, backed by a CHECK constraint); SELECT … FOR UPDATE before deciding; optimistic locking with a version column; or serializable isolation with a retry loop.</div></details>
+  <details class="q"><summary>What does the planner need in order to choose a good plan, and what do you run when it is choosing badly after a bulk load?</summary><div class="in">Up-to-date statistics about each table (row count, distinct values, most common values). Run ANALYZE on the table; autovacuum normally does this in the background.</div></details>
+  <h3>Glossary</h3>
+  <div class="tw"><table class="gloss"><tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>WAL</td><td>Write-ahead log: the append-only record of every change, flushed to disk before a commit is acknowledged.</td></tr>
+    <tr><td>LSN</td><td>Log sequence number: a byte position in the WAL, written like 0/19FF790.</td></tr>
+    <tr><td>checkpoint</td><td>The moment changed pages in memory are written to the data files, so older WAL is no longer needed for recovery.</td></tr>
+    <tr><td>shared buffers</td><td>PostgreSQL’s in-memory cache of 8 kB data pages, shared by all backend processes.</td></tr>
+    <tr><td>backend</td><td>The server process that handles one client connection.</td></tr>
+    <tr><td>planner</td><td>The part that chooses how to run a query, by estimating the cost of each option from statistics.</td></tr>
+    <tr><td>MVCC</td><td>Multi-version concurrency control: updates create new row versions so readers and writers do not block each other.</td></tr>
+    <tr><td>snapshot</td><td>The set of transactions a statement or transaction treats as committed; it decides which row versions are visible.</td></tr>
+    <tr><td>xmin</td><td>Hidden column: the ID of the transaction that created this row version.</td></tr>
+    <tr><td>xmax</td><td>Hidden column: the ID of the transaction that ended or locked this row version; 0 if none.</td></tr>
+    <tr><td>ctid</td><td>Hidden column: the physical address of a row version, as (page, slot).</td></tr>
+    <tr><td>dead row</td><td>A row version no transaction can see any more; it takes space until vacuum reclaims it.</td></tr>
+    <tr><td>vacuum</td><td>The cleanup that makes the space of dead row versions reusable and freezes old transaction IDs.</td></tr>
+    <tr><td>autovacuum</td><td>Background workers that run vacuum and analyze on tables once enough rows have changed.</td></tr>
+    <tr><td>bloat</td><td>Space inside a table or index held by dead or freed row versions rather than live data.</td></tr>
+    <tr><td>isolation level</td><td>The setting that decides when a transaction takes its snapshot and which anomalies it can see.</td></tr>
+    <tr><td>write skew</td><td>Two transactions each read the same data, then write different rows, and the combined result breaks a rule.</td></tr>
+    <tr><td>sequential scan</td><td>Reading every page of a table to find matching rows.</td></tr>
+    <tr><td>index-only scan</td><td>Answering a query from the index alone, without visiting the table.</td></tr>
+    <tr><td>partition pruning</td><td>Skipping partitions whose bounds cannot match the query’s WHERE clause.</td></tr>
+    <tr><td>streaming replication</td><td>A replica continuously receives and replays the primary’s WAL.</td></tr>
+    <tr><td>replication lag</td><td>How far a replica’s replayed position is behind the primary, in bytes or seconds.</td></tr>
+    <tr><td>failover</td><td>Promoting a replica to primary after the old primary fails.</td></tr>
+    <tr><td>PgBouncer</td><td>A lightweight connection pooler that lets many client connections share a few server connections.</td></tr>
+    <tr><td>advisory lock</td><td>A lock on an application-chosen number rather than on a row or table.</td></tr>
+    <tr><td>keyset pagination</td><td>Fetching the next page with WHERE key &gt; last_seen instead of OFFSET.</td></tr>
+  </table></div>
+</section>
+
+<section class="s" id="slab" data-t="Proof checklist">
+  <div class="sh"><span class="off">31</span><h2>Proof checklist</h2></div>
+  <p class="lead">Sixteen small experiments on a real PostgreSQL. Each one settles a tagged statement from the lessons.</p>
+  <p>Any scratch database will do. Rows 4 to 7 need two <code>psql</code> windows. Create the three tables from <a href="#s0">lesson 00</a> first, with <code>CHECK (quantity &gt;= 0)</code> on inventory.</p>
+  <p id="labProg" aria-live="polite"></p>
+  <div class="tw" style="max-width:none"><table class="lab">
+    <tr><th>Passed</th><th>#</th><th>Question</th><th>Experiment</th><th>Passes when</th></tr>
+    <tr id="c1"><td><input type="checkbox" data-lab="c1" aria-label="Passed: default isolation"></td><td>1</td><td><b>Default isolation</b><br>Which level do I get if I say nothing?</td><td><code>SHOW default_transaction_isolation;</code></td><td>It prints <code>read committed</code>. If not, someone changed it: find out why.</td></tr>
+    <tr id="c2"><td><input type="checkbox" data-lab="c2" aria-label="Passed: row versions"></td><td>2</td><td><b>Row versions</b><br>Does UPDATE write a new version?</td><td><code>SELECT ctid, xmin, xmax FROM inventory WHERE product_id = 123;</code> then an UPDATE, then the SELECT again</td><td>ctid and xmin both change.</td></tr>
+    <tr id="c3"><td><input type="checkbox" data-lab="c3" aria-label="Passed: WAL advances"></td><td>3</td><td><b>WAL first</b><br>Does every write move the log?</td><td><code>SELECT pg_current_wal_lsn();</code> before and after an INSERT. Then <code>SHOW synchronous_commit;</code></td><td>The LSN grows. <code>synchronous_commit</code> is <code>on</code>.</td></tr>
+    <tr id="c4"><td><input type="checkbox" data-lab="c4" aria-label="Passed: no dirty reads"></td><td>4</td><td><b>No dirty reads</b><br>Can read uncommitted see an open transaction’s change?</td><td>Window A: <code>BEGIN; UPDATE inventory SET quantity = 99 WHERE product_id = 123;</code> (no commit). Window B: <code>BEGIN ISOLATION LEVEL READ UNCOMMITTED; SELECT quantity FROM inventory WHERE product_id = 123;</code></td><td>B sees the old quantity, not 99. Roll both back.</td></tr>
+    <tr id="c5"><td><input type="checkbox" data-lab="c5" aria-label="Passed: repeatable read conflict"></td><td>5</td><td><b>Snapshot conflict</b><br>What happens when an old snapshot updates a changed row?</td><td>A: <code>BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT …</code> B: update the row, commit. A: SELECT again, then UPDATE the row.</td><td>A’s second SELECT is unchanged. A’s UPDATE fails with “could not serialize access due to concurrent update”.</td></tr>
+    <tr id="c6"><td><input type="checkbox" data-lab="c6" aria-label="Passed: write skew"></td><td>6</td><td><b>Write skew</b><br>Does only serializable catch it?</td><td>In both windows: <code>BEGIN ISOLATION LEVEL SERIALIZABLE; SELECT count(*) FROM orders WHERE product_id = 123;</code> then an INSERT into orders, then COMMIT. Repeat at repeatable read.</td><td>Serializable: the second COMMIT fails with 40001. Repeatable read: both succeed.</td></tr>
+    <tr id="c7"><td><input type="checkbox" data-lab="c7" aria-label="Passed: row locks"></td><td>7</td><td><b>Row locks</b><br>Who does FOR UPDATE block?</td><td>A: <code>BEGIN; SELECT * FROM inventory WHERE product_id = 123 FOR UPDATE;</code> B: a plain SELECT, then the same with <code>FOR UPDATE NOWAIT</code>.</td><td>The plain SELECT returns at once. NOWAIT fails with “could not obtain lock on row”.</td></tr>
+    <tr id="c8"><td><input type="checkbox" data-lab="c8" aria-label="Passed: index changes the plan"></td><td>8</td><td><b>Index changes the plan</b><br>Does the planner use my index?</td><td>Load at least 100,000 orders. <code>EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM orders WHERE user_id = 42;</code> before and after <code>CREATE INDEX ON orders(user_id, created_at);</code></td><td>Seq Scan becomes an index or bitmap scan, and Buffers drops sharply.</td></tr>
+    <tr id="c9"><td><input type="checkbox" data-lab="c9" aria-label="Passed: leading column"></td><td>9</td><td><b>Leading column</b><br>What does my version do without it?</td><td><code>EXPLAIN SELECT * FROM orders WHERE created_at &gt; '2026-03-31';</code> with only the composite index present. Also <code>SELECT version();</code></td><td>On 17 and earlier: Seq Scan. On 18 or later you may see the index used via skip scan. Note which.</td></tr>
+    <tr id="c10"><td><input type="checkbox" data-lab="c10" aria-label="Passed: prefix LIKE"></td><td>10</td><td><b>Prefix LIKE</b><br>Does my collation allow it?</td><td><code>EXPLAIN SELECT * FROM users WHERE email LIKE 'asha%';</code> Then <code>CREATE INDEX ON users(email text_pattern_ops);</code> and repeat.</td><td>You know which of the two indexes your database needs. On the test server (collation C.UTF-8) only the second was used.</td></tr>
+    <tr id="c11"><td><input type="checkbox" data-lab="c11" aria-label="Passed: BRIN size"></td><td>11</td><td><b>BRIN size</b><br>How much smaller is it here?</td><td>Create a B-tree and a BRIN index on <code>orders(created_at)</code>. <code>SELECT pg_size_pretty(pg_relation_size('index_name'));</code> for each.</td><td>The BRIN index is hundreds of times smaller.</td></tr>
+    <tr id="c12"><td><input type="checkbox" data-lab="c12" aria-label="Passed: partition pruning"></td><td>12</td><td><b>Pruning</b><br>Are partitions really skipped?</td><td>Create <code>orders_p</code> with two quarterly partitions. <code>EXPLAIN SELECT * FROM orders_p WHERE created_at &gt;= '2026-03-15' AND created_at &lt; '2026-03-16';</code> then filter on <code>id</code> only.</td><td>The first plan names one partition. The second names all of them.</td></tr>
+    <tr id="c13"><td><input type="checkbox" data-lab="c13" aria-label="Passed: partition key update"></td><td>13</td><td><b>Moving a row</b><br>Can the partition key be updated?</td><td><code>UPDATE orders_p SET created_at = created_at + interval '3 months' WHERE id = 9001 RETURNING tableoid::regclass;</code></td><td>The row is returned from the next partition, with no error.</td></tr>
+    <tr id="c14"><td><input type="checkbox" data-lab="c14" aria-label="Passed: replication mode and lag"></td><td>14</td><td><b>Replication mode and lag</b><br>Sync or async, and how far behind?</td><td>Primary: <code>SELECT application_name, state, sync_state FROM pg_stat_replication;</code> Replica: <code>SELECT now() - pg_last_xact_replay_timestamp();</code></td><td>You can say for each replica whether a commit waits for it, and what its usual lag is.</td></tr>
+    <tr id="c15"><td><input type="checkbox" data-lab="c15" aria-label="Passed: settings"></td><td>15</td><td><b>Settings</b><br>What is this server actually running with?</td><td><code>SELECT name, setting, unit, source FROM pg_settings WHERE name IN ('shared_buffers', 'work_mem', 'max_connections', 'checkpoint_timeout', 'random_page_cost', 'autovacuum_vacuum_scale_factor', 'autovacuum_vacuum_threshold');</code></td><td>You know which values are defaults (<code>source = default</code>) and which were set on purpose.</td></tr>
+    <tr id="c16"><td><input type="checkbox" data-lab="c16" aria-label="Passed: pooler"></td><td>16</td><td><b>Pooler</b><br>Which pool mode, and who routes reads?</td><td><code>psql -p 6432 pgbouncer -c 'SHOW POOLS;'</code> and <code>-c 'SHOW DATABASES;'</code></td><td><code>pool_mode</code> is what your code assumes, <code>cl_waiting</code> is 0, and you can point to how read-only traffic reaches a replica.</td></tr>
+  </table></div>
+  <p>The list and its order are a proposal. <span class="tag s">Simplified</span></p>
+</section>
+
+<footer>Covers PostgreSQL 16 to 18. All output in the yellow boxes was captured on PostgreSQL 16.15 (Ubuntu 24.04) in October 2026, with the settings shown; timings come from one small machine and will differ on yours. Version 18 differences are noted where they change an answer. PgBouncer, Patroni and the application code were written from memory and not run. Based on “PostgreSQL Deep Dive for System Design Interviews”, with corrections where current PostgreSQL behaves differently.</footer>
+
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cell=(o,v,c)=>`<div class="cell ${c||''}"><b>${o}</b><span>${esc(v)}</span></div>`;
+
+/* theme */
+const root=document.documentElement, tb=$('#themeBtn');
+const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+const label=()=>tb.textContent=isDark()?'Light theme':'Dark theme';
+try{const t=localStorage.getItem('course-theme');if(t)root.dataset.theme=t}catch(e){}
+label();
+tb.onclick=()=>{const t=isDark()?'light':'dark';root.dataset.theme=t;try{localStorage.setItem('course-theme',t)}catch(e){}label()};
+new MutationObserver(label).observe(root,{attributes:true,attributeFilter:['data-theme']});
+
+/* contents */
+const toc=$('#toc'), links={};
+document.querySelectorAll('main>.part, main>section.s').forEach(n=>{
+  if(n.classList.contains('part')){toc.appendChild(el('h3','',esc(n.dataset.part)));return}
+  const a=el('a','',`<span>${n.querySelector('.off').textContent}</span>${esc(n.dataset.t)}`);a.href='#'+n.id;toc.appendChild(a);links[n.id]=a;
+});
+const mb=$('#menuBtn');
+mb.onclick=()=>{const o=toc.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+toc.addEventListener('click',e=>{if(e.target.closest('a')){toc.classList.remove('open');mb.setAttribute('aria-expanded',false)}});
+if('IntersectionObserver' in window){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){Object.values(links).forEach(a=>a.classList.remove('cur'));const a=links[e.target.id];a.classList.add('cur');if(!toc.classList.contains('open'))a.scrollIntoView({block:'nearest'})}}),{rootMargin:'-15% 0px -75% 0px'});
+  document.querySelectorAll('section.s').forEach(s=>io.observe(s));
+}
+const bar=$('#bar');
+addEventListener('scroll',()=>{const h=document.documentElement;bar.style.width=(100*h.scrollTop/Math.max(1,h.scrollHeight-h.clientHeight))+'%'},{passive:true});
+
+
+/* reader tools ------------------------------------------------------------
+   Four tools that need no markup per lesson: search, lesson progress,
+   glossary tooltips (fed by table.gloss) and a self-test (fed by details.q). */
+const lessons=[...document.querySelectorAll('main>section.s')];
+const load=k=>{try{return JSON.parse(localStorage.getItem(k)||'{}')||{}}catch(e){return {}}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+
+/* search: a box at the top of the contents. Matches lesson titles, h3 sub-headings and lesson text. */
+(function(){
+  const box=el('div','srch','<input type="search" placeholder="Search lessons" aria-label="Search lessons"><div class="res" hidden></div>');
+  toc.prepend(box);
+  const inp=box.firstChild,res=box.lastChild,idx=[];let hid=0;
+  const words=n=>{const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT);let o='',x;while((x=w.nextNode()))o+=' '+x.nodeValue;return o};
+  lessons.forEach(s=>{const n=s.querySelector('.off').textContent,title=s.querySelector('h2').textContent;
+    let cur={id:s.id,t:title,n,x:''};idx.push(cur);
+    [...s.children].forEach(c=>{if(c.classList.contains('sh'))return;
+      if(c.tagName==='H3'){if(!c.id)c.id='h'+(hid++);cur={id:c.id,t:c.textContent,n,x:'',p:title};idx.push(cur);return}
+      cur.x+=words(c)})});
+  idx.forEach(e=>{e.x=e.x.replace(/\s+/g,' ');e.low=(e.t+' '+e.x).toLowerCase()});
+  inp.addEventListener('input',()=>{const q=inp.value.trim().toLowerCase();res.innerHTML='';if(q.length<2){res.hidden=true;return}
+    const w=q.split(/\s+/),hits=idx.filter(e=>w.every(x=>e.low.includes(x))).slice(0,8);
+    if(!hits.length)res.appendChild(el('p','','Nothing found. Try a shorter word.'));
+    hits.forEach(e=>{const at=e.x.toLowerCase().indexOf(w[0]);const snip=at<0?(e.p||''):(at>30?'…':'')+e.x.substr(Math.max(0,at-30),90).trim()+'…';
+      const a=el('a','',`<span>${e.n}</span><div>${esc(e.t)}<small>${esc(snip)}</small></div>`);a.href='#'+e.id;res.appendChild(a)});
+    res.hidden=false});
+  inp.addEventListener('keydown',e=>{if(e.key==='Escape'){inp.value='';res.hidden=true}});
+  res.addEventListener('click',e=>{if(e.target.closest('a'))res.hidden=true});
+})();
+
+/* lesson progress: a "Mark as done" button under every lesson title, a tick in the contents, and a count. */
+(function(){
+  const done=load('course-done'),list=lessons.filter(s=>s.id!=='slab');
+  const prog=el('p');prog.id='doneProg';toc.querySelector('.srch').after(prog);
+  const draw=()=>{let n=0;list.forEach(s=>{const on=!!done[s.id];if(on)n++;
+      const b=s.querySelector('.btn.done');b.classList.toggle('ok',on);b.textContent=on?'✓ Done. Undo?':'Mark as done';b.setAttribute('aria-pressed',on);
+      const a=links[s.id],sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=on?'✓':sp.dataset.n;a.classList.toggle('ok',on)});
+    prog.textContent=n+' of '+list.length+' lessons done'};
+  list.forEach(s=>{const b=el('button','btn done');b.type='button';b.onclick=()=>{done[s.id]=!done[s.id];save('course-done',done);draw()};s.querySelector('.sh').after(b)});
+  draw();
+})();
+
+/* glossary tooltips: underline the first mention of each table.gloss term in every lesson. */
+(function(){
+  const terms=[...document.querySelectorAll('table.gloss tr')].map(r=>r.cells).filter(c=>c.length>1&&c[0].tagName==='TD')
+    .map(c=>({name:c[0].textContent.trim(),tip:c[1].textContent.trim()})).filter(t=>t.name.length>2&&!/[()\/]/.test(t.name));
+  if(!terms.length)return;
+  terms.sort((a,b)=>b.name.length-a.name.length);
+  terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
+  /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk';
+  lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
+    nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
+      for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;
+        const mid=node.splitText(m.index+m[1].length);mid.splitText(m[2].length);
+        const ab=el('abbr','gl');ab.tabIndex=0;ab.dataset.tip=t.tip;ab.textContent=mid.nodeValue;mid.replaceWith(ab);used[t.name]=true;return}})});
+})();
+
+/* self-test: a scored run through every details.q on the page, with a retry of the missed ones. */
+(function(){
+  const host=$('#selftest');if(!host)return;
+  const cards=[...document.querySelectorAll('section.s details.q')].map(d=>{const s=d.closest('section.s');
+    return{q:d.querySelector('summary').textContent,a:d.querySelector('.in').innerHTML,id:s.id,n:s.querySelector('.off').textContent,t:s.dataset.t}});
+  if(!cards.length){host.hidden=true;return}
+  let deck,i,missed;
+  const home=msg=>{host.innerHTML='<h4>Self-test</h4><div class="out" aria-live="polite">'+msg+'</div><div class="ctrls"><button class="btn on" data-a="start">Start ('+cards.length+' questions)</button></div>'};
+  const show=()=>{const c=deck[i];host.innerHTML='<h4>Self-test</h4><p class="from">Question '+(i+1)+' of '+deck.length+', from lesson <a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a></p><p class="q">'+esc(c.q)+'</p><div class="a" hidden>'+c.a+'</div>'
+    +'<div class="ctrls"><button class="btn on" data-a="show">Show answer</button><button class="btn" data-a="yes" hidden>Got it</button><button class="btn warn" data-a="no" hidden>Not yet</button><button class="btn" data-a="stop">Stop</button></div>'};
+  const end=()=>{const got=deck.length-missed.length;let h='<h4>Self-test</h4><div class="out" aria-live="polite">Score: '+got+' of '+deck.length+'.</div>';
+    if(missed.length)h+='<p>Worth another look:</p><ul>'+missed.map(c=>'<li><a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a>: '+esc(c.q)+'</li>').join('')+'</ul>';
+    h+='<div class="ctrls">'+(missed.length?'<button class="btn on" data-a="retry">Retry the ones I missed</button>':'')+'<button class="btn" data-a="start">Start again</button></div>';host.innerHTML=h};
+  const begin=list=>{deck=list.slice();i=0;missed=[];show()};
+  host.addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const a=b.dataset.a;
+    if(a==='start')begin(cards);else if(a==='retry')begin(missed);else if(a==='stop')home('Stopped. Start again any time.');
+    else if(a==='show'){host.querySelector('.a').hidden=false;b.hidden=true;host.querySelectorAll('[data-a=yes],[data-a=no]').forEach(x=>x.hidden=false)}
+    else{if(a==='no')missed.push(deck[i]);i++;if(i<deck.length)show();else end()}});
+  home('Answer in your head, show the answer, then mark yourself.');
+})();
+
+/* mermaid: rendered here so colours follow the page theme */
+(function(){
+  const LIGHT={background:'#ffffff',primaryColor:'#e2e9f2',primaryTextColor:'#16233a',primaryBorderColor:'#16233a',lineColor:'#52617a',secondaryColor:'#e3edff',tertiaryColor:'#f3f6fa',textColor:'#16233a',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#16233a',actorBkg:'#e2e9f2',actorBorder:'#16233a',actorTextColor:'#16233a',actorLineColor:'#8a99b3',signalColor:'#52617a',signalTextColor:'#16233a',labelBoxBkgColor:'#e2e9f2',labelBoxBorderColor:'#16233a',labelTextColor:'#16233a',loopTextColor:'#16233a',edgeLabelBackground:'#ffffff',clusterBkg:'#f3f6fa',clusterBorder:'#8a99b3',titleColor:'#16233a'};
+  const DARK={background:'#17233a',primaryColor:'#24365a',primaryTextColor:'#e8eef7',primaryBorderColor:'#78a7ff',lineColor:'#a3b3cb',secondaryColor:'#263a5c',tertiaryColor:'#111c2e',textColor:'#e8eef7',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#f2b705',actorBkg:'#24365a',actorBorder:'#78a7ff',actorTextColor:'#e8eef7',actorLineColor:'#4a628c',signalColor:'#a3b3cb',signalTextColor:'#e8eef7',labelBoxBkgColor:'#24365a',labelBoxBorderColor:'#78a7ff',labelTextColor:'#e8eef7',loopTextColor:'#e8eef7',edgeLabelBackground:'#17233a',clusterBkg:'#111c2e',clusterBorder:'#4a628c',titleColor:'#e8eef7'};
+  const CTL_DARK='fill:#3b2f6b,stroke:#b196f5,color:#e8eef7', CTL_LIGHT='fill:#efe8ff,stroke:#7a4fd6,color:#16233a';
+  const items=[...document.querySelectorAll('pre.mmd')].map(pre=>{const w=el('div','svgw');w.hidden=true;pre.after(w);return{pre,w,src:pre.textContent}});
+  let run=0,last=null;
+  async function render(){
+    if(!window.mermaid)return;
+    const dark=isDark();if(dark===last)return;last=dark;const me=++run;
+    mermaid.initialize({startOnLoad:false,theme:'base',themeVariables:Object.assign({fontFamily:'"Atkinson Hyperlegible",Verdana,sans-serif',fontSize:'15px'},dark?DARK:LIGHT),sequence:{useMaxWidth:true,mirrorActors:false},flowchart:{useMaxWidth:true}});
+    for(let i=0;i<items.length;i++){const it=items[i];
+      try{const {svg}=await mermaid.render('mmd'+i+'r'+me,dark?it.src:it.src.replace(CTL_DARK,CTL_LIGHT));
+        if(me!==run)return;it.w.innerHTML=svg;it.w.hidden=false;it.pre.hidden=true}
+      catch(e){it.w.hidden=true;it.pre.hidden=false}
+    }
+  }
+  render();
+  new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{label();render()});
+})();
+
+/* proof checklist */
+(function(){const boxes=[...document.querySelectorAll('[data-lab]')],prog=$('#labProg');if(!boxes.length||!prog)return;let st={};
+  try{st=JSON.parse(localStorage.getItem('course-lab')||'{}')}catch(e){}
+  const draw=()=>{let n=0;boxes.forEach(b=>{b.checked=!!st[b.dataset.lab];b.closest('tr').classList.toggle('ok',b.checked);if(b.checked)n++});prog.textContent=n+' of '+boxes.length+' passed';const a=links.slab;if(a){const sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=n===boxes.length?'✓':sp.dataset.n}};
+  boxes.forEach(b=>b.onchange=()=>{st[b.dataset.lab]=b.checked;try{localStorage.setItem('course-lab',JSON.stringify(st))}catch(e){}draw()});draw();
+})();
+
+/* demo 1: MVCC row versions */
+(function(){const log=$('#mvLog'),out=$('#mvOut'),sb=$('#mvSnap');if(!log)return;let vs,xid,snap,lp;
+  const draw=msg=>{log.innerHTML='<label>inventory page 0</label>'+vs.map(v=>{const live=!v.xmax,seen=snap!==null&&v.xmin<snap&&v.xmax>snap;
+      return '<div class="cell '+(live?'pend':seen?'done':'gone')+'"><b>(0,'+v.lp+')</b><span>qty '+v.q+'<br>xmin '+v.xmin+'<br>xmax '+(v.xmax||'0')+'</span></div>'}).join('');
+    sb.textContent=snap===null?'Open a long transaction':'End the long transaction';sb.classList.toggle('on',snap!==null);out.textContent=msg};
+  const init=()=>{vs=[{lp:1,xmin:740,xmax:0,q:5}];xid=741;snap=null;lp=2;draw('Slot (0,1): the Widget, quantity 5, created by transaction 740.')};
+  $('#mvUp').onclick=()=>{const cur=vs[vs.length-1];
+    if(cur.q===0){draw('quantity is 0. The WHERE quantity > 0 clause matches nothing: UPDATE 0.');return}
+    if(vs.length>=8){draw('The page is filling up with old versions. Run VACUUM.');return}
+    cur.xmax=xid;vs.push({lp:lp++,xmin:xid,xmax:0,q:cur.q-1});
+    draw('Transaction '+xid+' ended version (0,'+cur.lp+') and wrote (0,'+(lp-1)+') with quantity '+(cur.q-1)+'. '+(vs.length-1)+' old version(s) still on the page.');xid++};
+  sb.onclick=()=>{if(snap===null){snap=xid++;const cur=vs[vs.length-1];draw('Transaction '+snap+' opened at repeatable read and took its snapshot. It will keep seeing quantity '+cur.q+' until it ends.')}
+    else{const s=snap;snap=null;draw('Transaction '+s+' ended. Nothing needs the old versions any more.')}};
+  $('#mvVac').onclick=()=>{let rm=0,keep=0;vs=vs.filter(v=>{if(!v.xmax)return true;if(snap===null||v.xmax<snap){rm++;return false}keep++;return true});
+    draw('VACUUM: '+rm+' removed, '+keep+' dead but not yet removable'+(keep?' (transaction '+snap+' might still read them).':'.'))};
+  $('#mvReset').onclick=init;init();
+})();
+
+/* demo 2: isolation levels */
+(function(){const tbl=$('#isoTbl'),out=$('#isoOut'),lvl=$('#isoLvl');if(!tbl)return;let i;
+  const NAME={rc:'READ COMMITTED',rr:'REPEATABLE READ',ser:'SERIALIZABLE'};
+  const steps=l=>{const snap=l!=='rc';return[
+    ['T1','BEGIN ISOLATION LEVEL '+NAME[l]+'; SELECT quantity …','4','T1 (Asha) reads the Widget: 4 in stock.'],
+    ['T2','UPDATE inventory SET quantity = quantity - 1 …; COMMIT','UPDATE 1','T2 (Ravi) buys one and commits. The committed quantity is now 3.'],
+    ['T1','SELECT quantity …',snap?'4':'3',snap?'T1 still sees 4: it reads from the snapshot it took at its first statement.':'T1 sees 3: at read committed every statement takes a fresh snapshot.'],
+    ['T1','UPDATE inventory SET quantity = quantity - 1 … RETURNING quantity',snap?'ERROR 40001':'2',snap?'could not serialize access due to concurrent update. T1 must roll back and retry from BEGIN.':'The UPDATE applies on top of T2’s committed value: 3 becomes 2. No error.']]};
+  const init=()=>{i=0;tbl.innerHTML='<tr><th>#</th><th>Who</th><th>Statement</th><th>Result</th></tr>';out.textContent='Pick a level for T1, then press Next step. Quantity starts at 4.'};
+  $('#isoStep').onclick=()=>{const st=steps(lvl.value);if(i>=st.length){out.textContent='That was the last step. Reset, pick another level and compare.';return}
+    const s=st[i++],tr=el('tr','','<td>'+i+'</td><td>'+s[0]+'</td><td><code>'+esc(s[1])+'</code></td><td class="'+(s[2].indexOf('ERROR')===0?'no':'yes')+'">'+esc(s[2])+'</td>');tbl.appendChild(tr);out.textContent=s[3]};
+  $('#isoReset').onclick=init;lvl.onchange=init;init();
+})();
+
+/* demo 3: composite index usability */
+(function(){const log=$('#ciLog'),out=$('#ciOut'),btns=$('#ciBtns');if(!log)return;
+  const E=[[41,'2026-03-02'],[41,'2026-03-20'],[42,'2025-11-30'],[42,'2026-01-05'],[42,'2026-03-15'],[42,'2026-03-28'],[43,'2026-01-09'],[43,'2026-03-11'],[44,'2026-02-02'],[44,'2026-03-30']];
+  const Q={
+    a:{f:e=>e[0]===42,m:'One contiguous run of entries. Measured: bitmap index scan, 101 rows, 105 buffers, 0.15 ms.'},
+    b:{f:e=>e[0]===42&&e[1]>'2026-01-01',m:'Still one contiguous run, just shorter: seek to (42, 2026-01-01) and read on. Measured: 12 rows, 18 buffers, 0.085 ms.'},
+    c:{f:e=>e[1]>'2026-03-01',m:'The matches are scattered across every user, so the index gives no shortcut. Measured for a similar date-only query on PostgreSQL 16: Seq Scan, 9,346 buffers, 70 ms.'},
+    d:{f:e=>e[0]===42&&e[1]>='2026-03-15',m:'Jump to the end of user 42’s run and read backwards. The index already holds the order, so there is no sort. Measured with LIMIT 5: Index Scan Backward, 8 buffers, 0.033 ms.'}};
+  const run=k=>{const q=Q[k];log.innerHTML='<label>index order</label>'+E.map(e=>'<div class="cell '+(q.f(e)?'pend':'')+'"><b>user '+e[0]+'</b><span>'+e[1]+(e[0]===42&&e[1]==='2026-03-15'?'<br>order 9001':'')+'</span></div>').join('');
+    out.textContent=q.m;btns.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.q===k))};
+  btns.addEventListener('click',e=>{const b=e.target.closest('button[data-q]');if(b)run(b.dataset.q)});run('a');
+})();
+
+/* demo 4: partition pruning */
+(function(){const row=$('#ppRow'),out=$('#ppOut');if(!row)return;
+  const ALL=[['2024q1','2024-01-01','2024-04-01',110738],['2024q2','2024-04-01','2024-07-01',110738],['2024q3','2024-07-01','2024-10-01',111954],['2024q4','2024-10-01','2025-01-01',111955],['2025q1','2025-01-01','2025-04-01',109522],['2025q2','2025-04-01','2025-07-01',110738],['2025q3','2025-07-01','2025-10-01',111954],['2025q4','2025-10-01','2026-01-01',111955],['2026q1','2026-01-01','2026-04-01',109523],['2026q2','2026-04-01','2026-07-01',924]];
+  let parts;const fmt=n=>n.toLocaleString('en-US');
+  const draw=(hit,msg)=>{row.innerHTML=parts.map(p=>{const on=hit&&hit(p);return '<div class="bk'+(hit&&!on?' skip':'')+'" style="flex:1 1 120px;min-width:120px"><b>'+p[0]+'</b><small>'+fmt(p[3])+' rows</small>'+(hit?'<span class="chip'+(on?' Y':'')+'">'+(on?'scanned':'skipped')+'</span>':'')+'</div>'}).join('');out.textContent=msg};
+  const total=()=>parts.reduce((a,p)=>a+p[3],0);
+  const init=()=>{parts=ALL.slice();draw(null,'orders_p: ten quarterly partitions, '+fmt(total())+' rows. Order 9001 is in 2026q1.')};
+  $('#ppRun').onclick=()=>{const f=$('#ppFrom').value,t=$('#ppTo').value;if(!f||!t||f>=t){out.textContent='Pick a “from” date that is before the “up to” date.';return}
+    const hit=p=>p[1]<t&&p[2]>f,n=parts.filter(hit);
+    draw(hit,n.length?'Pruned to '+n.length+' of '+parts.length+' partitions: at most '+fmt(n.reduce((a,p)=>a+p[3],0))+' rows to look at instead of '+fmt(total())+'.':'No partition covers those dates: the plan scans nothing.')};
+  $('#ppId').onclick=()=>draw(()=>true,'No condition on created_at, so nothing can be ruled out: all '+parts.length+' partitions are searched (one index lookup in each).');
+  $('#ppDrop').onclick=()=>{if(parts.length<=1){out.textContent='Keep at least one partition.';return}const p=parts.shift();draw(null,'DROP TABLE orders_p_'+p[0]+': '+fmt(p[3])+' rows gone at once, with no dead rows to vacuum. '+fmt(total())+' rows remain.')};
+  $('#ppReset').onclick=init;init();
+})();
+
+/* demo 5: replication and a primary crash */
+(function(){const P=$('#rpP'),R=$('#rpR'),out=$('#rpOut'),mb=$('#rpMode');if(!P)return;let sync,n,shipped,dead;
+  const draw=msg=>{let p='<label>'+(dead?'pg-1 (down)':'pg-1 WAL')+'</label>',r='<label>'+(dead?'replica1 (new primary)':'replica1 WAL')+'</label>';
+    for(let k=0;k<n;k++)p+=cell(k+1,'order '+(9001+k),k<shipped?'done':dead?'gone':'pend');
+    for(let k=0;k<shipped;k++)r+=cell(k+1,'order '+(9001+k),'done');
+    P.innerHTML=p;R.innerHTML=r;mb.textContent='Mode: '+(sync?'sync':'async');out.textContent=msg};
+  const init=()=>{sync=false;n=0;shipped=0;dead=false;draw('Async mode. Commit a few orders, then crash the primary before the replica catches up.')};
+  mb.onclick=()=>{if(dead)return;sync=!sync;if(sync)shipped=n;draw(sync?'Sync mode: every COMMIT now waits until replica1 has flushed it.':'Async mode: COMMIT returns as soon as pg-1 has flushed it.')};
+  $('#rpCommit').onclick=()=>{if(dead){out.textContent='pg-1 is down. Reset to start again.';return}if(n>=7){out.textContent='That is enough orders. Crash the primary or reset.';return}
+    n++;if(sync){shipped=n;draw('Order '+(9000+n)+': flushed on pg-1, shipped, flushed on replica1, then acknowledged. Slower, but it exists in two places.')}
+    else draw('Order '+(9000+n)+': flushed on pg-1 and acknowledged to the client at once. replica1 is '+(n-shipped)+' commit(s) behind.')};
+  $('#rpShip').onclick=()=>{if(dead){out.textContent='pg-1 is down: there is nothing left to receive.';return}shipped=n;draw('replica1 received and replayed everything. Lag is zero.')};
+  $('#rpCrash').onclick=()=>{if(dead)return;dead=true;const lost=n-shipped;
+    draw('pg-1 crashed and replica1 was promoted. '+(lost?lost+' acknowledged commit(s) never reached the replica: the customers were told “paid”, and the new primary has no record.':'Nothing acknowledged was lost: the new primary has every commit.'))};
+  $('#rpReset').onclick=init;init();
+})();
+
+})();
+</script>
+</body>
+</html>

@@ -16,5 +16,14 @@
     "path": "artifacts/mssql-cdc-debezium.html",
     "highlights": ["CDC internals", "Debezium", "Kafka & schemas", "Schema changes", "Production"],
     "tags": ["MSSQL", "CDC", "Debezium", "Snowflake", "Schema Evolution"]
+  },
+  {
+    "id": "postgresql",
+    "title": "PostgreSQL from first principles",
+    "category": "Databases",
+    "description": "32 lessons on how PostgreSQL stores, protects, finds and scales data, with the internals behind it",
+    "path": "artifacts/postgresql.html",
+    "highlights": ["WAL, pages & buffer cache", "ACID, MVCC & isolation", "Indexes", "Replication & HA", "Performance"],
+    "tags": ["PostgreSQL", "MVCC", "WAL", "System Design"]
   }
 ]
