@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PostgreSQL from first principles</title>
+<title>PostgreSQL, from zero to production</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -251,12 +251,20 @@ abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolu
 .selftest .a{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:8px;padding:.6rem .8rem;margin:0 0 .7rem}
 .selftest .from{font-size:.82rem;color:var(--muted);margin:0}
 .selftest ul{margin:.3rem 0 .7rem}
+/* beginner layer */
+.plain{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;font-size:1.02rem}
+.plain>b:first-child{display:block;font:700 .82rem var(--display);color:var(--ok);letter-spacing:.02em;margin-bottom:.25rem}
+.words{display:grid;gap:.3rem;margin:.4rem 0 1.1rem;max-width:72ch;font-size:.93rem}
+.words>h4{margin:0 0 .1rem;font:700 .82rem var(--display);color:var(--muted)}
+.words>div{display:grid;grid-template-columns:minmax(7.5rem,max-content) 1fr;gap:.7rem;padding:.35rem .6rem;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.words>div>b{font-family:var(--mono);font-size:.86rem}
+@media (max-width:520px){.words>div{grid-template-columns:1fr;gap:.1rem}}
 </style>
 </head>
 <body>
 <div class="top">
   <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
-  <strong>PostgreSQL from first principles</strong>
+  <strong>PostgreSQL, from zero to production</strong>
   <button class="btn" id="themeBtn">Dark theme</button>
   <div id="bar"></div>
 </div>
@@ -265,8 +273,8 @@ abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolu
 <main>
 
 <div class="hero">
-  <h1>Log it first. Never overwrite a row.</h1>
-  <p>32 short lessons on how PostgreSQL stores, protects, finds and scales data: the system-design interview material, with the internals behind it. One order is followed through every lesson with real output, and the last lesson is a checklist to prove it on your own server.</p>
+  <h1>Keep data correct, find it fast, and never lose a commit.</h1>
+  <p>A course that starts from zero. Part 0 explains what a database is, tables, SQL, transactions and indexes in plain words. Then it goes deep: how PostgreSQL stores, protects, finds and scales data, with the internals behind it. One order is followed through every lesson with real output, and the last lesson is a checklist to prove it on your own server.</p>
   <div class="canvas herolog scroll">
     <div class="log"><label>WAL</label><div class="cell done"><b>0/19FF528</b><span>update stock</span></div><div class="cell done"><b>0/19FF618</b><span>insert order</span></div><div class="cell pend new"><b>0/19FF790</b><span>COMMIT</span></div><div class="cell ghost"><b>next</b><span>…</span></div></div>
     <div class="log"><label>inventory</label><div class="cell gone"><b>(0,1)</b><span>qty 5</span></div><div class="cell pend new"><b>(0,2)</b><span>qty 4</span></div><div class="cell ghost"><b>(0,3)</b><span>next version</span></div></div>
@@ -281,6 +289,8 @@ abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolu
 
 <section class="s" id="s0" data-t="Running example and tags">
   <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  
+  <div class="plain"><b>In plain words</b>This course follows one purchase from start to finish: Asha buys a Widget from an online shop. Do not worry if the SQL, the table and the words below look unfamiliar. Part 0, right after this lesson, explains every piece from zero. Come back here whenever you want to look up a name or a number.</div>
   <p class="lead">One order is followed through every lesson. Look for the yellow “Follow order 9001” box at the end of each one.</p>
   <pre class="code"><i>-- Asha (user 42) buys one Widget (product 123) for 499.00</i>
 BEGIN;
@@ -317,10 +327,168 @@ COMMIT;</pre>
   <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>.</p>
 </section>
 
+<div class="part" data-part="Start here"><h2>Part 0: Start here</h2><p>No database knowledge needed</p></div>
+
+<section class="s" id="pgwhy" data-t="Why a database at all">
+  <div class="sh"><span class="off">01</span><h2>Why a database at all?</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Imagine an online shop writing every order into one spreadsheet file. Two customers buy at once and one order overwrites the other. The power cuts while saving and the file is corrupted. Finding one order among ten million means reading the whole file. A database exists to solve exactly these three problems.</div>
+  <p class="lead">A database is a program whose job is to remember data safely, let many people change it at the same time, and find any piece of it quickly.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>A plain file</h4><div class="flow v"><span class="n r">two writers at once: one is lost</span><span class="n r">power cut mid-save: file broken</span><span class="n r">find one order: read everything</span></div></div>
+    <div><h4>A database</h4><div class="flow v"><span class="n g">writers take turns safely</span><span class="n g">a crash never leaves half a change</span><span class="n g">indexes jump straight to the order</span></div></div>
+  </div></div><figcaption>The same three situations, handled by a file and by a database.</figcaption></figure>
+  <h3>Client and server</h3>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">Your app<small>the client</small></span><i data-t="sends SQL"></i><span class="n y">PostgreSQL server<small>its own program</small></span><i data-t="reads and writes"></i><span class="n">Disk</span>
+  </div></div><figcaption>PostgreSQL runs as its own program, usually on its own machine. Apps connect over the network and send requests written in SQL.</figcaption></figure>
+  <ul>
+    <li><b>PostgreSQL (“Postgres”) is a server program.</b> It listens for connections on port 5432 by default. <span class="tag d">Default</span></li>
+    <li><b>Your code is the client.</b> It connects, sends a request, and gets an answer.</li>
+    <li><b>It is free and open source,</b> known for correctness and for many advanced features this course reaches later.</li>
+  </ul>
+  <details class="q"><summary>Name three problems a database solves that a plain file does not.</summary><div class="in">Many users changing data at once without losing changes; surviving a crash without half-written data; and finding one record quickly among millions.</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>Through this course we follow one purchase: Asha buys one Widget. The shop must remember safely who Asha is, how many Widgets are left, and her order.</p></div></aside>
+</section>
+
+<section class="s" id="pgtables" data-t="Tables, rows and keys">
+  <div class="sh"><span class="off">02</span><h2>Tables, rows and keys</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Think of three spreadsheet tabs: customers, products and orders. An order row does not copy Asha’s name; it just says “customer 42”. That number is the link. Linking tables by numbers is what “relational database” means.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>table</b><span>A named grid of data, like a spreadsheet tab.</span></div>
+    <div><b>row</b><span>One record: one user, one order.</span></div>
+    <div><b>column</b><span>One fact every row has: name, quantity, total.</span></div>
+    <div><b>primary key</b><span>A column whose value is unique per row, used to find it. Usually <code>id</code>.</span></div>
+    <div><b>foreign key</b><span>A column holding another table’s primary key, linking the two rows.</span></div>
+  </div>
+  <p class="lead">PostgreSQL stores data in tables: each row is one thing, each column one fact about it, and keys link rows in different tables.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>users</h4><div class="tw"><table><tr><th>id</th><th>name</th></tr><tr><td><b>42</b></td><td><b>Asha</b></td></tr><tr><td>43</td><td>Ravi</td></tr></table></div>
+      <h4 style="margin-top:.8rem">inventory</h4><div class="tw"><table><tr><th>product_id</th><th>name</th><th>quantity</th></tr><tr><td><b>123</b></td><td>Widget</td><td>5</td></tr></table></div></div>
+    <div><h4>orders</h4><div class="tw"><table><tr><th>id</th><th>user_id</th><th>product_id</th><th>total</th></tr><tr><td>9001</td><td><b>42</b></td><td><b>123</b></td><td>499.00</td></tr></table></div><p style="font-size:.9rem;margin:.5rem 0 0">user_id 42 points at Asha; product_id 123 at the Widget.</p></div>
+  </div></div><figcaption>Three small tables. The bold numbers are the links between them.</figcaption></figure>
+  <ul>
+    <li><b>Foreign keys keep links valid:</b> PostgreSQL refuses an order for a user that does not exist. <span class="tag g">Guaranteed</span></li>
+    <li><b>Columns have types:</b> <code>bigint</code> for whole numbers, <code>text</code>, <code>numeric(10,2)</code> for money, <code>timestamptz</code> for times.</li>
+    <li><b>Constraints are rules the database enforces,</b> such as “quantity must not go below 0”.</li>
+  </ul>
+  <details class="q"><summary>Why does the orders table store user_id 42 rather than Asha’s name?</summary><div class="in">So each fact is stored once. If Asha changes her name, only her users row changes; every order still points to her through 42.</div></details>
+  <aside class="trk"><h4 data-id="users 42">Follow order 9001</h4><div class="in"><p>Before the purchase: Asha is user 42, the Widget is product 123 with 5 in stock, and order 9001 does not exist yet.</p></div></aside>
+</section>
+
+<section class="s" id="pgsql" data-t="Five SQL statements">
+  <div class="sh"><span class="off">03</span><h2>Talking to PostgreSQL: five SQL statements</h2></div>
+  
+  <div class="plain"><b>In plain words</b>SQL reads almost like English: “select the name from users where the id is 42”. You describe <i>what</i> you want, and PostgreSQL works out <i>how</i> to get it. That “how” is much of this course.</div>
+  <p class="lead">SQL is the language for creating tables and adding, reading, changing and deleting rows; you type it into <code>psql</code> or send it from your app.</p>
+  <pre class="code"><i>-- 1. Create a table</i>
+CREATE TABLE inventory (product_id bigint PRIMARY KEY, name text, quantity int CHECK (quantity &gt;= 0));
+
+<i>-- 2. Add a row</i>
+INSERT INTO inventory VALUES (123, 'Widget', 5);
+
+<i>-- 3. Read rows</i>
+shop=# SELECT name, quantity FROM inventory WHERE product_id = 123;
+  name  | quantity
+--------+----------
+ Widget |        5
+
+<i>-- 4. Change rows</i>
+UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 123;
+UPDATE 1
+
+<i>-- 5. Remove rows</i>
+DELETE FROM inventory WHERE product_id = 123;</pre>
+  <figure><div class="canvas"><div class="flow"><span class="n g">SELECT … WHERE product_id = 123</span><i data-t="PostgreSQL decides how"></i><span class="n y">finds the row</span><i data-t="returns"></i><span class="n">Widget, 5</span></div></div><figcaption>You say what you want; finding it fast is the database’s job.</figcaption></figure>
+  <ul>
+    <li><b>WHERE picks the rows.</b> Without it, UPDATE and DELETE touch every row.</li>
+    <li><b><code>shop=#</code> is the psql prompt</b> for the database named <code>shop</code>.</li>
+    <li><b>RETURNING</b> makes a write hand back the row it wrote, which this course uses often.</li>
+  </ul>
+  <details class="q"><summary>What does UPDATE inventory SET quantity = 0 do without a WHERE clause?</summary><div class="in">It sets quantity to 0 on every row of the table. WHERE is what limits a change to the rows you mean.</div></details>
+  <aside class="trk"><h4 data-id="order 9001">Follow order 9001</h4><div class="in"><p>The two statements that make Asha’s purchase. The next lesson wraps them together.</p>
+  <pre class="code">UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 123 AND quantity &gt; 0;
+INSERT INTO orders (user_id, product_id, total) VALUES (42, 123, 499.00) RETURNING id;</pre></div></aside>
+</section>
+
+<section class="s" id="pgtxn" data-t="Transactions: all or nothing">
+  <div class="sh"><span class="off">04</span><h2>Transactions: all or nothing</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Asha’s purchase is two changes: take one Widget from stock, and create her order. A crash after the first would lose a Widget with no order to show for it. A transaction says “these belong together: finish both, or undo both.”</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>transaction</b><span>A group of statements that succeed or fail together.</span></div>
+    <div><b>COMMIT</b><span>Make the changes permanent; they survive a crash from now on.</span></div>
+    <div><b>ROLLBACK</b><span>Undo everything since BEGIN.</span></div>
+  </div>
+  <p class="lead">A transaction groups statements so that either all of them take effect or none do, even if the server crashes halfway.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Without a transaction</h4><div class="flow"><span class="n y">stock 5 → 4</span><i></i><span class="n r">crash</span><i></i><span class="n r">no order, lost Widget</span></div></div>
+    <div><h4>With a transaction</h4><div class="flow"><span class="n y">stock 5 → 4</span><i></i><span class="n r">crash</span><i></i><span class="n g">undone: stock is 5</span></div></div>
+  </div></div><figcaption>Same crash, two outcomes. The transaction makes the half-done state impossible.</figcaption></figure>
+  <pre class="code">BEGIN;
+UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 123 AND quantity &gt; 0;
+INSERT INTO orders (user_id, product_id, total) VALUES (42, 123, 499.00) RETURNING id;
+COMMIT;            <i>-- or ROLLBACK; to cancel both</i></pre>
+  <ul>
+    <li><b>Part 2 is all about transactions:</b> the guarantees they give, and what happens when two run at the same moment.</li>
+  </ul>
+  <details class="q"><summary>A transaction changed the stock, then the app crashed before COMMIT. What does the stock show afterwards?</summary><div class="in">The old value. An uncommitted transaction is rolled back, so its changes disappear.</div></details>
+  <aside class="trk"><h4 data-id="xid 741">Follow order 9001</h4><div class="in"><p>This block is the running example from lesson 00. PostgreSQL numbers each transaction; Asha’s is transaction 741.</p></div></aside>
+</section>
+
+<section class="s" id="pgidx" data-t="Indexes in one picture">
+  <div class="sh"><span class="off">05</span><h2>Indexes in one picture</h2></div>
+  
+  <div class="plain"><b>In plain words</b>To find a word in a thick book you use the index at the back, sorted alphabetically, which gives the page. A database index is the same idea, kept up to date automatically.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>index</b><span>A sorted structure over some columns that points to the matching rows.</span></div>
+    <div><b>sequential scan</b><span>Reading every row of a table to find matches.</span></div>
+  </div>
+  <p class="lead">An index is a sorted copy of one or more columns with pointers to the rows, so PostgreSQL can jump to matches instead of reading the whole table.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>No index on user_id</h4><div class="log"><div class="cell gone"><b>1</b><span>read</span></div><div class="cell gone"><b>…</b><span>read</span></div><div class="cell pend"><b>9001</b><span>match</span></div><div class="cell gone"><b>…</b><span>read</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">Every order is read to find Asha’s.</p></div>
+    <div><h4>Index on user_id</h4><div class="log"><div class="cell"><b>41</b><span>…</span></div><div class="cell pend"><b>42</b><span>→ 9001</span></div><div class="cell"><b>43</b><span>…</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">Jump to 42, follow the pointer.</p></div>
+  </div></div><figcaption>Same question, “Asha’s orders”, with a million orders: one reads them all, the other a handful.</figcaption></figure>
+  <pre class="code">CREATE INDEX orders_user_idx ON orders (user_id);</pre>
+  <ul>
+    <li><b>Indexes speed up reads and slow down writes</b> a little, since every write updates them too.</li>
+    <li><b>Primary keys and unique constraints get an index automatically.</b> <span class="tag g">Guaranteed</span></li>
+    <li><b>Part 3 covers the different kinds</b> of index and when to use each.</li>
+  </ul>
+  <details class="q"><summary>Why does adding an index make writes slightly slower?</summary><div class="in">Each new or changed row must also be updated in every index on the table.</div></details>
+  <aside class="trk"><h4 data-id="user 42">Follow order 9001</h4><div class="in"><p>“Show Asha’s orders” asks for <code>WHERE user_id = 42</code>. With an index that is a few page reads instead of the whole orders table.</p></div></aside>
+</section>
+
+<section class="s" id="pgscale" data-t="When one server is not enough">
+  <div class="sh"><span class="off">06</span><h2>When one server is not enough</h2></div>
+  
+  <div class="plain"><b>In plain words</b>One librarian can answer only so many questions. You can hire assistants who each hold a photocopy of every book (copies), put a receptionist at the door who queues visitors for the few librarians (a pooler), or split the library by subject (partitioning). This lesson only introduces the words; Part 4 explains them properly.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>primary</b><span>The one server that accepts writes.</span></div>
+    <div><b>replica</b><span>A server holding a copy of the primary’s data, kept up to date, for reads and as a spare.</span></div>
+    <div><b>failover</b><span>Making a replica the new primary when the primary dies.</span></div>
+    <div><b>connection pooler</b><span>A program (here PgBouncer) that lets many app connections share a few database connections.</span></div>
+    <div><b>partitioning</b><span>Splitting one big table into smaller pieces by a key such as date.</span></div>
+  </div>
+  <p class="lead">A growing app adds copies of the database to share reads and survive failures, a pooler to share connections, and only much later splits data up.</p>
+  <figure><div class="canvas"><div class="flow v">
+    <span class="n y">Stage 1: one server</span><i data-t="more users"></i>
+    <span class="n y">Stage 2: a pooler in front, a primary and replicas<small>writes to the primary, reads spread out</small></span><i data-t="tables grow huge"></i>
+    <span class="n y">Stage 3: partitioned tables, more replicas</span>
+  </div></div><figcaption>The usual growth path. PostgreSQL scales a long way before anything more drastic is needed.</figcaption></figure>
+  <details class="q"><summary>Why do replicas help a site with many page views but not one flooded with new orders?</summary><div class="in">Replicas only answer reads. Every new order is a write, and all writes still go to the single primary.</div></details>
+  <aside class="trk"><h4 data-id="shop">Follow order 9001</h4><div class="in"><p>The shop in this course runs at stage 2: the app connects through PgBouncer to the primary <code>pg-1</code>, with one replica, <code>replica1</code>.</p></div></aside>
+</section>
+
+
 <div class="part" data-part="The big picture"><h2>Part 1: The big picture</h2><p>What it is, and where a query goes</p></div>
 
 <section class="s" id="s1" data-t="When to pick PostgreSQL">
-  <div class="sh"><span class="off">01</span><h2>When to pick PostgreSQL</h2></div>
+  <div class="sh"><span class="off">07</span><h2>When to pick PostgreSQL</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Every database is good at some jobs and poor at others. PostgreSQL shines when data is related, correctness matters, and you will keep asking the data new questions. This lesson is about recognising those situations, and the ones where something else wins.</div>
+  <div class="words"><h4>New words</h4><div><b>JOIN</b><span>Combining rows from two tables that share a key, such as orders with their users.</span></div><div><b>JSONB</b><span>PostgreSQL’s binary JSON column type, which can be indexed and queried.</span></div><div><b>PostGIS</b><span>An extension that adds maps, locations and distances to PostgreSQL.</span></div></div>
   <p class="lead">Pick PostgreSQL when the data is related, the writes must be correct, and the questions you ask of the data will keep changing.</p>
   <div class="wwh">
     <div><b>What</b><span>A relational database: tables, SQL, transactions, on one primary server.</span></div>
@@ -360,7 +528,10 @@ COMMIT;</pre>
 </section>
 
 <section class="s" id="s2" data-t="The path of one query">
-  <div class="sh"><span class="off">02</span><h2>The path of one query</h2></div>
+  <div class="sh"><span class="off">08</span><h2>The path of one query</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Every SQL statement takes the same walk inside PostgreSQL: it is checked, a plan is chosen, and the plan is carried out by reading and writing pages, with every change written to a log first. The figure also shows two helpers you will meet properly in Part 4: a pooler in front and a replica behind.</div>
+  <div class="words"><h4>New words</h4><div><b>backend process</b><span>The PostgreSQL process that serves one client connection.</span></div><div><b>parser</b><span>Checks the SQL and turns it into a structure the server can work with.</span></div><div><b>planner</b><span>Chooses the cheapest way to run the query, for example which index to use.</span></div><div><b>executor</b><span>Carries out the chosen plan.</span></div><div><b>WAL</b><span>Write-ahead log: every change is written here before the data files. The next lesson explains it.</span></div></div>
   <p class="lead">Every statement is parsed, planned and executed by one backend process, which reads pages through a shared cache and logs every change before it counts.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">orders-api<small>app server</small></span><i data-t="SQL"></i>
@@ -395,7 +566,10 @@ shop=# SELECT pg_backend_pid();   <i>-- the process serving this connection</i>
 </section>
 
 <section class="s" id="s3" data-t="Pages, cache and the WAL">
-  <div class="sh"><span class="off">03</span><h2>Pages, the buffer cache and the WAL</h2></div>
+  <div class="sh"><span class="off">09</span><h2>Pages, the buffer cache and the WAL</h2></div>
+  
+  <div class="plain"><b>In plain words</b>PostgreSQL does not rewrite data files on every change. It changes data in memory, appends a short record of the change to a log, which is fast, and writes the real files later in bulk. After a crash it replays the log. Like a chef writing each order on a ticket before cooking.</div>
+  <div class="words"><h4>New words</h4><div><b>page</b><span>The 8 kB block PostgreSQL reads and writes; rows live inside pages.</span></div><div><b>shared buffers</b><span>PostgreSQL’s memory cache of pages.</span></div><div><b>checkpoint</b><span>The moment changed pages in memory are written to the data files.</span></div><div><b>LSN</b><span>Log sequence number: a position in the WAL. It only goes up.</span></div></div>
   <p class="lead">Tables are files of 8 kB pages. A change is made in memory and written to the WAL first; the data files catch up later.</p>
   <div class="wwh">
     <div><b>What</b><span>The WAL is an append-only log of every change, in order.</span></div>
@@ -436,61 +610,13 @@ shop=# SELECT pg_backend_pid();   <i>-- the process serving this connection</i>
  0/19FF790 | 741 | Transaction      | <b>COMMIT</b>      |            34</pre></div></aside>
 </section>
 
-<section class="s" id="smap" data-t="Where it lives, who calls whom">
-  <div class="sh"><span class="off">04</span><h2>Where it lives and who calls whom</h2></div>
-  <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port each thing is in, and who opens each connection.</p>
-  <h3>Where each thing lives</h3>
-  <figure><div class="canvas"><div class="zones">
-    <div class="zone"><b>orders-api</b><small>10.0.1.10</small><h5>In memory</h5><span class="chip">app pool: a few open connections to pgb-1</span><span class="chip">the retry loop</span></div>
-    <div class="zone"><b>PgBouncer</b><small>pgb-1:6432</small><h5>On disk</h5><span class="chip C">pgbouncer.ini, userlist.txt</span><h5>In memory</h5><span class="chip C">client connections (many)</span><span class="chip C">server connections (few)</span></div>
-    <div class="zone"><b>Primary</b><small>pg-1:5432</small><h5>On disk</h5><span class="chip Y">base/16384/17138: orders rows</span><span class="chip Y">base/16384/17146: orders_pkey</span><span class="chip Y">pg_wal/0000…0001: the log</span><span class="chip Y">pg_xact: committed or aborted</span><h5>In memory</h5><span class="chip">shared buffers: cached pages</span><span class="chip">lock table, list of running transactions</span></div>
-    <div class="zone"><b>Replica</b><small>pg-2:5432 (replica1)</small><h5>On disk</h5><span class="chip F">the same files, replayed from WAL</span><span class="chip F">standby.signal</span><h5>In memory</h5><span class="chip">its own shared buffers</span></div>
-    <div class="zone"><b>Patroni and etcd</b><small>agent on each DB host, etcd:2379</small><h5>In etcd</h5><span class="chip C">leader key with a time limit</span><span class="chip C">cluster config</span></div>
-  </div></div><figcaption>Everything under “in memory” is lost on a crash. Shared buffers is rebuilt by replaying the WAL; locks and open transactions simply vanish, and their changes count as aborted.</figcaption></figure>
-  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For order 9001</th></tr>
-    <tr><td>The row</td><td>A heap file, one per table, in 8 kB pages</td><td><code>base/16384/17138</code>, page 0</td></tr>
-    <tr><td>Index entry</td><td>A separate file per index</td><td><code>base/16384/17146</code> (orders_pkey)</td></tr>
-    <tr><td>The change record</td><td>WAL segment files, 16 MB each</td><td><code>pg_wal/000000010000000000000001</code></td></tr>
-    <tr><td>Committed or not</td><td>The commit log, <code>pg_xact</code></td><td>xid 741: committed</td></tr>
-    <tr><td>Row versions and who sees them</td><td>In each row header: xmin, xmax</td><td>xmin = 741</td></tr>
-    <tr><td>Row locks</td><td>In the row header too, not in a lock table</td><td>xmax on the Widget row</td></tr>
-    <tr><td>Planner statistics</td><td><code>pg_statistic</code>, read via <code>pg_stats</code></td><td>status: paid 0.99, pending 0.01</td></tr>
-    <tr><td>Settings</td><td><code>postgresql.conf</code>, <code>postgresql.auto.conf</code></td><td><code>/etc/postgresql/16/main/</code></td></tr>
-    <tr><td>Who is primary</td><td>etcd leader key (with Patroni)</td><td>pg-1 <span class="tag x">Example value</span></td></tr>
-  </table></div>
-  <h3>Who calls whom</h3>
-  <figure><div class="board"><pre class="mmd">flowchart TB
-  A["orders-api"] --&gt;|"SQL on port 6432"| B["PgBouncer pgb-1"]:::ctl
-  B --&gt;|"SQL on port 5432"| P["Primary pg-1"]:::lead
-  B --&gt;|"read-only SQL"| R["Replica pg-2"]
-  R --&gt;|"walreceiver asks for WAL"| P
-  PA["Patroni agents"]:::ctl --&gt;|"renew leader key"| E["etcd"]:::ctl
-  PA --&gt;|"promote or demote"| P
-  H["HAProxy"]:::ctl -.-&gt;|"health check: are you primary?"| PA
-  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
-  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
-</pre></div><figcaption>Every arrow points from the side that opens the connection to the side that answers. Note the replica: it dials the primary, not the other way round.</figcaption></figure>
-  <div class="tw"><table><tr><th>Caller</th><th>Calls</th><th>Request</th><th>Why</th></tr>
-    <tr><td>orders-api</td><td>PgBouncer :6432</td><td>Ordinary PostgreSQL protocol</td><td>The app thinks the pooler is the database.</td></tr>
-    <tr><td>PgBouncer</td><td>Primary :5432</td><td>The same SQL, on a shared connection</td><td>Few real connections serve many clients.</td></tr>
-    <tr><td>Replica (walreceiver)</td><td>Primary :5432 (walsender)</td><td>“Stream WAL from LSN X”</td><td>The replica knows how far it got, so it asks.</td></tr>
-    <tr><td>Patroni agent</td><td>etcd :2379</td><td>Renew or take the leader key</td><td>One key, one primary.</td></tr>
-    <tr><td>Patroni agent</td><td>Its local PostgreSQL</td><td>Promote, demote, restart</td><td>It manages the server next to it.</td></tr>
-    <tr><td>HAProxy</td><td>Patroni REST API :8008</td><td>Health check</td><td>Route writes to whoever holds the key. <span class="tag s">Simplified</span></td></tr>
-    <tr><td>Autovacuum launcher</td><td>Worker processes</td><td>“Vacuum this table”</td><td>Internal, no network.</td></tr>
-  </table></div>
-  <h3>What that means for your network</h3>
-  <ul>
-    <li><b>Apps only need to reach the pooler.</b> Port 6432 on pgb-1, nothing else.</li>
-    <li><b>Replicas must reach the primary on 5432.</b> The primary needs a <code>replication</code> line for them in <code>pg_hba.conf</code>.</li>
-    <li><b>Every database host must reach etcd.</b> A node that cannot renew its key must stop being primary.</li>
-    <li><b>PgBouncer does not read your SQL.</b> It cannot tell reads from writes. The app picks a read-only or read-write address. <a class="tag s" href="#c16">Simplified · check 16</a></li>
-  </ul>
-</section>
 <div class="part" data-part="Transactions"><h2>Part 2: Transactions</h2><p>Correct under concurrency</p></div>
 
 <section class="s" id="s4" data-t="ACID: the contract">
-  <div class="sh"><span class="off">05</span><h2>ACID: the contract</h2></div>
+  <div class="sh"><span class="off">10</span><h2>ACID: the contract</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A transaction is a promise with four parts, known as ACID. Each letter protects you from a different kind of disaster: a crash halfway, invalid data, two users interfering, and losing a commit after the fact.</div>
+  <div class="words"><h4>New words</h4><div><b>ACID</b><span>Atomicity, Consistency, Isolation, Durability: the four guarantees of a transaction.</span></div><div><b>constraint</b><span>A rule the database enforces, such as CHECK (quantity &gt;= 0).</span></div></div>
   <p class="lead">A transaction is a promise of four things: all or nothing, always valid, as if alone, and never lost.</p>
   <div class="cards">
     <div class="card"><h4>Atomicity</h4><p>Stock goes down and the order appears, or neither happens. A crash in between rolls both back.</p></div>
@@ -522,7 +648,10 @@ DETAIL:  Key (user_id)=(999) is not present in table "users".</pre></div></aside
 </section>
 
 <section class="s" id="s5" data-t="MVCC: row versions">
-  <div class="sh"><span class="off">06</span><h2>MVCC: every update writes a new row version</h2></div>
+  <div class="sh"><span class="off">11</span><h2>MVCC: every update writes a new row version</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If one transaction is reading a row while another is changing it, what should the reader see? PostgreSQL never edits a row in place: it writes a new version and keeps the old one, so the reader sees a consistent picture and nobody waits.</div>
+  <div class="words"><h4>New words</h4><div><b>MVCC</b><span>Multi-version concurrency control: keeping several versions of a row so readers and writers do not block each other.</span></div><div><b>snapshot</b><span>The set of committed data a transaction is allowed to see.</span></div><div><b>xmin / xmax</b><span>Hidden columns recording which transaction created and which ended each row version.</span></div></div>
   <p class="lead">PostgreSQL never edits a row in place. An UPDATE writes a new version and marks the old one as ended, so readers and writers do not block each other.</p>
   <div class="wwh">
     <div><b>What</b><span>Multi-version concurrency control: several versions of a row exist at once.</span></div>
@@ -564,7 +693,10 @@ shop=# SELECT lp, t_xmin, t_xmax, t_ctid FROM heap_page_items(get_raw_page('inve
 </section>
 
 <section class="s" id="s6" data-t="Isolation levels">
-  <div class="sh"><span class="off">07</span><h2>Isolation levels</h2></div>
+  <div class="sh"><span class="off">12</span><h2>Isolation levels</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When two transactions run at the same time, how much of each other’s just-finished work should they see? Seeing too much causes bugs; seeing too little forces waiting or retries. The isolation level picks the balance.</div>
+  <div class="words"><h4>New words</h4><div><b>isolation level</b><span>How strictly concurrent transactions are kept apart.</span></div><div><b>dirty read</b><span>Seeing another transaction’s change before it commits. PostgreSQL never allows it.</span></div><div><b>phantom</b><span>A new row appearing in a repeated query because someone inserted it in between.</span></div></div>
   <p class="lead">The isolation level decides when a transaction takes its snapshot: at every statement, or once at the start.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Read committed: new snapshot per statement</h4><div class="flow"><span class="n y">T1 reads 4</span><i></i><span class="n b">T2 commits 3</span><i></i><span class="n y">T1 reads 3</span></div></div>
@@ -608,7 +740,10 @@ T1: UPDATE inventory SET quantity=quantity-1 ...
 </section>
 
 <section class="s" id="s7" data-t="Serializable and retries">
-  <div class="sh"><span class="off">08</span><h2>Serializable and the retry loop</h2></div>
+  <div class="sh"><span class="off">13</span><h2>Serializable and the retry loop</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The strictest level, Serializable, promises that running transactions together gives the same result as running them one at a time. PostgreSQL keeps that promise by cancelling one of two conflicting transactions, so your code must be ready to try again.</div>
+  <div class="words"><h4>New words</h4><div><b>serializable</b><span>Concurrent transactions behave as if they ran one after another.</span></div><div><b>serialization failure</b><span>Error 40001: PostgreSQL cancelled your transaction to keep that promise. Retry it.</span></div></div>
   <p class="lead">Serializable guarantees the result matches some one-at-a-time order of the transactions. It does that by aborting one of them, so your code must retry.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant A as T1 Asha
@@ -672,7 +807,10 @@ HINT:  The transaction might succeed if retried.</pre></div></aside>
 </section>
 
 <section class="s" id="s8" data-t="Row locks: FOR UPDATE">
-  <div class="sh"><span class="off">09</span><h2>Row locks: SELECT … FOR UPDATE</h2></div>
+  <div class="sh"><span class="off">14</span><h2>Row locks: SELECT … FOR UPDATE</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A normal read never waits and never blocks. But when you read a value in order to change it, such as checking stock before selling, you want to lock the row while you read so nobody changes it in between. That is what FOR UPDATE does.</div>
+  <div class="words"><h4>New words</h4><div><b>row lock</b><span>A lock on one row that makes other writers wait.</span></div><div><b>race condition</b><span>A bug where the result depends on which of two simultaneous actions happens first.</span></div></div>
   <p class="lead">When you must read a row, decide in the app, then write it back, lock the row as you read it so nobody changes it in between.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>No lock: one sale vanishes</h4><div class="flow v"><span class="n y">T1 reads 4</span><span class="n b">T2 reads 4</span><span class="n y">T1 writes 3, commits</span><span class="n b">T2 writes 3, commits</span><span class="n r">Two sales, stock says 3</span></div></div>
@@ -710,7 +848,10 @@ T1: SELECT 4   T2: SELECT 4   T1: SET quantity=3, COMMIT   T2: SET quantity=3, C
 <div class="part" data-part="Indexes"><h2>Part 3: Indexes</h2><p>Finding rows without reading them all</p></div>
 
 <section class="s" id="s9" data-t="B-tree: the default index">
-  <div class="sh"><span class="off">10</span><h2>B-tree: the default index</h2></div>
+  <div class="sh"><span class="off">15</span><h2>B-tree: the default index</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A B-tree is how PostgreSQL keeps an index sorted while rows keep arriving. Picture a library: a sign at the door says which floor holds which letters, each floor has signs for its shelves, and the shelves hold the books in order. Three signs find any book.</div>
+  <div class="words"><h4>New words</h4><div><b>B-tree</b><span>A shallow, sorted tree; PostgreSQL’s default index type.</span></div><div><b>leaf</b><span>A bottom node of the tree, holding the actual entries and row pointers.</span></div><div><b>index scan</b><span>Using an index to find rows instead of reading the whole table.</span></div></div>
   <p class="lead">Without an index PostgreSQL reads every page of the table. A B-tree keeps the keys sorted in a shallow tree, so a lookup reads a handful of pages.</p>
   <div class="wwh">
     <div><b>What</b><span>A balanced tree of sorted keys. Each leaf entry points at a row’s ctid.</span></div>
@@ -751,7 +892,10 @@ T1: SELECT 4   T2: SELECT 4   T1: SET quantity=3, COMMIT   T2: SET quantity=3, C
 </section>
 
 <section class="s" id="s10" data-t="GIN and GiST">
-  <div class="sh"><span class="off">11</span><h2>GIN and GiST: indexes for values with parts</h2></div>
+  <div class="sh"><span class="off">16</span><h2>GIN and GiST: indexes for values with parts</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A B-tree compares whole values, which is no help for questions like “which documents contain this word?” or “which bookings overlap this time?”. GIN and GiST are index types built for those questions.</div>
+  <div class="words"><h4>New words</h4><div><b>GIN</b><span>Generalized inverted index: indexes the pieces inside a value, such as words or JSON keys.</span></div><div><b>GiST</b><span>Generalized search tree: indexes shapes and ranges that overlap or are near each other.</span></div><div><b>full-text search</b><span>Searching documents for words, with stemming and ranking.</span></div></div>
   <p class="lead">A B-tree compares whole values. GIN indexes the pieces inside a value, and GiST indexes things that overlap or sit near each other.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>GIN: an inverted index</h4>
@@ -793,7 +937,10 @@ shop=# CREATE INDEX idx_inventory_attrs ON inventory USING gin(attributes);   <i
 </section>
 
 <section class="s" id="s11" data-t="BRIN: tiny index for ordered data">
-  <div class="sh"><span class="off">12</span><h2>BRIN: a tiny index for data stored in order</h2></div>
+  <div class="sh"><span class="off">17</span><h2>BRIN: a tiny index for data stored in order</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When a table is naturally stored in time order, like log rows, you do not need a full index. Remembering just the smallest and largest value in each block of pages lets PostgreSQL skip whole blocks, using almost no space.</div>
+  <div class="words"><h4>New words</h4><div><b>BRIN</b><span>Block range index: stores a min and max per range of pages.</span></div><div><b>correlation</b><span>How closely the physical order of rows matches a column’s order.</span></div></div>
   <p class="lead">When rows sit on disk in roughly the same order as a column’s values, it is enough to remember the minimum and maximum of each block of pages.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>orders pages</label><div class="cell pend"><b>0 to 127</b><span>2024-01-01 …<br>2026-03-15</span></div><div class="cell"><b>128 to 255</b><span>2024-01-12 …<br>2024-01-23</span></div><div class="cell"><b>256 to 383</b><span>2024-01-23 …<br>2024-02-03</span></div><div class="cell ghost"><b>…</b><span>…</span></div><div class="cell pend"><b>a later range</b><span>holds<br>2026-03-15</span></div><div class="cell ghost"><b>…</b><span>…</span></div></div>
@@ -829,7 +976,10 @@ shop=# CREATE INDEX idx_inventory_attrs ON inventory USING gin(attributes);   <i
 </section>
 
 <section class="s" id="s12" data-t="Composite, partial, covering">
-  <div class="sh"><span class="off">13</span><h2>Composite, partial and covering indexes</h2></div>
+  <div class="sh"><span class="off">18</span><h2>Composite, partial and covering indexes</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A plain index covers one column for every row. You can shape it to fit a query better: cover several columns in a chosen order, cover only the rows you query, or carry extra columns so the table is never touched.</div>
+  <div class="words"><h4>New words</h4><div><b>composite index</b><span>One index over several columns, in a fixed order.</span></div><div><b>partial index</b><span>An index over only the rows matching a condition, such as status = 'pending'.</span></div><div><b>covering index</b><span>An index that also stores the columns a query returns (INCLUDE).</span></div></div>
   <p class="lead">Three ways to shape a B-tree to the query: index several columns in a chosen order, index only some rows, or carry extra columns so the table is never visited.</p>
   <h3>Composite: column order matters</h3>
   <p>An index on <code>(user_id, created_at)</code> is sorted like a phone book: by user first, then by date within each user. You can find all of one user’s entries, but not “everyone’s March entries” without reading the lot.</p>
@@ -874,7 +1024,9 @@ shop=# SELECT user_id, total, status FROM orders WHERE user_id = 42;
 </section>
 
 <section class="s" id="s13" data-t="Choosing an index">
-  <div class="sh"><span class="off">14</span><h2>Choosing an index</h2></div>
+  <div class="sh"><span class="off">19</span><h2>Choosing an index</h2></div>
+  
+  <div class="plain"><b>In plain words</b>There is no single best index. Start from the operator in the query (=, &lt;, @&gt;, LIKE…), pick the index type that supports it, and check that the speed-up is worth the cost on every write.</div>
   <p class="lead">Start from the query’s operator, not from the column. Then ask whether the index is worth what it costs on every write.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   Q["What does the WHERE clause do?"] --&gt; E["=, ranges, ORDER BY, prefix LIKE"]
@@ -921,7 +1073,10 @@ shop=# SELECT user_id, total, status FROM orders WHERE user_id = 42;
 <div class="part" data-part="Scale and availability"><h2>Part 4: Scale and availability</h2><p>Bigger tables, more servers</p></div>
 
 <section class="s" id="s14" data-t="Partitioning">
-  <div class="sh"><span class="off">15</span><h2>Partitioning: one table, many smaller ones</h2></div>
+  <div class="sh"><span class="off">20</span><h2>Partitioning: one table, many smaller ones</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Very large tables get slow to maintain. Partitioning splits one big table into smaller child tables, for example one per quarter, while the application still sees a single table.</div>
+  <div class="words"><h4>New words</h4><div><b>partition</b><span>One child table holding a slice of the rows.</span></div><div><b>partition key</b><span>The column that decides which child table a row goes into.</span></div><div><b>partition pruning</b><span>Skipping child tables that cannot contain matching rows.</span></div></div>
   <p class="lead">A partitioned table looks like one table to the application, but each row is stored in a smaller child table chosen by a key.</p>
   <div class="wwh">
     <div><b>What</b><span>The parent holds no rows. Children hold them, split by range, list or hash.</span></div>
@@ -966,7 +1121,10 @@ shop=# EXPLAIN (COSTS OFF) SELECT * FROM orders_p WHERE id = 9001;
 </section>
 
 <section class="s" id="s15" data-t="Partition upkeep and limits">
-  <div class="sh"><span class="off">16</span><h2>Partition upkeep and limits</h2></div>
+  <div class="sh"><span class="off">21</span><h2>Partition upkeep and limits</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Partitions make deleting old data instant (drop a whole child table) and keep indexes small. In return they bring a few rules about keys and some regular housekeeping, which this lesson lists.</div>
+  <div class="words"><h4>New words</h4><div><b>DETACH / DROP partition</b><span>Removing a whole child table at once instead of deleting rows one by one.</span></div></div>
   <p class="lead">Partitions make old data cheap to remove, in exchange for a few rules about keys and some housekeeping.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>DELETE a quarter</h4><div class="flow"><span class="n">110,738 rows</span><i data-t="mark each dead, log each"></i><span class="n r">82.9 ms, then vacuum</span></div></div>
@@ -998,7 +1156,10 @@ shop=# ALTER TABLE orders_p DETACH PARTITION orders_p_2024q3;     ALTER TABLE   
 </section>
 
 <section class="s" id="s16" data-t="Streaming replication">
-  <div class="sh"><span class="off">17</span><h2>Streaming replication: shipping the WAL</h2></div>
+  <div class="sh"><span class="off">22</span><h2>Streaming replication: shipping the WAL</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A replica is a second PostgreSQL server that keeps itself up to date by receiving the primary’s log (the WAL) and replaying it, so it holds the same data a fraction of a second later.</div>
+  <div class="words"><h4>New words</h4><div><b>streaming replication</b><span>Sending WAL to replicas continuously as it is written.</span></div><div><b>standby</b><span>Another name for a replica.</span></div><div><b>synchronous / asynchronous</b><span>Whether the primary waits for a replica to confirm before telling the app “committed”.</span></div></div>
   <p class="lead">A replica is a copy of the server that keeps itself current by receiving the primary’s WAL and replaying it.</p>
   <figure><div class="canvas"><div class="cluster"><em>shop cluster</em><div class="row nowrap">
     <div class="bk"><b>pg-1</b><small>walsender</small><span class="chip L">primary</span><span class="chip">WAL up to 0/41000060</span></div>
@@ -1055,7 +1216,10 @@ DETAIL:  The transaction has already committed locally, but might not have been 
 </section>
 
 <section class="s" id="s17" data-t="Failover and Patroni">
-  <div class="sh"><span class="off">18</span><h2>Failover: promoting a replica</h2></div>
+  <div class="sh"><span class="off">23</span><h2>Failover: promoting a replica</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When the primary dies, one replica must become the new primary, and only one. Two primaries at once would split the data. Tools like Patroni handle this by agreeing on a single leader through a shared store.</div>
+  <div class="words"><h4>New words</h4><div><b>failover</b><span>Promoting a replica when the primary fails.</span></div><div><b>split brain</b><span>Two servers both acting as primary and accepting writes.</span></div><div><b>Patroni</b><span>A popular tool that manages PostgreSQL failover using a store such as etcd.</span></div></div>
   <p class="lead">When the primary dies, one replica must become the new primary, and exactly one. The hard part is agreeing who.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant P as Patroni on pg-1
@@ -1101,7 +1265,10 @@ LOG:  database system is ready to accept connections</pre></div></aside>
 </section>
 
 <section class="s" id="s18" data-t="Read replicas and lag">
-  <div class="sh"><span class="off">19</span><h2>Read replicas, lag and logical replication</h2></div>
+  <div class="sh"><span class="off">24</span><h2>Read replicas, lag and logical replication</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Replicas can answer read queries and multiply read capacity. But each one is a moment behind the primary, so a user who saves something and immediately reads it from a replica may not see it yet.</div>
+  <div class="words"><h4>New words</h4><div><b>replication lag</b><span>How far a replica is behind the primary.</span></div><div><b>read-your-writes</b><span>The promise that a user always sees their own latest changes.</span></div></div>
   <p class="lead">Replicas multiply read capacity, but each one is a moment behind the primary, and your application has to tolerate that moment.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">orders-api</span><i data-t="writes"></i><span class="n y">pg-1 primary</span><i data-t="WAL"></i><span class="n b">pg-2<small>reads</small></span>
@@ -1132,7 +1299,10 @@ replica=# SELECT pg_last_wal_replay_lsn(),
 </section>
 
 <section class="s" id="s19" data-t="Connection pooling">
-  <div class="sh"><span class="off">20</span><h2>Connection pooling with PgBouncer</h2></div>
+  <div class="sh"><span class="off">25</span><h2>Connection pooling with PgBouncer</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Each PostgreSQL connection is a whole operating-system process using memory, so thousands of connections hurt. A pooler like PgBouncer sits in front and lets thousands of app connections share a few dozen real ones.</div>
+  <div class="words"><h4>New words</h4><div><b>connection pool</b><span>A set of open connections shared and reused by many clients.</span></div><div><b>transaction pooling</b><span>A pooler mode where a client holds a real connection only for the length of one transaction.</span></div></div>
   <p class="lead">Each PostgreSQL connection is a whole operating-system process. A pooler lets thousands of clients share a few dozen of them.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Without a pooler</h4><div class="flow v"><span class="n g">50 services × 10 instances × 10 connections</span><span class="n r">5,000 backend processes<small>the stock limit is 100</small></span></div></div>
@@ -1166,10 +1336,69 @@ default_pool_size = 80          <i>; server connections per database and user</i
 reserve_pool_size = 5
 server_idle_timeout = 600</pre></div></aside>
 </section>
+
+<section class="s" id="smap" data-t="Where it lives, who calls whom">
+  <div class="sh"><span class="off">26</span><h2>Where it lives and who calls whom</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows but rarely say where each piece of data physically lives, or which program connects to which. Now that you have met the pooler, the primary, the replica and Patroni, this lesson answers both questions for the whole setup.</div>
+  <div class="words"><h4>New words</h4><div><b>port</b><span>A number identifying a network service on a machine. PostgreSQL uses 5432, PgBouncer 6432.</span></div><div><b>etcd</b><span>A small, highly available store that Patroni uses to agree who the primary is.</span></div></div>
+  <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port each thing is in, and who opens each connection.</p>
+  <h3>Where each thing lives</h3>
+  <figure><div class="canvas"><div class="zones">
+    <div class="zone"><b>orders-api</b><small>10.0.1.10</small><h5>In memory</h5><span class="chip">app pool: a few open connections to pgb-1</span><span class="chip">the retry loop</span></div>
+    <div class="zone"><b>PgBouncer</b><small>pgb-1:6432</small><h5>On disk</h5><span class="chip C">pgbouncer.ini, userlist.txt</span><h5>In memory</h5><span class="chip C">client connections (many)</span><span class="chip C">server connections (few)</span></div>
+    <div class="zone"><b>Primary</b><small>pg-1:5432</small><h5>On disk</h5><span class="chip Y">base/16384/17138: orders rows</span><span class="chip Y">base/16384/17146: orders_pkey</span><span class="chip Y">pg_wal/0000…0001: the log</span><span class="chip Y">pg_xact: committed or aborted</span><h5>In memory</h5><span class="chip">shared buffers: cached pages</span><span class="chip">lock table, list of running transactions</span></div>
+    <div class="zone"><b>Replica</b><small>pg-2:5432 (replica1)</small><h5>On disk</h5><span class="chip F">the same files, replayed from WAL</span><span class="chip F">standby.signal</span><h5>In memory</h5><span class="chip">its own shared buffers</span></div>
+    <div class="zone"><b>Patroni and etcd</b><small>agent on each DB host, etcd:2379</small><h5>In etcd</h5><span class="chip C">leader key with a time limit</span><span class="chip C">cluster config</span></div>
+  </div></div><figcaption>Everything under “in memory” is lost on a crash. Shared buffers is rebuilt by replaying the WAL; locks and open transactions simply vanish, and their changes count as aborted.</figcaption></figure>
+  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For order 9001</th></tr>
+    <tr><td>The row</td><td>A heap file, one per table, in 8 kB pages</td><td><code>base/16384/17138</code>, page 0</td></tr>
+    <tr><td>Index entry</td><td>A separate file per index</td><td><code>base/16384/17146</code> (orders_pkey)</td></tr>
+    <tr><td>The change record</td><td>WAL segment files, 16 MB each</td><td><code>pg_wal/000000010000000000000001</code></td></tr>
+    <tr><td>Committed or not</td><td>The commit log, <code>pg_xact</code></td><td>xid 741: committed</td></tr>
+    <tr><td>Row versions and who sees them</td><td>In each row header: xmin, xmax</td><td>xmin = 741</td></tr>
+    <tr><td>Row locks</td><td>In the row header too, not in a lock table</td><td>xmax on the Widget row</td></tr>
+    <tr><td>Planner statistics</td><td><code>pg_statistic</code>, read via <code>pg_stats</code></td><td>status: paid 0.99, pending 0.01</td></tr>
+    <tr><td>Settings</td><td><code>postgresql.conf</code>, <code>postgresql.auto.conf</code></td><td><code>/etc/postgresql/16/main/</code></td></tr>
+    <tr><td>Who is primary</td><td>etcd leader key (with Patroni)</td><td>pg-1 <span class="tag x">Example value</span></td></tr>
+  </table></div>
+  <h3>Who calls whom</h3>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  A["orders-api"] --&gt;|"SQL on port 6432"| B["PgBouncer pgb-1"]:::ctl
+  B --&gt;|"SQL on port 5432"| P["Primary pg-1"]:::lead
+  B --&gt;|"read-only SQL"| R["Replica pg-2"]
+  R --&gt;|"walreceiver asks for WAL"| P
+  PA["Patroni agents"]:::ctl --&gt;|"renew leader key"| E["etcd"]:::ctl
+  PA --&gt;|"promote or demote"| P
+  H["HAProxy"]:::ctl -.-&gt;|"health check: are you primary?"| PA
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Every arrow points from the side that opens the connection to the side that answers. Note the replica: it dials the primary, not the other way round.</figcaption></figure>
+  <div class="tw"><table><tr><th>Caller</th><th>Calls</th><th>Request</th><th>Why</th></tr>
+    <tr><td>orders-api</td><td>PgBouncer :6432</td><td>Ordinary PostgreSQL protocol</td><td>The app thinks the pooler is the database.</td></tr>
+    <tr><td>PgBouncer</td><td>Primary :5432</td><td>The same SQL, on a shared connection</td><td>Few real connections serve many clients.</td></tr>
+    <tr><td>Replica (walreceiver)</td><td>Primary :5432 (walsender)</td><td>“Stream WAL from LSN X”</td><td>The replica knows how far it got, so it asks.</td></tr>
+    <tr><td>Patroni agent</td><td>etcd :2379</td><td>Renew or take the leader key</td><td>One key, one primary.</td></tr>
+    <tr><td>Patroni agent</td><td>Its local PostgreSQL</td><td>Promote, demote, restart</td><td>It manages the server next to it.</td></tr>
+    <tr><td>HAProxy</td><td>Patroni REST API :8008</td><td>Health check</td><td>Route writes to whoever holds the key. <span class="tag s">Simplified</span></td></tr>
+    <tr><td>Autovacuum launcher</td><td>Worker processes</td><td>“Vacuum this table”</td><td>Internal, no network.</td></tr>
+  </table></div>
+  <h3>What that means for your network</h3>
+  <ul>
+    <li><b>Apps only need to reach the pooler.</b> Port 6432 on pgb-1, nothing else.</li>
+    <li><b>Replicas must reach the primary on 5432.</b> The primary needs a <code>replication</code> line for them in <code>pg_hba.conf</code>.</li>
+    <li><b>Every database host must reach etcd.</b> A node that cannot renew its key must stop being primary.</li>
+    <li><b>PgBouncer does not read your SQL.</b> It cannot tell reads from writes. The app picks a read-only or read-write address. <a class="tag s" href="#c16">Simplified · check 16</a></li>
+  </ul>
+</section>
+
 <div class="part" data-part="Patterns"><h2>Part 5: Patterns</h2><p>Small tools, sharp edges</p></div>
 
 <section class="s" id="s20" data-t="Optimistic and advisory locks">
-  <div class="sh"><span class="off">21</span><h2>Optimistic locking and advisory locks</h2></div>
+  <div class="sh"><span class="off">27</span><h2>Optimistic locking and advisory locks</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Two ways to coordinate without holding a row lock. Optimistic: change the row only if its version has not changed since you read it. Advisory: lock an idea, such as “the nightly report”, rather than a row.</div>
+  <div class="words"><h4>New words</h4><div><b>optimistic locking</b><span>Detecting a conflict at write time using a version number, then retrying.</span></div><div><b>advisory lock</b><span>An application-defined lock on a number, managed by PostgreSQL.</span></div></div>
   <p class="lead">Two ways to coordinate without holding a row lock: detect a conflict after the fact with a version number, or lock an idea instead of a row.</p>
   <h3>Optimistic locking</h3>
   <figure><div class="canvas"><div class="flow">
@@ -1203,7 +1432,10 @@ T2: SELECT pg_try_advisory_lock(hashtext('payout_user_42'));        t</pre></div
 </section>
 
 <section class="s" id="s21" data-t="UPSERT and RETURNING">
-  <div class="sh"><span class="off">22</span><h2>Idempotent writes: UPSERT and RETURNING</h2></div>
+  <div class="sh"><span class="off">28</span><h2>Idempotent writes: UPSERT and RETURNING</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Networks fail and clients retry. A write is safe to retry only if running it twice gives the same result as once. INSERT … ON CONFLICT (upsert) and RETURNING are the tools that make that easy.</div>
+  <div class="words"><h4>New words</h4><div><b>idempotent</b><span>Doing it twice has the same effect as doing it once.</span></div><div><b>upsert</b><span>Insert a row, or update it if it already exists.</span></div></div>
   <p class="lead">Networks retry. A write is safe to retry when running it twice leaves the same result as running it once.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">orders-api<small>pay, key pay-9001-a1</small></span><i data-t="INSERT … ON CONFLICT DO NOTHING"></i><span class="n y">payments<small>1 row inserted</small></span>
@@ -1236,7 +1468,10 @@ ERROR:  duplicate key value violates unique constraint "users_pkey"</pre></div><
 </section>
 
 <section class="s" id="s22" data-t="No double-booking">
-  <div class="sh"><span class="off">23</span><h2>No double-booking: exclusion constraints</h2></div>
+  <div class="sh"><span class="off">29</span><h2>No double-booking: exclusion constraints</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Two people trying to book the same room at the same time is a classic race. A unique constraint can stop exact duplicates; an exclusion constraint stops overlaps, and the database enforces it even when requests race.</div>
+  <div class="words"><h4>New words</h4><div><b>exclusion constraint</b><span>A rule that no two rows may overlap according to an operator, such as overlapping time ranges.</span></div><div><b>range type</b><span>A column holding a span of values, such as a booking from 10:00 to 11:00.</span></div></div>
   <p class="lead">A unique constraint says “no two rows are equal”. An exclusion constraint says “no two rows overlap”, and the database enforces it even when two requests race.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>room 7</label><div class="cell done"><b>10:00 to 11:00</b><span>Asha: booked</span></div><div class="cell done"><b>11:00 to 12:00</b><span>Ravi: booked</span></div></div>
@@ -1272,7 +1507,10 @@ shop=# INSERT INTO reservations (resource_id, time_range, user_id)
 </section>
 
 <section class="s" id="s23" data-t="CTEs and audit triggers">
-  <div class="sh"><span class="off">24</span><h2>CTEs and audit triggers</h2></div>
+  <div class="sh"><span class="off">30</span><h2>CTEs and audit triggers</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Two tools for keeping things understandable. A CTE gives each step of a long query a name, like variables in code. A trigger is a function the database runs automatically on changes, useful for recording who changed what.</div>
+  <div class="words"><h4>New words</h4><div><b>CTE</b><span>Common table expression: a named sub-query introduced with WITH.</span></div><div><b>trigger</b><span>A function PostgreSQL runs automatically before or after a change.</span></div></div>
   <p class="lead">Two tools for keeping things understandable: name the steps of a long query, and let the database record who changed what.</p>
   <h3>CTEs: a query as named steps</h3>
   <figure><div class="canvas"><div class="flow">
@@ -1319,7 +1557,10 @@ shop=# SELECT id, table_name, operation, old_data-&gt;&gt;'status', new_data-&gt
 <div class="part" data-part="Performance"><h2>Part 6: Performance</h2><p>Observe, explain, fix, verify</p></div>
 
 <section class="s" id="s24" data-t="Find it, explain it">
-  <div class="sh"><span class="off">25</span><h2>Find the slow query, then explain it</h2></div>
+  <div class="sh"><span class="off">31</span><h2>Find the slow query, then explain it</h2></div>
+  
+  <div class="plain"><b>In plain words</b>“Add an index” is a guess. First measure which queries cost the most time in total, then read the plan PostgreSQL chose for them, and only then change something.</div>
+  <div class="words"><h4>New words</h4><div><b>pg_stat_statements</b><span>An extension that records time and counts for every query shape.</span></div><div><b>EXPLAIN ANALYZE</b><span>Runs a query and shows the plan with real timings.</span></div></div>
   <p class="lead">“Add an index” is a guess. First find which queries cost the most in total, then read their plans.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n p">Observe<small>pg_stat_statements</small></span><i></i><span class="n p">Explain<small>EXPLAIN (ANALYZE, BUFFERS)</small></span><i></i><span class="n y">Fix<small>index, rewrite, ANALYZE</small></span><i></i><span class="n g">Verify<small>run EXPLAIN again</small></span>
@@ -1357,7 +1598,10 @@ shop=# SELECT attname, n_distinct, most_common_vals, most_common_freqs FROM pg_s
 </section>
 
 <section class="s" id="s25" data-t="Vacuum and bloat">
-  <div class="sh"><span class="off">26</span><h2>Vacuum: cleaning up dead row versions</h2></div>
+  <div class="sh"><span class="off">32</span><h2>Vacuum: cleaning up dead row versions</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Because updates and deletes leave old row versions behind (MVCC), someone has to clean them up. That is vacuum. If it falls behind, tables fill with dead rows and get slower and bigger.</div>
+  <div class="words"><h4>New words</h4><div><b>dead tuple</b><span>An old row version no transaction can see any more.</span></div><div><b>vacuum</b><span>The process that marks dead row versions’ space as reusable.</span></div><div><b>bloat</b><span>Wasted space from dead rows that vacuum has not cleaned.</span></div></div>
   <p class="lead">MVCC leaves the old version of every updated or deleted row behind. Vacuum marks that space reusable; if it falls behind, the table bloats.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>after UPDATEs</label><div class="cell gone"><b>dead</b><span>v1</span></div><div class="cell gone"><b>dead</b><span>v2</span></div><div class="cell pend"><b>live</b><span>v3</span></div><div class="cell pend"><b>live</b><span>other row</span></div></div>
@@ -1388,7 +1632,10 @@ shop=# UPDATE orders SET status = 'paid' WHERE created_at &lt; '2024-07-01' AND 
 </section>
 
 <section class="s" id="s26" data-t="Settings and anti-patterns">
-  <div class="sh"><span class="off">27</span><h2>Settings and anti-patterns</h2></div>
+  <div class="sh"><span class="off">33</span><h2>Settings and anti-patterns</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A handful of settings make most of the difference, and the defaults are sized for a small machine. Most slow systems are also slow because of a few repeated habits in their queries. This lesson lists both.</div>
+  <div class="words"><h4>New words</h4><div><b>shared_buffers</b><span>How much memory PostgreSQL uses for its own page cache.</span></div><div><b>work_mem</b><span>Memory each sort or hash step may use before spilling to disk.</span></div></div>
   <p class="lead">A handful of settings matter, the defaults are sized for a laptop, and most slow systems are slow because of a few repeated query habits.</p>
   <div class="tw"><table>
     <tr><th>Setting</th><th>Out of the box</th><th>Starting point, 16 GB server on SSD</th><th>What it is</th></tr>
@@ -1432,7 +1679,9 @@ shop=# EXPLAIN (ANALYZE, COSTS OFF) SELECT id FROM orders WHERE id &gt; 909001 O
 <div class="part" data-part="Choose and revise"><h2>Part 7: Choose and revise</h2><p>Trade-offs, then prove it</p></div>
 
 <section class="s" id="s27" data-t="PostgreSQL vs the others">
-  <div class="sh"><span class="off">28</span><h2>PostgreSQL vs MySQL, MongoDB and DynamoDB</h2></div>
+  <div class="sh"><span class="off">34</span><h2>PostgreSQL vs MySQL, MongoDB and DynamoDB</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Interviewers often ask why PostgreSQL and not something else. A good answer names what the alternative is better at, and why that does not matter for this particular problem.</div>
   <p class="lead">Every database gives something up. A good answer names what the alternative is better at and why that does not matter for this problem.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   S["What does the workload need?"] --&gt; A["JOINs, transactions, changing queries"]
@@ -1467,12 +1716,14 @@ shop=# EXPLAIN (ANALYZE, COSTS OFF) SELECT id FROM orders WHERE id &gt; 909001 O
 Asha's recent orders in 0.085 ms     B-tree on (user_id, created_at)   <i>lessons 10 to 14</i>
 drop a quarter of old orders         range partitioning                <i>lessons 15, 16</i>
 survive losing pg-1                  streaming replication, Patroni    <i>lessons 17 to 19</i>
-5,000 clients, 100 backends          PgBouncer                         <i>lesson 20</i>
-payment retried, charged once        ON CONFLICT DO NOTHING            <i>lesson 22</i></pre></div></aside>
+5,000 clients, 100 backends          PgBouncer                         <i>lesson 25</i>
+payment retried, charged once        ON CONFLICT DO NOTHING            <i>lesson 28</i></pre></div></aside>
 </section>
 
 <section class="s" id="smyth" data-t="Misconceptions">
-  <div class="sh"><span class="off">29</span><h2>Common misconceptions</h2></div>
+  <div class="sh"><span class="off">35</span><h2>Common misconceptions</h2></div>
+  
+  <div class="plain"><b>In plain words</b>These are beliefs that sound right and are wrong in ways that matter. Each card gives the belief and the correction.</div>
   <p class="lead">Eight beliefs that sound right and cost marks in interviews.</p>
   <div class="cards">
     <div class="card myth"><p class="w">Read uncommitted lets you see uncommitted data in PostgreSQL.</p><p class="c">It runs as read committed. There are no dirty reads at any level.</p></div>
@@ -1487,7 +1738,9 @@ payment retried, charged once        ON CONFLICT DO NOTHING            <i>lesson
 </section>
 
 <section class="s" id="srev" data-t="Revision and glossary">
-  <div class="sh"><span class="off">30</span><h2>Quick revision and glossary</h2></div>
+  <div class="sh"><span class="off">36</span><h2>Quick revision and glossary</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten in the glossary.</div>
   <p class="lead">Test yourself, then look up any term.</p>
   <div class="demo selftest" id="selftest"></div>
   <details class="q"><summary>At repeatable read, T1 reads a row, T2 updates it and commits, then T1 tries to update the same row. What happens?</summary><div class="in">T1’s UPDATE fails with SQLSTATE 40001, “could not serialize access due to concurrent update”. T1 must roll back and retry. At read committed the UPDATE would simply apply on top of T2’s value.</div></details>
@@ -1528,7 +1781,9 @@ payment retried, charged once        ON CONFLICT DO NOTHING            <i>lesson
 </section>
 
 <section class="s" id="slab" data-t="Proof checklist">
-  <div class="sh"><span class="off">31</span><h2>Proof checklist</h2></div>
+  <div class="sh"><span class="off">37</span><h2>Proof checklist</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a real PostgreSQL. These experiments show you how.</div>
   <p class="lead">Sixteen small experiments on a real PostgreSQL. Each one settles a tagged statement from the lessons.</p>
   <p>Any scratch database will do. Rows 4 to 7 need two <code>psql</code> windows. Create the three tables from <a href="#s0">lesson 00</a> first, with <code>CHECK (quantity &gt;= 0)</code> on inventory.</p>
   <p id="labProg" aria-live="polite"></p>
@@ -1641,7 +1896,7 @@ const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
   terms.sort((a,b)=>b.name.length-a.name.length);
   terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
   /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
-  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk';
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk,.words';
   lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
     nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
       for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;

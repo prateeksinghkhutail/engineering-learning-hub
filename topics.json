@@ -61,16 +61,16 @@
   },
   {
     "id": "postgresql",
-    "title": "PostgreSQL from first principles",
+    "title": "PostgreSQL, from zero to production",
     "category": "Databases",
-    "description": "32 lessons on how PostgreSQL stores, protects, finds and scales data, with the internals behind it",
+    "description": "37 lessons that start from “what is a database” and go deep: WAL, MVCC, isolation, index types, replication, failover and performance",
     "path": "artifacts/postgresql.html",
     "highlights": [
+      "Start here: tables, SQL, transactions, indexes",
       "WAL, pages & buffer cache",
       "ACID, MVCC & isolation",
-      "Indexes",
-      "Replication & HA",
-      "Performance"
+      "B-tree, GIN, GiST, BRIN",
+      "Replication, failover & pooling"
     ],
     "tags": [
       "PostgreSQL",
