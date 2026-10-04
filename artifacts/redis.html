@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Redis, from one thread to a cluster</title>
+<title>Redis, from zero to a cluster</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -258,12 +258,20 @@ figure.big{max-width:none}
 .cards .flow{margin:.4rem 0}
 .card pre.code{font-size:.78rem;padding:.5rem .6rem;white-space:pre-wrap}
 .ctrls input[type=checkbox]{min-width:0;width:auto}
+/* beginner layer */
+.plain{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;font-size:1.02rem}
+.plain>b:first-child{display:block;font:700 .82rem var(--display);color:var(--ok);letter-spacing:.02em;margin-bottom:.25rem}
+.words{display:grid;gap:.3rem;margin:.4rem 0 1.1rem;max-width:72ch;font-size:.93rem}
+.words>h4{margin:0 0 .1rem;font:700 .82rem var(--display);color:var(--muted)}
+.words>div{display:grid;grid-template-columns:minmax(7.5rem,max-content) 1fr;gap:.7rem;padding:.35rem .6rem;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.words>div>b{font-family:var(--mono);font-size:.86rem}
+@media (max-width:520px){.words>div{grid-template-columns:1fr;gap:.1rem}}
 </style>
 </head>
 <body>
 <div class="top">
   <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
-  <strong>Redis, from one thread to a cluster</strong>
+  <strong>Redis, from zero to a cluster</strong>
   <button class="btn" id="themeBtn">Dark theme</button>
   <div id="bar"></div>
 </div>
@@ -271,8 +279,8 @@ figure.big{max-width:none}
 <nav id="toc" aria-label="Contents"></nav>
 <main>
 <div class="hero">
-  <h1>Keep it in memory. Do one thing at a time. Pick the right shape.</h1>
-  <p>36 short lessons that build Redis up from first principles: why one thread is fast, how each data structure works inside, what survives a crash, how replicas, Sentinel and Cluster keep it running, and the patterns interviews ask for. One flash-sale checkout is followed through every lesson, and six simulators let you break things safely.</p>
+  <h1>Keep hot data in memory, and answer in under a millisecond.</h1>
+  <p>A course that starts from zero. Part 0 explains what a cache is, your first commands, and what “in memory” means. Then it goes deep: why one thread is fast, how each data structure works inside, what survives a crash, how replicas, Sentinel and Cluster keep Redis running, and the patterns interviews ask for. One flash-sale checkout is followed through every lesson, and six simulators let you break things safely.</p>
   <div class="canvas herolog scroll">
     <div class="flow" style="margin-bottom:1rem"><span class="n g">web-1, web-2, web-3<small>checkout-api</small></span><i data-t="commands over TCP"></i><span class="n p">event loop<small>one thread runs every command</small></span><i data-t="touches"></i><span class="n y">RAM<small>strings, hashes, lists, sets, sorted sets</small></span></div>
     <div class="log"><label>queue</label><div class="cell done"><b>web-1</b><span>GET cache:product:501</span></div><div class="cell done"><b>web-2</b><span>INCR rl:checkout:123</span></div><div class="cell pend new"><b>web-3</b><span>DECR stock:501</span></div><div class="cell ghost"><b>next</b><span>ZINCRBY sales…</span></div></div>
@@ -289,14 +297,17 @@ figure.big{max-width:none}
 
 <section class="s" id="s0" data-t="Running example and tags">
   <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  
+  <div class="plain"><b>In plain words</b>This course follows one shopper, Asha, through a flash-sale checkout, and Redis does a different job at every step. Do not worry if the key names and words in the tables below are unfamiliar: Part 0, right after this lesson, starts from zero. Come back here whenever you want to look up a key or a host.</div>
   <p class="lead">One checkout is followed through every lesson: Asha buys the last keyboards in a flash sale, and Redis does a different job at each step. Look for the yellow “Follow Asha’s checkout” box.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">Asha opens product 501</span><i data-t="cache"></i><span class="n y">session check</span><i data-t="hash"></i><span class="n y">rate limit</span><i data-t="counter"></i><span class="n y">reserve stock</span><i data-t="atomic DECR"></i><span class="n y">rank the sale</span><i data-t="sorted set"></i><span class="n b">order event</span><i data-t="stream"></i><span class="n g">MySQL order 7001</span>
-  </div></div><figcaption>Redis sits in front of the MySQL shop from the previous course. MySQL stays the source of truth; Redis makes each step fast.</figcaption></figure>
+  </div></div><figcaption>Redis sits in front of the shop’s main database, MySQL, which permanently stores users, stock and orders. Redis makes each step fast; MySQL stays the source of truth.</figcaption></figure>
   <div class="tw"><table>
     <tr><th>Piece</th><th>In this guide</th></tr>
     <tr><td>Shopper</td><td>Asha, <code>user 123</code>. Bob, <code>user 25</code>, is the rival buyer</td></tr>
     <tr><td>Product</td><td>Keyboard, <code>product 501</code>, 10 units in the sale</td></tr>
+    <tr><td>Main database</td><td>MySQL. Asha’s purchase becomes <code>order 7001</code> there</td></tr>
     <tr><td>App</td><td><code>checkout-api</code> on <code>web-1</code>, <code>web-2</code>, <code>web-3</code></td></tr>
     <tr><td>Redis, Part 4</td><td>primary <code>redis-1:6379</code>, replicas <code>redis-2</code>, <code>redis-3</code>; Sentinels <code>sentinel-1..3:26379</code>, master name <code>shop</code></td></tr>
     <tr><td>Redis Cluster, Part 5</td><td>masters <code>m1</code> (slots 0–5460), <code>m2</code> (5461–10922), <code>m3</code> (10923–16383), each with one replica</td></tr>
@@ -326,10 +337,150 @@ figure.big{max-width:none}
   <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>, which you can run against a local <code>redis-server</code> in a few minutes.</p>
 </section>
 
+<div class="part" data-part="Start here"><h2>Part 0: Start here</h2><p>No Redis knowledge needed</p></div>
+
+<section class="s" id="whycache" data-t="Why apps need a cache">
+  <div class="sh"><span class="off">01</span><h2>Why apps need something like Redis</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Think of a kitchen. The supermarket (the database) has everything, but every trip takes time. The fridge (Redis) is small, but what you use every day is right there. You still buy from the supermarket; you just do not go there for every glass of milk.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>database</b><span>A program that stores data permanently on disk, such as MySQL or PostgreSQL.</span></div>
+    <div><b>cache</b><span>A small, fast copy of data that is used often, kept so you do not have to fetch it from the slow place each time.</span></div>
+    <div><b>latency</b><span>How long one request takes, from asking to getting the answer.</span></div>
+    <div><b>RAM (memory)</b><span>The computer’s fast working memory. Much faster than disk, but smaller and emptied when power is lost.</span></div>
+  </div>
+  <p class="lead">Databases keep data safely on disk, which makes every lookup take milliseconds; Redis keeps a copy of the hot data in memory so the same lookup takes a fraction of a millisecond.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Every request asks the database</h4><div class="flow"><span class="n g">app</span><i data-t="query"></i><span class="n">database<small>reads disk, ~6 ms</small></span></div><p style="font-size:.9rem;margin:.4rem 0 0">Fine at 100 requests a second. Painful at 50,000.</p></div>
+    <div><h4>A cache in front</h4><div class="flow"><span class="n g">app</span><i data-t="ask first"></i><span class="n y">Redis<small>in memory, ~0.2 ms</small></span><i data-t="only on a miss"></i><span class="n">database</span></div><p style="font-size:.9rem;margin:.4rem 0 0">Most requests stop at Redis.</p></div>
+  </div></div><figcaption>The same question, answered from memory instead of disk. The database is asked only when Redis does not have the answer.</figcaption></figure>
+  <ul>
+    <li><b>Redis is a server program.</b> It runs on its own, usually on its own machine, and apps talk to it over the network on port 6379. <span class="tag d">Default</span></li>
+    <li><b>Caching is only one job.</b> Because Redis is fast and shared by every app server, it is also used for counters, sessions, leaderboards, rate limits and locks. This course covers all of them.</li>
+    <li><b>The database stays the source of truth.</b> Redis usually holds copies and short-lived data that can be rebuilt.</li>
+  </ul>
+  <details class="q"><summary>Why is reading from Redis faster than reading the same data from a disk-based database?</summary><div class="in">Redis keeps the data in RAM, which is roughly a thousand times faster to read than disk, and it does very little work per request.</div></details>
+  <aside class="trk"><h4 data-id="flash sale">Follow Asha’s checkout</h4><div class="in"><p>Our story: an online shop runs a flash sale on keyboards, and its main database cannot answer 50,000 page views a second. Redis takes the load. We follow one shopper, Asha, through every lesson.</p></div></aside>
+</section>
+
+<section class="s" id="firstcmds" data-t="Your first Redis commands">
+  <div class="sh"><span class="off">02</span><h2>Your first Redis commands</h2></div>
+  
+  <div class="plain"><b>In plain words</b>At its simplest Redis is a giant dictionary: you give it a name and a value to remember, and later you ask for the value by name. Everything else in this course builds on that.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>key</b><span>The name you store a value under, such as <code>user:123:name</code>.</span></div>
+    <div><b>value</b><span>The data stored under the key.</span></div>
+    <div><b>redis-cli</b><span>The command-line tool for typing Redis commands and seeing replies.</span></div>
+    <div><b>TTL</b><span>Time to live: how many seconds until Redis deletes a key by itself.</span></div>
+  </div>
+  <p class="lead">Redis stores values under names called keys, and you talk to it with short commands like SET, GET, INCR and EXPIRE.</p>
+  <pre class="code">$ docker run -d -p 6379:6379 redis:7        <i># start a Redis server</i>
+$ redis-cli                                  <i># connect to it</i>
+127.0.0.1:6379&gt; SET greeting "hello"
+OK
+127.0.0.1:6379&gt; GET greeting
+"hello"
+127.0.0.1:6379&gt; INCR visits                  <i># add 1; creates the key at 0 first</i>
+(integer) 1
+127.0.0.1:6379&gt; INCR visits
+(integer) 2
+127.0.0.1:6379&gt; SET code 4271 EX 60          <i># remember for 60 seconds only</i>
+OK
+127.0.0.1:6379&gt; TTL code
+(integer) 57
+127.0.0.1:6379&gt; DEL greeting
+(integer) 1
+127.0.0.1:6379&gt; GET greeting
+(nil)                                        <i># nil = no such key</i></pre>
+  <figure><div class="canvas"><div class="row">
+    <div class="bk"><b>visits</b><span class="chip Y">2</span></div>
+    <div class="bk"><b>code</b><small>expires in 57 s</small><span class="chip Y">4271</span></div>
+  </div></div><figcaption>What Redis holds after those commands: two keys, one of them with a timer.</figcaption></figure>
+  <ul>
+    <li><b>Keys are strings,</b> usually written like paths with colons: <code>user:123:name</code>.</li>
+    <li><b>Every command gets a reply:</b> <code>OK</code>, a value, a number, or <code>(nil)</code> for “nothing there”.</li>
+    <li><b>Apps use a client library</b> (redis-py, Jedis, ioredis…) that sends the same commands.</li>
+  </ul>
+  <details class="q"><summary>You run SET code 4271 EX 60 and wait two minutes. What does GET code return?</summary><div class="in">(nil). EX 60 gave the key a 60-second time to live, so Redis deleted it.</div></details>
+  <aside class="trk"><h4 data-id="cache:product:501">Follow Asha’s checkout</h4><div class="in"><p>The shop caches each product page’s data for 5 minutes. <span class="tag x">Example value</span></p>
+  <pre class="code">SET cache:product:501 "{\"id\":501,\"name\":\"Keyboard\",\"price\":49.99,\"stock\":10}" EX 300</pre></div></aside>
+</section>
+
+<section class="s" id="inmemory" data-t="What “in memory” means">
+  <div class="sh"><span class="off">03</span><h2>What “in memory” really means</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Memory is like a whiteboard: quick to read and write, but wiped when the power goes. Disk is like a notebook: slower, but it keeps what you wrote. Redis works on the whiteboard and can copy it into the notebook from time to time, which Part 3 explains.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>volatile</b><span>Lost when power is lost. RAM is volatile; disk is not.</span></div>
+    <div><b>persistence</b><span>Saving data to disk so it survives a restart.</span></div>
+  </div>
+  <p class="lead">Redis keeps all its data in RAM, which makes it fast but means the data set must fit in memory, and anything not saved to disk is lost when the server stops.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>RAM</h4><span class="chip Y">~0.1 µs per read</span><span class="chip">tens to hundreds of GB per machine</span><span class="chip X">cleared on restart</span></div>
+    <div><h4>Disk (SSD)</h4><span class="chip">~100 µs per read</span><span class="chip">terabytes per machine</span><span class="chip Y">keeps data</span></div>
+  </div></div><figcaption>The trade in one picture: memory is a thousand times faster, much smaller, and forgetful. <span class="tag s">Simplified</span></figcaption></figure>
+  <ul>
+    <li><b>Everything must fit.</b> If you need 500 GB of data and the machine has 64 GB of RAM, one Redis cannot hold it. Part 5 splits data across machines.</li>
+    <li><b>Restarts can lose data</b> unless persistence is on, and even then the last second or so can be lost.</li>
+    <li><b>That is why Redis usually holds copies</b> of data whose real home is a database.</li>
+  </ul>
+  <details class="q"><summary>Why should the only copy of customer orders not live in Redis?</summary><div class="in">Redis keeps data in RAM, so a crash can lose recent writes even with persistence on. Orders must survive anything, so they belong in a database built for durability; Redis can hold copies.</div></details>
+  <aside class="trk"><h4 data-id="shop">Follow Asha’s checkout</h4><div class="in"><p>In our shop, Asha’s account, the stock of record and her final order live in the shop’s main database, MySQL. Redis holds fast copies and short-lived data: the product cache, her session, her rate-limit counter, the flash-sale stock counter.</p></div></aside>
+</section>
+
+<section class="s" id="fiveshapes" data-t="Five kinds of values">
+  <div class="sh"><span class="off">04</span><h2>Not just strings: five kinds of values</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Most key-value stores only keep blobs of text. Redis also understands a few everyday shapes of data, so you can say “add 1 to this score” or “put this job at the back of the queue” instead of downloading the whole thing, changing it, and uploading it again.</div>
+  <p class="lead">A Redis value can be a string, a hash, a list, a set or a sorted set, and each comes with commands that work on it directly inside Redis.</p>
+  <div class="cards">
+    <div class="card"><h4>String</h4><p>A sticky note: one value. Text, a number, a JSON blob.</p></div>
+    <div class="card"><h4>Hash</h4><p>A form with fields: name = Asha, cart = 1.</p></div>
+    <div class="card"><h4>List</h4><p>A queue of people: add at one end, take from the other.</p></div>
+    <div class="card"><h4>Set</h4><p>A bag of unique tags: each one appears once.</p></div>
+    <div class="card"><h4>Sorted set</h4><p>A scoreboard: members kept in order of their score.</p></div>
+  </div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Plain key-value store</h4><div class="flow v"><span class="n">download the whole scoreboard</span><span class="n">add 1 in your code</span><span class="n r">upload it again (and race other servers)</span></div></div>
+    <div><h4>Redis sorted set</h4><div class="flow v"><span class="n y">ZINCRBY scoreboard 1 product:501</span><span class="n g">done, in one step, on the server</span></div></div>
+  </div></div><figcaption>Why the value types matter: the work happens inside Redis, in one command.</figcaption></figure>
+  <ul>
+    <li><b>Part 2 gives each type its own lesson,</b> with what it is good for and how it works inside.</li>
+    <li><b>There are a few more</b> (HyperLogLog, streams), also in Part 2.</li>
+  </ul>
+  <details class="q"><summary>Which value type would you use for a leaderboard, and why not a string?</summary><div class="in">A sorted set: it keeps members ordered by score and can add to one score in a single command. With a string you would have to read, change and rewrite the whole leaderboard every time.</div></details>
+  <aside class="trk"><h4 data-id="shop keys">Follow Asha’s checkout</h4><div class="in"><p>Asha’s checkout uses every one of these: a string for the cached page, a hash for her session, a sorted set for the best-sellers board, and more. Lesson 00 lists them all.</p></div></aside>
+</section>
+
+<section class="s" id="morenodes" data-t="When one Redis is not enough">
+  <div class="sh"><span class="off">05</span><h2>When one Redis is not enough</h2></div>
+  
+  <div class="plain"><b>In plain words</b>One fridge can break, and one fridge can be too small. You can keep a second fridge with the same contents, ready if the first breaks (copies), or spread your food over several fridges, each holding a different shelf (splitting). This lesson only introduces the words; Parts 4 and 5 explain them properly.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>primary</b><span>The Redis server that accepts writes.</span></div>
+    <div><b>replica</b><span>A Redis server holding a live copy of the primary, for reads and as a spare.</span></div>
+    <div><b>failover</b><span>Switching to a replica when the primary dies.</span></div>
+    <div><b>Sentinel</b><span>Redis’s helper processes that watch the primary and run the failover.</span></div>
+    <div><b>Redis Cluster</b><span>Several primaries, each owning part of the keys, so data and load are split.</span></div>
+  </div>
+  <p class="lead">A single Redis server can fail or run out of memory, so real systems add copies for safety and split the data across machines for size.</p>
+  <figure><div class="canvas"><div class="flow v">
+    <span class="n y">One Redis<small>simple; a crash means an outage</small></span><i data-t="need it to survive a crash"></i>
+    <span class="n y">Primary + replicas + Sentinel<small>automatic failover</small></span><i data-t="data no longer fits one machine"></i>
+    <span class="n y">Redis Cluster<small>data split over several primaries</small></span>
+  </div></div><figcaption>The usual growth path. Most systems stop at the middle step.</figcaption></figure>
+  <details class="q"><summary>Do replicas let you store more data than fits on one server?</summary><div class="in">No. Each replica holds a full copy of the same data. Storing more needs splitting the data, which is what Redis Cluster does.</div></details>
+  <aside class="trk"><h4 data-id="shop">Follow Asha’s checkout</h4><div class="in"><p>The shop runs the middle step during the sale (Part 4) and later moves to a cluster as the cache grows (Part 5).</p></div></aside>
+</section>
+
+
 <div class="part" data-part="Why Redis"><h2>Part 1: Why Redis</h2><p>Memory, one thread, and when to say no</p></div>
 
 <section class="s" id="what" data-t="A data structure server">
-  <div class="sh"><span class="off">01</span><h2>A data structure server in RAM</h2></div>
+  <div class="sh"><span class="off">06</span><h2>A data structure server in RAM</h2></div>
+  
+  <div class="plain"><b>In plain words</b>This lesson puts the pieces from Part 0 together: Redis is one program holding all its data in memory, answering commands one at a time, optionally saving to disk, and optionally copying everything to spare servers. Each of those parts gets its own lessons later.</div>
+  <div class="words"><h4>New words</h4><div><b>round trip</b><span>One request from the app to Redis and the reply back.</span></div><div><b>pipelining</b><span>Sending several commands without waiting for each reply, to save round trips.</span></div></div>
   <p class="lead">Redis keeps every key in memory and stores values as ready-made data structures, so most commands finish in microseconds and the network trip is the slow part.</p>
   <div class="tip"><b>Think first.</b> A disk-backed database answers in 5 to 50 ms. Redis answers in well under 1 ms. Before reading on, guess where the difference comes from.</div>
   <figure><div class="canvas">
@@ -367,7 +518,10 @@ figure.big{max-width:none}
 </section>
 
 <section class="s" id="onethread" data-t="Why one thread is fast">
-  <div class="sh"><span class="off">02</span><h2>Why one thread is fast, and safe</h2></div>
+  <div class="sh"><span class="off">07</span><h2>Why one thread is fast, and safe</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Most servers use many workers in parallel, which then have to coordinate. Redis uses one worker that does one command at a time, very quickly. No coordination is needed, and as a bonus no command can ever be interrupted halfway by another.</div>
+  <div class="words"><h4>New words</h4><div><b>thread</b><span>One sequence of work inside a program. Many-threaded programs do several things at once.</span></div><div><b>event loop</b><span>A loop that waits for any connection with a request ready, handles it, and repeats.</span></div><div><b>atomic</b><span>Happening as one indivisible step: nothing else can run in the middle.</span></div></div>
   <p class="lead">Redis runs every command on a single thread, one after another, which removes locking costs and makes every single command atomic for free.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Many threads, shared data</h4><div class="flow v"><span class="n">thread A wants stock:501</span><span class="n r">lock, wait, unlock</span><span class="n">thread B wants stock:501</span></div><p style="font-size:.9rem;margin:.4rem 0 0">Locks, context switches and cache misses on every access.</p></div>
@@ -397,7 +551,9 @@ redis-1:6379&gt; DECR stock:501        <i># Bob, a microsecond later</i>
 </section>
 
 <section class="s" id="choose" data-t="When to choose Redis">
-  <div class="sh"><span class="off">03</span><h2>When to choose Redis, and when not to</h2></div>
+  <div class="sh"><span class="off">08</span><h2>When to choose Redis, and when not to</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Redis is excellent at some jobs and the wrong tool for others. The rule of thumb: fast data that fits in memory and could be rebuilt if lost belongs in Redis; anything you cannot afford to lose, or need to search in flexible ways, belongs in a database.</div>
   <p class="lead">Choose Redis when you need very fast access to data that fits in memory and can be rebuilt; refuse it when the data is your only copy or needs real queries.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   A{"Need sub-millisecond latency?"} -->|"Yes"| B{"Data fits in memory?"}
@@ -434,7 +590,10 @@ MySQL:  users, inventory (source of truth), orders</pre></div></aside>
 <div class="part" data-part="Data structures"><h2>Part 2: Data structures</h2><p>Pick the shape, get the speed</p></div>
 
 <section class="s" id="keys" data-t="Keys and expiry">
-  <div class="sh"><span class="off">04</span><h2>Keys, TTLs and how expiry really works</h2></div>
+  <div class="sh"><span class="off">09</span><h2>Keys, TTLs and how expiry really works</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Any key can be given a timer, after which Redis deletes it on its own. That is how caches stay fresh and sessions log out. This lesson shows how Redis actually notices that a key’s time is up.</div>
+  <div class="words"><h4>New words</h4><div><b>expire</b><span>Give a key a time to live, after which it is deleted.</span></div><div><b>lazy expiry</b><span>Checking a key’s timer only when someone reads it.</span></div><div><b>active expiry</b><span>A background sweep that looks for expired keys nobody has read.</span></div></div>
   <p class="lead">Every value lives under a string key, any key can carry a time to live, and Redis removes expired keys both when you touch them and with a small background sweep.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Lazy expiry</h4><div class="flow v"><span class="n">GET session:9f2c7a</span><i data-t="is it past its TTL?"></i><span class="n r">yes: delete it, reply nil</span></div></div>
@@ -458,7 +617,10 @@ redis-1:6379&gt; TTL cache:product:501
 </section>
 
 <section class="s" id="strings" data-t="Strings and counters">
-  <div class="sh"><span class="off">05</span><h2>Strings and counters</h2></div>
+  <div class="sh"><span class="off">10</span><h2>Strings and counters</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The string is Redis’s simplest value: one piece of data under one key. If that data is a whole number, Redis can add to it in place, which turns strings into safe counters shared by every server in your app.</div>
+  <div class="words"><h4>New words</h4><div><b>counter</b><span>A number you add to; in Redis, INCR and DECR change it in one atomic step.</span></div><div><b>NX</b><span>“Only if it does not exist yet.” Used to make sure only one client creates a key.</span></div></div>
   <p class="lead">A string holds any bytes up to 512 MB, and if those bytes look like an integer Redis can add to it atomically.</p>
   <figure><div class="canvas"><div class="row">
     <div class="bk"><b>cache:product:501</b><small>serialized JSON</small><span class="chip Y">{"id":501,"price":49.99,…}</span></div>
@@ -472,11 +634,11 @@ INCRBY stock:501 -1                  <i># same as DECR</i>
 SET lock:product:501 a7f3e1 NX EX 30 <i># set only if absent, expire in 30 s</i></pre>
   <ul>
     <li><b>O(1) for GET, SET, INCR.</b> <code>MGET</code> and <code>MSET</code> cost O(N) for N keys, but one round trip.</li>
-    <li><b>Counters are the superpower.</b> <code>INCR</code> with a TTL is a complete rate limiter in two commands (lesson 29).</li>
+    <li><b>Counters are the superpower.</b> <code>INCR</code> with a TTL is a complete rate limiter in two commands (lesson 34).</li>
     <li><b><code>SET … NX</code> is a primitive lock:</b> only one client can create the key. <span class="tag g">Guaranteed</span></li>
   </ul>
   <details class="q"><summary>Why is storing a whole user object as one JSON string awkward when you often change a single field?</summary><div class="in">To change one field you must read the whole JSON, edit it in the app, and write it all back, which is two round trips and a race between clients. A hash lets you change one field with HSET.</div></details>
-  <aside class="trk"><h4 data-id="cache:product:501">Follow Asha’s checkout</h4><div class="in"><p>The cached product is a 53-byte JSON string (computed from the value in lesson 01).</p>
+  <aside class="trk"><h4 data-id="cache:product:501">Follow Asha’s checkout</h4><div class="in"><p>The cached product is a 53-byte JSON string (computed from the value in lesson 06).</p>
   <pre class="code">redis-1:6379&gt; STRLEN cache:product:501
 (integer) 53
 redis-1:6379&gt; OBJECT ENCODING stock:501
@@ -484,7 +646,10 @@ redis-1:6379&gt; OBJECT ENCODING stock:501
 </section>
 
 <section class="s" id="hashes" data-t="Hashes">
-  <div class="sh"><span class="off">06</span><h2>Hashes</h2></div>
+  <div class="sh"><span class="off">11</span><h2>Hashes</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A hash is a small table of fields and values under one key, like a filled-in form. You can read or change one field without touching the others, which is exactly what you want for a user profile or a login session.</div>
+  <div class="words"><h4>New words</h4><div><b>field</b><span>One named entry inside a hash, like name or cart_items.</span></div><div><b>encoding</b><span>How Redis lays a value out in memory. Small values use a compact layout; big ones a faster, larger one.</span></div></div>
   <p class="lead">A hash is a small map of fields to values under one key, which is how you store an object and change one field at a time.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Small hash: listpack</h4><div class="log"><div class="cell pend"><b>f</b><span>user_id</span></div><div class="cell"><b>v</b><span>123</span></div><div class="cell pend"><b>f</b><span>name</span></div><div class="cell"><b>v</b><span>Asha</span></div><div class="cell pend"><b>f</b><span>cart</span></div><div class="cell"><b>v</b><span>1</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">One compact block of memory. Lookups scan it, which is fast for a few fields.</p></div>
@@ -510,7 +675,10 @@ redis-1:6379&gt; OBJECT ENCODING session:9f2c7a
 </section>
 
 <section class="s" id="lists" data-t="Lists and queues">
-  <div class="sh"><span class="off">07</span><h2>Lists and queues</h2></div>
+  <div class="sh"><span class="off">12</span><h2>Lists and queues</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A list is an ordered row of values where adding or removing at either end is instant. Push jobs on one end and pop them off the other and you have a queue; keep only the newest 100 and you have a recent-activity feed.</div>
+  <div class="words"><h4>New words</h4><div><b>queue</b><span>First in, first out: the oldest item is taken first.</span></div><div><b>blocking pop</b><span>BRPOP: wait until an item arrives instead of asking again and again.</span></div></div>
   <p class="lead">A list is an ordered sequence you push and pop at either end in O(1), which makes it a natural queue or a “latest N” feed.</p>
   <figure><div class="canvas scroll">
     <div class="flow" style="margin-bottom:.6rem"><span class="n g">producer<small>LPUSH</small></span><i></i>
@@ -537,7 +705,10 @@ redis-1:6379&gt; BRPOP queue:emails 30      <i># on the email worker</i>
 </section>
 
 <section class="s" id="sets" data-t="Sets">
-  <div class="sh"><span class="off">08</span><h2>Sets</h2></div>
+  <div class="sh"><span class="off">13</span><h2>Sets</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A set is a bag of unique values with no order. Adding the same value twice changes nothing, and asking “is X in the bag?” is instant. Redis can also compare two sets for you, for example to find what two users have in common.</div>
+  <div class="words"><h4>New words</h4><div><b>membership</b><span>Whether a value is in the set.</span></div><div><b>intersection</b><span>The values present in both sets.</span></div></div>
   <p class="lead">A set holds unique members with no order, so “is X in it?” and “add X once” are O(1), and sets can be intersected and unioned on the server.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>wishlist:123 (Asha)</h4><span class="chip">product:310</span><span class="chip Y">product:501</span><span class="chip Y">product:777</span></div>
@@ -549,7 +720,7 @@ SINTER wishlist:123 wishlist:25         <i># product:501, product:777</i>
 SCARD wishlist:123                      <i># 3, O(1)</i></pre>
   <ul>
     <li><b>Add, remove, check: O(1).</b> <code>SMEMBERS</code> and <code>SINTER</code> grow with set size.</li>
-    <li><b>Exact unique counting costs memory:</b> a set of a million user IDs is tens of megabytes. Lesson 10 counts the same thing in 12 KB.</li>
+    <li><b>Exact unique counting costs memory:</b> a set of a million user IDs is tens of megabytes. Lesson 15 counts the same thing in 12 KB.</li>
     <li><b>Small integer sets are stored as a sorted array</b> (intset) to save space. <span class="tag a">Added</span></li>
   </ul>
   <details class="q"><summary>You need “friends in common” for two users. Which structure and command?</summary><div class="in">A set of friend IDs per user and SINTER on the two keys. The server returns only the common members.</div></details>
@@ -559,7 +730,10 @@ SCARD wishlist:123                      <i># 3, O(1)</i></pre>
 </section>
 
 <section class="s" id="zsets" data-t="Sorted sets and skip lists">
-  <div class="sh"><span class="off">09</span><h2>Sorted sets and the skip list</h2></div>
+  <div class="sh"><span class="off">14</span><h2>Sorted sets and the skip list</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A sorted set is like a set where every member carries a score, and Redis keeps the members in score order at all times. That makes leaderboards, rankings and “top 10” lists cheap, even with millions of members.</div>
+  <div class="words"><h4>New words</h4><div><b>score</b><span>The number each member is sorted by.</span></div><div><b>rank</b><span>A member’s position in the order, starting at 0.</span></div><div><b>skip list</b><span>Several linked lists stacked like express lanes, used to find any score quickly.</span></div></div>
   <p class="lead">A sorted set keeps unique members ordered by a numeric score, and a skip list inside lets Redis insert, rank and range-read in O(log N).</p>
   <figure><div class="canvas"><h4 style="margin:0 0 .4rem;font:700 .95rem var(--display)">Leaderboard sorted set: sales:2026-10-04</h4><div class="row">
     <div class="bk"><b>product:777</b><span class="chip">905</span></div>
@@ -610,7 +784,10 @@ redis-1:6379&gt; ZREVRANGE sales:2026-10-04 0 2 WITHSCORES
 </section>
 
 <section class="s" id="hll" data-t="HyperLogLog">
-  <div class="sh"><span class="off">10</span><h2>HyperLogLog: counting without remembering</h2></div>
+  <div class="sh"><span class="off">15</span><h2>HyperLogLog: counting without remembering</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Counting how many different visitors you had normally means remembering every visitor. HyperLogLog gives a very close estimate while remembering almost nothing, using a few kilobytes no matter how many visitors there are.</div>
+  <div class="words"><h4>New words</h4><div><b>cardinality</b><span>The number of distinct items.</span></div><div><b>estimate</b><span>A count that is close but not exact; here usually within 1%.</span></div></div>
   <p class="lead">HyperLogLog estimates how many distinct items it has seen using at most 12 KB, by remembering patterns in hashes instead of the items themselves.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Exact: a set</h4><div class="flow v"><span class="n">1,000,000 user IDs</span><span class="n r">tens of MB</span><span class="n g">exact count</span></div></div>
@@ -635,7 +812,10 @@ redis-1:6379&gt; PFCOUNT uv:product:501:2026-10-04
 </section>
 
 <section class="s" id="streams" data-t="Streams">
-  <div class="sh"><span class="off">11</span><h2>Streams: a log with consumer groups</h2></div>
+  <div class="sh"><span class="off">16</span><h2>Streams: a log with consumer groups</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A stream is an ever-growing log of events, each with a time-based ID. Unlike a list, reading an event does not remove it, and groups of workers can share the events while Redis remembers which ones each has finished.</div>
+  <div class="words"><h4>New words</h4><div><b>event</b><span>A record that something happened, such as “order 7001 placed”.</span></div><div><b>consumer group</b><span>A named team of readers that share a stream’s events.</span></div><div><b>acknowledge (XACK)</b><span>Tell Redis an event has been fully processed.</span></div></div>
   <p class="lead">A stream is an append-only log of entries with time-based IDs, and consumer groups let several workers share it with acknowledgements, so nothing is lost when one crashes.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant A as checkout-api
@@ -666,7 +846,9 @@ redis-1:6379&gt; XPENDING events:orders mailers
 </section>
 
 <section class="s" id="pick" data-t="Choosing a structure">
-  <div class="sh"><span class="off">12</span><h2>Choosing a data structure</h2></div>
+  <div class="sh"><span class="off">17</span><h2>Choosing a data structure</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Choosing the right value type is the most important Redis decision. The right type turns a job into one fast command; the wrong one turns it into slow, racy code in your app. This lesson is the cheat sheet.</div>
   <p class="lead">Start from what you are building, and the structure follows; the wrong choice turns an O(1) job into an O(N) one.</p>
   <figure class="big"><div class="board"><pre class="mmd">flowchart TB
   subgraph Q["What are you building?"]
@@ -723,7 +905,10 @@ TYPE events:orders              stream</pre></div></aside>
 <div class="part" data-part="Surviving restarts"><h2>Part 3: Surviving restarts</h2><p>Snapshots, logs, and what a crash costs</p></div>
 
 <section class="s" id="rdb" data-t="RDB snapshots">
-  <div class="sh"><span class="off">13</span><h2>RDB snapshots: fork and copy-on-write</h2></div>
+  <div class="sh"><span class="off">18</span><h2>RDB snapshots: fork and copy-on-write</h2></div>
+  
+  <div class="plain"><b>In plain words</b>One way to save memory to disk is to take a photo of everything at once and write it to a file. Redis does this without pausing, using a trick the operating system provides for copying a running program cheaply.</div>
+  <div class="words"><h4>New words</h4><div><b>snapshot</b><span>A copy of all the data as it was at one moment.</span></div><div><b>fork</b><span>The operating system call that creates a copy of a running program.</span></div><div><b>copy-on-write</b><span>After a fork, memory is shared until one side changes a page; only then is that page copied.</span></div></div>
   <p class="lead">To save a snapshot without pausing, Redis forks a child process that writes the data to <code>dump.rdb</code> while the parent keeps serving clients, and the OS copies only the memory pages that change meanwhile.</p>
   <div class="tip"><b>Think first.</b> Writing 10 GB to disk takes many seconds. How can Redis keep answering writes during that time and still save a consistent point-in-time picture?</div>
   <figure><div class="board"><pre class="mmd">flowchart LR
@@ -757,7 +942,10 @@ rdb_last_cow_size:41943040            <i># 40 MB copied during the last save</i>
 </section>
 
 <section class="s" id="aof" data-t="AOF and fsync">
-  <div class="sh"><span class="off">14</span><h2>AOF: logging every write</h2></div>
+  <div class="sh"><span class="off">19</span><h2>AOF: logging every write</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The other way to save to disk is to write down every change as it happens, like a diary, and replay the diary after a restart. How often the diary is forced onto the disk decides how much you can lose.</div>
+  <div class="words"><h4>New words</h4><div><b>append-only file (AOF)</b><span>A file Redis only adds to, with one entry per write command.</span></div><div><b>fsync</b><span>Forcing data out of the operating system’s memory buffers onto the physical disk.</span></div></div>
   <p class="lead">With the append-only file on, Redis writes every change command to a log and replays it at startup, and one setting, <code>appendfsync</code>, decides how much a crash can lose.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n b">DECR stock:501</span><i data-t="apply in RAM"></i><span class="n y">append to AOF buffer</span><i data-t="write()"></i><span class="n">OS page cache</span><i data-t="fsync()"></i><span class="n g">on disk</span>
@@ -787,7 +975,10 @@ stock:501</pre></div></aside>
 </section>
 
 <section class="s" id="rewrite" data-t="AOF rewrite and hybrid">
-  <div class="sh"><span class="off">15</span><h2>AOF rewrite and hybrid persistence</h2></div>
+  <div class="sh"><span class="off">20</span><h2>AOF rewrite and hybrid persistence</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A diary of every change grows forever. Now and then Redis rewrites it as the shortest list of commands that produces today’s data, and stores the start of it as a snapshot so it loads quickly.</div>
+  <div class="words"><h4>New words</h4><div><b>rewrite</b><span>Replacing the long log with a short one that gives the same result.</span></div><div><b>hybrid persistence</b><span>A snapshot followed by a short log of changes since.</span></div></div>
   <p class="lead">An AOF grows forever, so Redis periodically rewrites it as the shortest set of commands that rebuilds today’s data, and stores that base as an RDB snapshot for fast loading.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Before rewrite</h4><pre class="code" style="margin:0">SET stock:501 10
@@ -806,7 +997,7 @@ auto-aof-rewrite-percentage 100     <i># rewrite when the log doubles…</i>
 auto-aof-rewrite-min-size 64mb      <i># …and is at least 64 MB</i></pre>
   <ul>
     <li><b>Hybrid = fast load + small loss window.</b> Load the RDB base quickly, replay only the short tail. <span class="tag d">Default</span></li>
-    <li><b>Rewrites fork too,</b> so the copy-on-write memory note from lesson 13 applies.</li>
+    <li><b>Rewrites fork too,</b> so the copy-on-write memory note from lesson 18 applies.</li>
   </ul>
   <details class="q"><summary>Why does an AOF rewrite read the in-memory data rather than compacting the old log file?</summary><div class="in">The current data already is the final state. Writing one command per key from memory produces the shortest possible log, without parsing millions of old commands.</div></details>
   <aside class="trk"><h4 data-id="stock:501">Follow Asha’s checkout</h4><div class="in"><p>After the sale sells out, a rewrite collapses ten DECRs into one line in the new base. <span class="tag x">Example value</span></p>
@@ -818,7 +1009,9 @@ aof_last_bgrewrite_status:ok</pre></div></aside>
 </section>
 
 <section class="s" id="persistpick" data-t="Choosing persistence">
-  <div class="sh"><span class="off">16</span><h2>Choosing persistence</h2></div>
+  <div class="sh"><span class="off">21</span><h2>Choosing persistence</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Snapshots and logs can be combined, or skipped. The right choice depends on one question per kind of data: how much of it can you afford to lose, and could you rebuild it from somewhere else?</div>
   <p class="lead">Pick persistence by asking one question about each key: how much of it can you afford to lose, and can you rebuild it?</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   Q["What is your durability requirement?"]:::ctl --> A{"Can lose minutes of data?"}
@@ -857,7 +1050,10 @@ save 3600 1 300 100 60 10000</pre></div></aside>
 <div class="part" data-part="Replication and failover"><h2>Part 4: Replication and failover</h2><p>Copies, and who decides who is in charge</p></div>
 
 <section class="s" id="repl" data-t="Replication">
-  <div class="sh"><span class="off">17</span><h2>Replication: full sync and partial resync</h2></div>
+  <div class="sh"><span class="off">22</span><h2>Replication: full sync and partial resync</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A replica is a second Redis server that keeps a live copy of the primary. It first copies everything once, then receives every change as it happens. If it briefly loses connection, it asks only for what it missed.</div>
+  <div class="words"><h4>New words</h4><div><b>full sync</b><span>Copying the whole data set to a replica.</span></div><div><b>partial resync</b><span>Sending a reconnecting replica only the changes it missed.</span></div><div><b>backlog</b><span>A buffer of recent changes the primary keeps for reconnecting replicas.</span></div></div>
   <p class="lead">A replica first copies a full snapshot from the primary, then receives every write as a stream; after a short disconnect it asks only for what it missed.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   C["Clients"]
@@ -909,7 +1105,10 @@ repl_backlog_size:1048576</pre></div></aside>
 </section>
 
 <section class="s" id="wait" data-t="Async writes and WAIT">
-  <div class="sh"><span class="off">18</span><h2>Asynchronous writes, and what WAIT really buys</h2></div>
+  <div class="sh"><span class="off">23</span><h2>Asynchronous writes, and what WAIT really buys</h2></div>
+  
+  <div class="plain"><b>In plain words</b>By default the primary answers your command before any replica has copied it, so a crash at the wrong moment loses it. The WAIT command lets you hold the answer until replicas confirm, which narrows that window but does not close it entirely.</div>
+  <div class="words"><h4>New words</h4><div><b>asynchronous</b><span>Not waiting: the primary replies first and copies later.</span></div><div><b>split brain</b><span>Two servers both believing they are the primary.</span></div></div>
   <p class="lead">The primary replies before replicas have a write, so a crash can lose it; WAIT lets one client block until replicas confirm, which narrows that window but does not close it.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Default: async</h4><div class="flow v"><span class="n b">DECR stock:501</span><span class="n g">reply 9 to Asha</span><span class="n">replicas get it ~ms later</span></div></div>
@@ -932,7 +1131,10 @@ redis-1:6379&gt; WAIT 1 100
 </section>
 
 <section class="s" id="sentinel" data-t="Sentinel">
-  <div class="sh"><span class="off">19</span><h2>Sentinel: automatic failover</h2></div>
+  <div class="sh"><span class="off">24</span><h2>Sentinel: automatic failover</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Replicas are useless in a crash unless something promotes one. Sentinels are small watcher processes: they keep checking the primary, vote when it looks dead, promote the best replica, and tell apps where the new primary is.</div>
+  <div class="words"><h4>New words</h4><div><b>quorum</b><span>How many Sentinels must agree the primary is down.</span></div><div><b>majority</b><span>More than half of all Sentinels, needed to choose who runs the failover.</span></div><div><b>promote</b><span>Turn a replica into the new primary.</span></div></div>
   <p class="lead">Sentinels are separate processes that watch the primary, agree when it is really down, promote the best replica, and tell clients the new address.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   subgraph SC["Sentinel cluster (3 or more)"]
@@ -997,7 +1199,10 @@ sentinel parallel-syncs shop 1</pre>
 </section>
 
 <section class="s" id="smap" data-t="Where it lives, who calls whom">
-  <div class="sh"><span class="off">20</span><h2>Where it lives and who calls whom</h2></div>
+  <div class="sh"><span class="off">25</span><h2>Where it lives and who calls whom</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows, but rarely say where each piece of data physically lives, or which program connects to which. This lesson answers both for the setup you now know: the app, the primary, the replicas and the Sentinels.</div>
+  <div class="words"><h4>New words</h4><div><b>port</b><span>A number identifying a network service on a machine. Redis uses 6379, Sentinel 26379.</span></div></div>
   <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port holds each piece of state, and who opens each connection.</p>
   <h3>Where each thing lives</h3>
   <figure><div class="canvas"><div class="zones">
@@ -1044,7 +1249,10 @@ sentinel parallel-syncs shop 1</pre>
 <div class="part" data-part="Redis Cluster"><h2>Part 5: Redis Cluster</h2><p>Beyond one machine’s memory</p></div>
 
 <section class="s" id="slots" data-t="Hash slots">
-  <div class="sh"><span class="off">21</span><h2>Hash slots</h2></div>
+  <div class="sh"><span class="off">26</span><h2>Hash slots</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When data no longer fits on one machine, Redis Cluster splits it across several primaries. Every key is assigned to one of 16,384 numbered slots by a hash of its name, and each primary owns a range of slots.</div>
+  <div class="words"><h4>New words</h4><div><b>hash</b><span>A function that turns a key into a number that looks random but is always the same for the same key.</span></div><div><b>slot</b><span>One of 16,384 buckets that keys are sorted into.</span></div><div><b>shard</b><span>One primary and its replicas, owning part of the slots.</span></div></div>
   <p class="lead">Redis Cluster hashes every key into one of 16,384 slots and gives each master a share of the slots, so adding a node means moving slots, not rehashing every key.</p>
   <figure><div class="board"><pre class="mmd">flowchart LR
   C["Client"]
@@ -1094,7 +1302,10 @@ m1:6379&gt; CLUSTER KEYSLOT cache:product:501
 </section>
 
 <section class="s" id="moved" data-t="MOVED, ASK and smart clients">
-  <div class="sh"><span class="off">22</span><h2>MOVED, ASK and smart clients</h2></div>
+  <div class="sh"><span class="off">27</span><h2>MOVED, ASK and smart clients</h2></div>
+  
+  <div class="plain"><b>In plain words</b>In a cluster, the app may ask the wrong server for a key. That server does not fetch it for you; it replies with the right server’s address. Good client libraries remember these answers, so they rarely ask the wrong server twice.</div>
+  <div class="words"><h4>New words</h4><div><b>redirect</b><span>A reply that says “not here, ask that server”.</span></div><div><b>smart client</b><span>A client library that keeps its own map of which server owns which slot.</span></div></div>
   <p class="lead">Any node answers “not mine, ask that one” for a key it does not own, and smart clients cache the slot table so that almost every command goes to the right node first time.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant A as checkout-api
@@ -1127,7 +1338,10 @@ $ redis-cli -c -h m1 HGETALL session:9f2c7a      <i># -c: follow redirects</i>
 </section>
 
 <section class="s" id="hashtags" data-t="Hash tags and multi-key limits">
-  <div class="sh"><span class="off">23</span><h2>Hash tags and multi-key limits</h2></div>
+  <div class="sh"><span class="off">28</span><h2>Hash tags and multi-key limits</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A command that touches several keys must find them all on one server. Curly braces in key names let you choose which part of the name is hashed, so related keys land together.</div>
+  <div class="words"><h4>New words</h4><div><b>multi-key command</b><span>A command that reads or writes several keys at once, like MGET.</span></div><div><b>hash tag</b><span>The part of a key inside {braces}: only it decides the slot.</span></div></div>
   <p class="lead">A command that touches several keys only works in a cluster when all those keys share a slot, and hash tags let you force that.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Without a tag</h4><span class="chip">user:123:cart → slot 12525 (m3)</span><span class="chip X">user:123:session → slot 10182 (m2)</span><p style="font-size:.9rem;margin:.4rem 0 0">Different nodes. <code>MGET</code> on both fails.</p></div>
@@ -1155,7 +1369,10 @@ m3:6379&gt; CLUSTER KEYSLOT {user:123}:session
 </section>
 
 <section class="s" id="clusterops" data-t="Cluster vs Sentinel">
-  <div class="sh"><span class="off">24</span><h2>Growing, failing over, and Cluster vs Sentinel</h2></div>
+  <div class="sh"><span class="off">29</span><h2>Growing, failing over, and Cluster vs Sentinel</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A cluster can grow by moving slots to new servers while it keeps running, and it can replace a dead primary on its own. This lesson also answers the practical question: do you need a cluster at all, or is Sentinel enough?</div>
+  <div class="words"><h4>New words</h4><div><b>resharding</b><span>Moving slots, and their keys, between servers.</span></div></div>
   <p class="lead">A cluster grows by moving slots online, heals itself by promoting a replica when a master dies, and is worth its extra complexity only when one node is not enough.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>before</label><div class="cell pend"><b>m1</b><span>0–5460</span></div><div class="cell pend"><b>m2</b><span>5461–10922</span></div><div class="cell pend"><b>m3</b><span>10923–16383</span></div></div>
@@ -1196,7 +1413,10 @@ cluster_size:3</pre></div></aside>
 <div class="part" data-part="Memory"><h2>Part 6: Memory</h2><p>What happens when RAM runs out</p></div>
 
 <section class="s" id="evict" data-t="maxmemory and eviction">
-  <div class="sh"><span class="off">25</span><h2>maxmemory and eviction policies</h2></div>
+  <div class="sh"><span class="off">30</span><h2>maxmemory and eviction policies</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Redis has a memory limit you set. When it is full, it must either refuse new writes or delete something. The eviction policy is the rule for which keys it may delete.</div>
+  <div class="words"><h4>New words</h4><div><b>maxmemory</b><span>The memory limit you give Redis.</span></div><div><b>eviction</b><span>Deleting keys to make room.</span></div><div><b>OOM</b><span>Out of memory: the error writes get when Redis may not evict.</span></div></div>
   <p class="lead">When Redis reaches its memory limit, the eviction policy decides whether to reject writes or delete some keys to make room.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   Q{"Is this a cache?"} -->|"No"| NE["noeviction"]
@@ -1236,7 +1456,10 @@ redis-1:6379&gt; TTL stock:501
 </section>
 
 <section class="s" id="lrulfu" data-t="LRU vs LFU">
-  <div class="sh"><span class="off">26</span><h2>LRU vs LFU</h2></div>
+  <div class="sh"><span class="off">31</span><h2>LRU vs LFU</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When the cache is full, which item should go? LRU throws out what was used longest ago; LFU throws out what is used least often. They behave very differently when something reads lots of data just once.</div>
+  <div class="words"><h4>New words</h4><div><b>LRU</b><span>Least recently used.</span></div><div><b>LFU</b><span>Least frequently used.</span></div><div><b>cache hit</b><span>Finding what you need in the cache.</span></div></div>
   <p class="lead">LRU keeps what was used recently; LFU keeps what is used often, and the difference shows the moment something reads a lot of data once.</p>
   <div class="demo">
     <h4>Try it: a batch job scans the catalog while shoppers browse</h4>
@@ -1258,7 +1481,10 @@ redis-1:6379&gt; TTL stock:501
 </section>
 
 <section class="s" id="memhyg" data-t="Memory hygiene">
-  <div class="sh"><span class="off">27</span><h2>Memory hygiene: big keys, hot keys, and KEYS</h2></div>
+  <div class="sh"><span class="off">32</span><h2>Memory hygiene: big keys, hot keys, and KEYS</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Because Redis does one thing at a time, one huge key or one expensive command makes everyone wait. This lesson covers the habits that keep a busy Redis healthy.</div>
+  <div class="words"><h4>New words</h4><div><b>big key</b><span>One key holding a very large value, slow to read or delete.</span></div><div><b>hot key</b><span>One key read so often that its server becomes a bottleneck.</span></div><div><b>SCAN</b><span>Walking through keys a small batch at a time instead of all at once.</span></div></div>
   <p class="lead">Most Redis incidents come from three habits: one huge key, one overloaded key, and one command that walks every key while everyone waits.</p>
   <div class="cards">
     <div class="card"><h4>Big key</h4><p>A hash with 5 million fields. <code>DEL</code> or <code>HGETALL</code> on it blocks the thread. Split it, and use <code>UNLINK</code> to delete in the background.</p></div>
@@ -1271,7 +1497,7 @@ redis-cli --bigkeys                         <i># sample the keyspace for the lar
 INFO memory                                 <i># used_memory, maxmemory, fragmentation</i></pre>
   <h3>Saving memory</h3>
   <ul>
-    <li><b>Group small fields in a hash</b> rather than many keys (lesson 06).</li>
+    <li><b>Group small fields in a hash</b> rather than many keys (lesson 11).</li>
     <li><b>Set TTLs</b> on everything that is a cache.</li>
     <li><b>Compress large values</b> in the app before <code>SET</code>.</li>
     <li><b>Short key names help only at huge key counts.</b> Readability usually wins. <span class="tag s">Simplified</span></li>
@@ -1290,7 +1516,10 @@ mem_fragmentation_ratio:1.08</pre></div></aside>
 <div class="part" data-part="Patterns"><h2>Part 7: Patterns</h2><p>The designs interviews ask for</p></div>
 
 <section class="s" id="cacheaside" data-t="Cache-aside">
-  <div class="sh"><span class="off">28</span><h2>Cache-aside, and how caches go wrong</h2></div>
+  <div class="sh"><span class="off">33</span><h2>Cache-aside, and how caches go wrong</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The most common way to use Redis: the app asks Redis first, and only on a miss asks the database, then saves the answer in Redis for next time. The tricky parts are keeping the copy fresh and surviving many misses at once.</div>
+  <div class="words"><h4>New words</h4><div><b>cache miss</b><span>The data is not in the cache, so the slow source must be asked.</span></div><div><b>stale</b><span>Out of date compared with the database.</span></div><div><b>invalidate</b><span>Delete a cached copy because the original changed.</span></div></div>
   <p class="lead">The app checks Redis first, falls back to the database on a miss and fills the cache for next time; the hard parts are keeping it fresh and surviving a burst of misses.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   RQ["Request: product 501"] --> Q{"In cache?"}
@@ -1331,7 +1560,10 @@ keyspace_misses:41077            <i># hit ratio = 9822410 / (9822410 + 41077) = 
 </section>
 
 <section class="s" id="ratelimit" data-t="Rate limiting">
-  <div class="sh"><span class="off">29</span><h2>Rate limiting: three algorithms</h2></div>
+  <div class="sh"><span class="off">34</span><h2>Rate limiting: three algorithms</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A rate limiter says “at most 5 checkouts per minute per user”. Every app server must share the same count, so the count lives in Redis. There are three common ways to count, each with a different trade-off.</div>
+  <div class="words"><h4>New words</h4><div><b>window</b><span>The period being counted, such as the last 60 seconds.</span></div><div><b>burst</b><span>Many requests arriving close together.</span></div><div><b>token bucket</b><span>A bucket that refills at a fixed rate; each request spends a token.</span></div></div>
   <p class="lead">Every rate limiter counts requests in a window of time; fixed windows are cheapest, sliding windows are exact, and token buckets allow controlled bursts.</p>
   <div class="cards">
     <div class="card"><h4>Fixed window</h4><pre class="code" style="margin:.3rem 0">INCR rl:123:202610041000
@@ -1364,7 +1596,10 @@ PEXPIRE rl:checkout:123 60000
 </section>
 
 <section class="s" id="locks" data-t="Distributed locks and Redlock">
-  <div class="sh"><span class="off">30</span><h2>Distributed locks and Redlock</h2></div>
+  <div class="sh"><span class="off">35</span><h2>Distributed locks and Redlock</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When only one worker should do a job at a time, workers can agree to first create a special key: whoever creates it holds the lock. The key has a timer so a crashed worker cannot hold it forever.</div>
+  <div class="words"><h4>New words</h4><div><b>distributed lock</b><span>A lock shared by processes on different machines.</span></div><div><b>lease</b><span>A lock that expires after a set time.</span></div><div><b>fencing token</b><span>An increasing number given with each lock, so stale holders can be rejected.</span></div></div>
   <p class="lead">A Redis lock is a key that only one client can create, with a token so only the owner can release it and a TTL so a crashed owner cannot hold it forever.</p>
   <pre class="code"><i># acquire: only if absent, auto-expire after 30 s, value = a random token</i>
 SET lock:product:501 a7f3e1c9 NX PX 30000
@@ -1414,7 +1649,10 @@ redis-1:6379&gt; SET lock:product:501 b21d0f44 NX PX 30000     <i># the second j
 </section>
 
 <section class="s" id="pubsub" data-t="Sessions and Pub/Sub">
-  <div class="sh"><span class="off">31</span><h2>Sessions, and Pub/Sub vs Streams</h2></div>
+  <div class="sh"><span class="off">36</span><h2>Sessions, and Pub/Sub vs Streams</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Sessions are a natural fit for hashes with a timer. Pub/Sub is Redis’s live broadcast: publish a message to a channel and everyone listening right now gets it, but nobody who is not listening ever will.</div>
+  <div class="words"><h4>New words</h4><div><b>session</b><span>Data that remembers a logged-in user between requests.</span></div><div><b>channel</b><span>A named topic for Pub/Sub messages.</span></div><div><b>subscriber</b><span>A client listening to a channel.</span></div></div>
   <p class="lead">Sessions are hashes with a sliding TTL; Pub/Sub pushes live messages to whoever is listening right now and forgets them, which is exactly right for some jobs and wrong for others.</p>
   <h3>Sessions</h3>
   <pre class="code">HSET session:9f2c7a user_id 123 name "Asha" cart_items 1
@@ -1442,7 +1680,10 @@ DEL session:9f2c7a                 <i># logout</i></pre>
 <div class="part" data-part="Atomic multi-step work"><h2>Part 8: Atomic multi-step work</h2><p>When one command is not enough</p></div>
 
 <section class="s" id="multi" data-t="MULTI, EXEC and WATCH">
-  <div class="sh"><span class="off">32</span><h2>MULTI, EXEC and WATCH</h2></div>
+  <div class="sh"><span class="off">37</span><h2>MULTI, EXEC and WATCH</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Sometimes several commands must run together with nothing in between. MULTI and EXEC queue commands and run them as a block. WATCH adds a check: if a key you looked at changed meanwhile, the block is cancelled and you try again.</div>
+  <div class="words"><h4>New words</h4><div><b>transaction</b><span>A group of commands run together.</span></div><div><b>optimistic locking</b><span>Not locking up front, but detecting a conflict at the end and retrying.</span></div></div>
   <p class="lead">MULTI queues commands and EXEC runs them back to back with nothing in between, and WATCH cancels the whole batch if a key changed since you read it.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant A as Asha's request
@@ -1476,7 +1717,10 @@ redis-1:6379(TX)&gt; EXEC
 </section>
 
 <section class="s" id="lua" data-t="Lua scripts">
-  <div class="sh"><span class="off">33</span><h2>Lua scripts</h2></div>
+  <div class="sh"><span class="off">38</span><h2>Lua scripts</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Lua is a small programming language that runs inside Redis. A script can read values, make decisions and write, all as one uninterruptible step, so “check the stock, then sell” cannot be split by another client.</div>
+  <div class="words"><h4>New words</h4><div><b>script</b><span>A small program sent to Redis and run on the server.</span></div><div><b>EVALSHA</b><span>Run a script already stored in Redis by its ID, instead of sending its text each time.</span></div></div>
   <p class="lead">A Lua script runs on the server as one atomic step, so you can read, decide and write in a single round trip with no retries.</p>
   <pre class="code"><i>-- reserve.lua: one unit per buyer, never below zero</i>
 local stock = tonumber(redis.call('GET', KEYS[1]) or '0')
@@ -1523,7 +1767,9 @@ redis-1:6379&gt; EVALSHA 9b8e4c… 2 stock:501 buyers:501 123
 <div class="part" data-part="Choose and revise"><h2>Part 9: Choose and revise</h2><p>Compare, test yourself, prove it</p></div>
 
 <section class="s" id="vs" data-t="Redis vs the alternatives">
-  <div class="sh"><span class="off">34</span><h2>Redis vs the alternatives</h2></div>
+  <div class="sh"><span class="off">39</span><h2>Redis vs the alternatives</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Redis is rarely the only data store in a design. The useful question is which job each tool does best, and where they meet.</div>
   <p class="lead">Redis is rarely the only store in a design; the useful comparison is which job each tool does best and where they meet.</p>
   <h3>Redis vs Memcached</h3>
   <div class="tw"><table>
@@ -1569,7 +1815,9 @@ Kafka:  (later) the company-wide order event pipeline; events:orders feeds only 
 </section>
 
 <section class="s" id="srev" data-t="Revision and glossary">
-  <div class="sh"><span class="off">35</span><h2>Quick revision and glossary</h2></div>
+  <div class="sh"><span class="off">40</span><h2>Quick revision and glossary</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten in the glossary.</div>
   <p class="lead">Test yourself, then look up any term.</p>
   <div class="demo selftest" id="selftest"></div>
   <details class="q"><summary>Explain in one sentence why Redis is fast and why a single slow command hurts everyone.</summary><div class="in">All data is in RAM and one thread runs commands without locks, so each is microseconds; but because there is one thread, a slow command makes every other client wait.</div></details>
@@ -1603,7 +1851,9 @@ Kafka:  (later) the company-wide order event pipeline; events:orders feeds only 
 </section>
 
 <section class="s" id="slab" data-t="Proof checklist">
-  <div class="sh"><span class="off">36</span><h2>Proof checklist</h2></div>
+  <div class="sh"><span class="off">41</span><h2>Proof checklist</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a laptop running Redis. These experiments show you how.</div>
   <p class="lead">14 experiments you can run on a laptop with <code>redis-server</code> and <code>redis-cli</code> (Docker: <code>docker run -p 6379:6379 redis:7</code>). Each settles a tagged statement from the lessons.</p>
   <p id="labProg" aria-live="polite"></p>
   <div class="tw" style="max-width:none"><table class="lab">
@@ -1713,7 +1963,7 @@ const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
   terms.sort((a,b)=>b.name.length-a.name.length);
   terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
   /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
-  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk';
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk,.words';
   lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
     nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
       for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;
