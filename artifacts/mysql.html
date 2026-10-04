@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MySQL, from one query to a sharded fleet</title>
+<title>MySQL, from zero to a sharded fleet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -256,14 +256,22 @@ figure.big{max-width:none}
 .cell.lost{border-color:var(--bad)}
 .cell.lost span{background:var(--bad-bg);color:var(--ink)}
 .cards .flow{margin:.4rem 0}
-.card pre.code{font-size:.78rem;padding:.5rem .6rem}
+.card pre.code{font-size:.78rem;padding:.5rem .6rem;white-space:pre-wrap}
 .ctrls input[type=checkbox]{min-width:0;width:auto}
+/* beginner layer */
+.plain{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;font-size:1.02rem}
+.plain>b:first-child{display:block;font:700 .82rem var(--display);color:var(--ok);letter-spacing:.02em;margin-bottom:.25rem}
+.words{display:grid;gap:.3rem;margin:.4rem 0 1.1rem;max-width:72ch;font-size:.93rem}
+.words>h4{margin:0 0 .1rem;font:700 .82rem var(--display);color:var(--muted)}
+.words>div{display:grid;grid-template-columns:minmax(7.5rem,max-content) 1fr;gap:.7rem;padding:.35rem .6rem;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.words>div>b{font-family:var(--mono);font-size:.86rem}
+@media (max-width:520px){.words>div{grid-template-columns:1fr;gap:.1rem}}
 </style>
 </head>
 <body>
 <div class="top">
   <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
-  <strong>MySQL, from one query to a sharded fleet</strong>
+  <strong>MySQL, from zero to a sharded fleet</strong>
   <button class="btn" id="themeBtn">Dark theme</button>
   <div id="bar"></div>
 </div>
@@ -271,8 +279,8 @@ figure.big{max-width:none}
 <nav id="toc" aria-label="Contents"></nav>
 <main>
 <div class="hero">
-  <h1>Log the change. Cache the page. Copy the log.</h1>
-  <p>37 short lessons on MySQL and InnoDB for system design: storage internals, indexes, locking, replication and sharding. One order is followed through every lesson with real statements and output, and the last lesson is a checklist to prove it on your own server.</p>
+  <h1>Keep data safe, find it fast, and copy it to grow.</h1>
+  <p>A course that starts from zero. Part 0 explains what a database is, tables, SQL, transactions and indexes in plain words. Then it goes deep: how InnoDB stores data, how indexes and locks work, how replication and sharding scale MySQL. One purchase is followed through every lesson, and the last lesson is a checklist to prove it all on your own server.</p>
   <div class="canvas herolog scroll">
     <div class="flow" style="margin-bottom:1rem"><span class="n g">checkout-api<small>web-1, web-2, web-3</small></span><i data-t="SQL"></i><span class="n p">ProxySQL<small>routes reads and writes</small></span><i data-t="writes"></i><span class="n y">db-primary<small>InnoDB</small></span><i data-t="binlog stream"></i><span class="n b">db-replica-1, db-replica-2<small>serve reads</small></span></div>
     <div class="log"><label>redo log</label><div class="cell done"><b>LSN …640</b><span>inventory 501</span></div><div class="cell pend new"><b>LSN …712</b><span>order 7001</span></div><div class="cell ghost"><b>next</b><span>…</span></div></div>
@@ -289,6 +297,8 @@ figure.big{max-width:none}
 
 <section class="s" id="s0" data-t="Running example and tags">
   <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  
+  <div class="plain"><b>In plain words</b>This course follows one purchase from beginning to end: Asha buys a keyboard from an online shop. Do not worry if the SQL and the table below look unfamiliar. Part 0, right after this lesson, explains every piece from zero. Come back here whenever you want to look up a name or a number.</div>
   <p class="lead">One order is followed through every lesson. Look for the yellow “Follow order 7001” box at the end of each one.</p>
   <pre class="code"><i>-- Asha (user 123) buys one Keyboard (product 501) for 49.99</i>
 START TRANSACTION;
@@ -350,10 +360,180 @@ CREATE TABLE orders (
   <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>.</p>
 </section>
 
+<div class="part" data-part="Start here"><h2>Part 0: Start here</h2><p>No database knowledge needed</p></div>
+
+<section class="s" id="whydb" data-t="Why a database at all">
+  <div class="sh"><span class="off">01</span><h2>Why a database at all?</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Imagine an online shop that writes every order into a spreadsheet file. Two customers buy at the same moment and one order overwrites the other. The power cuts halfway through saving and the file is corrupted. Finding one order among ten million means reading the whole file. A database solves exactly these three problems.</div>
+  <p class="lead">A database is a program whose whole job is to remember data safely, let many people change it at the same time, and find any piece of it quickly.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>A plain file</h4><div class="flow v"><span class="n r">two writers at once: one is lost</span><span class="n r">power cut mid-save: file broken</span><span class="n r">find one order: read everything</span></div></div>
+    <div><h4>A database</h4><div class="flow v"><span class="n g">writers take turns safely</span><span class="n g">a crash never leaves half a change</span><span class="n g">indexes jump straight to the order</span></div></div>
+  </div></div><figcaption>The same three situations, handled by a file and by a database.</figcaption></figure>
+  <h3>Client and server</h3>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">Your app<small>the client</small></span><i data-t="sends a question (SQL)"></i><span class="n y">MySQL server<small>a program on another machine</small></span><i data-t="reads and writes"></i><span class="n">Disk<small>where data lives</small></span>
+  </div></div><figcaption>MySQL runs as its own program, usually on its own machine. Apps connect to it over the network and send it requests written in SQL.</figcaption></figure>
+  <ul>
+    <li><b>MySQL is a server program.</b> It runs all the time and waits for connections, on port 3306 by default. <span class="tag d">Default</span></li>
+    <li><b>Your code is a client.</b> It connects, sends a request, and gets an answer back.</li>
+    <li><b>MySQL is free and open source</b> and one of the most used databases in the world, from tiny websites to Facebook-sized systems.</li>
+  </ul>
+  <details class="q"><summary>Name three problems a database solves that a plain file on disk does not.</summary><div class="in">Many users changing data at the same time without losing changes; surviving a crash without half-written data; and finding one record quickly among millions.</div></details>
+  <aside class="trk"><h4 data-id="order 7001">Follow order 7001</h4><div class="in"><p>Through this course we follow one purchase: Asha buys one keyboard. Already you can see what the shop must remember safely: who Asha is, how many keyboards are left, and her order.</p></div></aside>
+</section>
+
+<section class="s" id="tables" data-t="Tables, rows and keys">
+  <div class="sh"><span class="off">02</span><h2>Tables, rows and keys</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Think of three spreadsheet tabs: one listing customers, one listing products, one listing orders. Each order row does not copy Asha’s name; it just says “customer number 123”. That number is the link. Linking tables by numbers is what “relational database” means.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>table</b><span>A named grid of data, like a spreadsheet tab.</span></div>
+    <div><b>row</b><span>One record in a table: one user, one order.</span></div>
+    <div><b>column</b><span>One fact every row has: name, price, quantity.</span></div>
+    <div><b>primary key</b><span>A column whose value is unique per row, used to find that row. Usually <code>id</code>.</span></div>
+    <div><b>foreign key</b><span>A column that holds another table’s primary key, linking the two rows.</span></div>
+  </div>
+  <p class="lead">MySQL stores data in tables, like spreadsheet tabs: each row is one thing, each column one fact about it, and keys link rows in different tables together.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>users</h4><div class="tw"><table><tr><th>id</th><th>name</th></tr><tr><td>25</td><td>Bob</td></tr><tr><td><b>123</b></td><td><b>Asha</b></td></tr></table></div>
+      <h4 style="margin-top:.8rem">inventory</h4><div class="tw"><table><tr><th>product_id</th><th>name</th><th>quantity</th></tr><tr><td><b>501</b></td><td>Keyboard</td><td>10</td></tr></table></div></div>
+    <div><h4>orders</h4><div class="tw"><table><tr><th>id</th><th>user_id</th><th>product_id</th><th>total</th></tr><tr><td>7001</td><td><b>123</b></td><td><b>501</b></td><td>49.99</td></tr></table></div><p style="font-size:.9rem;margin:.5rem 0 0">user_id 123 points at Asha. product_id 501 points at the keyboard.</p></div>
+  </div></div><figcaption>Three small tables. The bold numbers are the links between them.</figcaption></figure>
+  <ul>
+    <li><b>Every table should have a primary key.</b> It is how MySQL finds and stores each row.</li>
+    <li><b>Foreign keys keep links valid.</b> MySQL refuses an order for user 999 if no user 999 exists. <span class="tag g">Guaranteed</span> with InnoDB</li>
+    <li><b>Columns have types:</b> <code>BIGINT</code> for whole numbers, <code>VARCHAR(100)</code> for text up to 100 characters, <code>DECIMAL(10,2)</code> for money, <code>DATETIME</code> for times.</li>
+  </ul>
+  <details class="q"><summary>Why does the orders table store user_id 123 instead of Asha’s name and email?</summary><div class="in">So each fact is stored once. If Asha changes her email, only her users row changes; every order still points to her through the key 123.</div></details>
+  <aside class="trk"><h4 data-id="users 123">Follow order 7001</h4><div class="in"><p>Before the purchase: Asha exists as user 123 and the keyboard as product 501 with 10 in stock. Order 7001 does not exist yet.</p></div></aside>
+</section>
+
+<section class="s" id="sqlbasics" data-t="Five SQL statements">
+  <div class="sh"><span class="off">03</span><h2>Talking to MySQL: five SQL statements</h2></div>
+  
+  <div class="plain"><b>In plain words</b>SQL reads almost like English: “select the name from users where the id is 123”. You describe <i>what</i> you want, and MySQL works out <i>how</i> to get it. That “how” is what most of this course is about.</div>
+  <p class="lead">SQL is the language you use to ask MySQL to create tables, add rows, read them, change them and delete them.</p>
+  <pre class="code"><i>-- 1. Create a table</i>
+CREATE TABLE inventory (product_id BIGINT PRIMARY KEY, name VARCHAR(100), quantity INT);
+
+<i>-- 2. Add a row</i>
+INSERT INTO inventory VALUES (501, 'Keyboard', 10);
+
+<i>-- 3. Read rows</i>
+SELECT name, quantity FROM inventory WHERE product_id = 501;
++----------+----------+
+| name     | quantity |
++----------+----------+
+| Keyboard |       10 |
++----------+----------+
+
+<i>-- 4. Change rows</i>
+UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 501;
+Query OK, 1 row affected
+
+<i>-- 5. Remove rows</i>
+DELETE FROM inventory WHERE product_id = 501;</pre>
+  <ul>
+    <li><b>WHERE picks the rows.</b> Without it, UPDATE and DELETE touch every row in the table.</li>
+    <li><b>Reads use SELECT; writes are INSERT, UPDATE and DELETE.</b> Later lessons treat reads and writes very differently.</li>
+    <li><b>You type SQL in the <code>mysql</code> command-line client,</b> or your app sends it through a library (a driver).</li>
+  </ul>
+  <figure><div class="canvas"><div class="flow"><span class="n g">SELECT … WHERE product_id = 501</span><i data-t="MySQL decides how"></i><span class="n y">finds the row</span><i data-t="returns"></i><span class="n">Keyboard, 10</span></div></div><figcaption>You say what you want. Choosing the fastest way to find it is MySQL’s job.</figcaption></figure>
+  <details class="q"><summary>What happens if you run UPDATE inventory SET quantity = 0 with no WHERE clause?</summary><div class="in">Every row in the table gets quantity 0. WHERE is what limits a change to the rows you mean.</div></details>
+  <aside class="trk"><h4 data-id="order 7001">Follow order 7001</h4><div class="in"><p>The two statements that make Asha’s purchase. The next lesson explains why they must be wrapped together.</p>
+  <pre class="code">UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 501;
+INSERT INTO orders (id, user_id, product_id, status, total, created_at)
+VALUES (7001, 123, 501, 'paid', 49.99, '2026-10-04 10:00:00');</pre></div></aside>
+</section>
+
+<section class="s" id="txnbasics" data-t="Transactions: all or nothing">
+  <div class="sh"><span class="off">04</span><h2>Transactions: all or nothing</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Asha’s purchase is two changes: take one keyboard from stock, and create her order. If the server crashed after the first, the shop would lose a keyboard with no order to show for it. A transaction says: “treat these as one. Finish both, or undo both.”</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>transaction</b><span>A group of statements that succeed or fail together.</span></div>
+    <div><b>COMMIT</b><span>“Make it permanent.” After this, the change survives a crash.</span></div>
+    <div><b>ROLLBACK</b><span>“Undo everything since START TRANSACTION.”</span></div>
+  </div>
+  <p class="lead">A transaction groups several statements so that either all of them happen or none of them do, even if the server crashes in the middle.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Without a transaction</h4><div class="flow"><span class="n y">stock 10 → 9</span><i></i><span class="n r">crash</span><i></i><span class="n r">no order, lost keyboard</span></div></div>
+    <div><h4>With a transaction</h4><div class="flow"><span class="n y">stock 10 → 9</span><i></i><span class="n r">crash</span><i></i><span class="n g">undone: stock is 10 again</span></div></div>
+  </div></div><figcaption>Same crash, two outcomes. The transaction makes the half-done state impossible.</figcaption></figure>
+  <pre class="code">START TRANSACTION;
+UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 501;
+INSERT INTO orders (id, user_id, product_id, status, total, created_at)
+VALUES (7001, 123, 501, 'paid', 49.99, '2026-10-04 10:00:00');
+COMMIT;      <i>-- or ROLLBACK; to cancel both</i></pre>
+  <h3>ACID, in plain words</h3>
+  <div class="cards">
+    <div class="card"><h4>Atomic</h4><p>All or nothing, as above.</p></div>
+    <div class="card"><h4>Consistent</h4><p>Rules always hold: stock never negative, orders always point to real users.</p></div>
+    <div class="card"><h4>Isolated</h4><p>Others never see your half-finished work.</p></div>
+    <div class="card"><h4>Durable</h4><p>After COMMIT, a power cut cannot undo it.</p></div>
+  </div>
+  <details class="q"><summary>A transaction updated the stock and then the app crashed before COMMIT. What does the stock show after MySQL restarts?</summary><div class="in">The old value. An uncommitted transaction is rolled back, so the stock change disappears along with everything else in it.</div></details>
+  <aside class="trk"><h4 data-id="order 7001">Follow order 7001</h4><div class="in"><p>This exact block is the running example. Lesson 00 shows it with the full table definitions.</p></div></aside>
+</section>
+
+<section class="s" id="idxbasics" data-t="Indexes in one picture">
+  <div class="sh"><span class="off">05</span><h2>Indexes in one picture</h2></div>
+  
+  <div class="plain"><b>In plain words</b>To find “replication” in a 600-page book you do not read every page; you look in the index at the back, which is sorted alphabetically and gives the page number. A database index is the same idea, kept up to date automatically.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>index</b><span>A sorted copy of one or more columns that points to the rows.</span></div>
+    <div><b>full table scan</b><span>Reading every row to find matches. Fine for 100 rows, terrible for 100 million.</span></div>
+  </div>
+  <p class="lead">An index is a sorted list of one column’s values with pointers to the rows, so MySQL can jump to the right rows instead of reading the whole table.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>No index on user_id</h4><div class="log"><div class="cell gone"><b>1</b><span>read</span></div><div class="cell gone"><b>2</b><span>read</span></div><div class="cell gone"><b>…</b><span>read</span></div><div class="cell pend"><b>7001</b><span>match</span></div><div class="cell gone"><b>…</b><span>read</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">Every order is read to find Asha’s.</p></div>
+    <div><h4>Index on user_id</h4><div class="log"><div class="cell"><b>122</b><span>…</span></div><div class="cell pend"><b>123</b><span>→ 7001</span></div><div class="cell"><b>124</b><span>…</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">Jump to 123 in the sorted list, follow the pointer.</p></div>
+  </div></div><figcaption>Same question, “Asha’s orders”. One reads millions of rows, the other a handful.</figcaption></figure>
+  <pre class="code">CREATE INDEX idx_user ON orders (user_id);</pre>
+  <ul>
+    <li><b>Indexes speed up reads and slow down writes</b> a little, because each write must update the index too.</li>
+    <li><b>The primary key always has an index.</b> <span class="tag g">Guaranteed</span></li>
+    <li><b>Part 3 explains how indexes really work</b>, and which ones to create.</li>
+  </ul>
+  <details class="q"><summary>Why does adding an index make INSERTs slightly slower?</summary><div class="in">Every new row must also be added, in sorted position, to each index on the table. More indexes means more work per write.</div></details>
+  <aside class="trk"><h4 data-id="user 123">Follow order 7001</h4><div class="in"><p>Asha’s “my orders” page asks for <code>WHERE user_id = 123</code>. With an index on user_id that is a few page reads instead of a scan of every order ever placed.</p></div></aside>
+</section>
+
+<section class="s" id="scalebasics" data-t="When one server is not enough">
+  <div class="sh"><span class="off">06</span><h2>When one server is not enough</h2></div>
+  
+  <div class="plain"><b>In plain words</b>One librarian can only answer so many questions. You can hire assistants who each hold a photocopy of every book and answer questions (copies), or split the library into wings by subject, each with its own librarian (splitting). Copies are easy; splitting is hard. This lesson only introduces the words; Parts 5 and 6 explain them properly.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>primary</b><span>The one server that accepts writes.</span></div>
+    <div><b>replica</b><span>A server holding a copy of the primary’s data, kept up to date, used for reads and as a spare.</span></div>
+    <div><b>replication</b><span>Copying every change from the primary to the replicas.</span></div>
+    <div><b>proxy</b><span>A program between the app and the databases that sends each query to the right server.</span></div>
+    <div><b>shard</b><span>One slice of the data when it is split across several primaries.</span></div>
+  </div>
+  <p class="lead">A growing app first adds copies of the database to share the reading and survive failures, and only much later splits the data across several databases.</p>
+  <figure><div class="canvas"><div class="flow v">
+    <span class="n y">Stage 1: one server<small>reads and writes</small></span><i data-t="more readers"></i>
+    <span class="n y">Stage 2: a primary and replicas<small>writes to the primary, reads spread over copies</small></span><i data-t="more writes than one primary can take"></i>
+    <span class="n y">Stage 3: shards<small>each primary owns part of the data</small></span>
+  </div></div><figcaption>The usual growth path. Most apps live happily at stage 2 for a very long time.</figcaption></figure>
+  <ul>
+    <li><b>Copies scale reads, not writes:</b> every write still goes to the one primary.</li>
+    <li><b>Splitting scales writes</b> but makes some queries harder, because the data is no longer in one place.</li>
+  </ul>
+  <details class="q"><summary>Adding replicas helps a site with lots of page views. Why does it not help a site that is overwhelmed by new orders?</summary><div class="in">Replicas only take read queries. Every new order is a write, and all writes still go to the single primary, so it remains the bottleneck.</div></details>
+  <aside class="trk"><h4 data-id="shop">Follow order 7001</h4><div class="in"><p>The shop in this course is at stage 2: one primary, <code>db-primary</code>, two replicas, and a proxy called ProxySQL in front. Part 6 imagines it growing to stage 3.</p></div></aside>
+</section>
+
+
 <div class="part" data-part="The big picture"><h2>Part 1: The big picture</h2><p>When to pick it, and where a query goes</p></div>
 
 <section class="s" id="choose" data-t="When to choose MySQL">
-  <div class="sh"><span class="off">01</span><h2>When to choose MySQL</h2></div>
+  <div class="sh"><span class="off">07</span><h2>When to choose MySQL</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Every database is good at some jobs and poor at others. MySQL shines when your data fits naturally into linked tables, most traffic is reading, and you want something dependable that many engineers already know how to run.</div>
+  <div class="words"><h4>New words</h4><div><b>read-heavy</b><span>Far more reads (SELECT) than writes (INSERT, UPDATE, DELETE).</span></div></div>
   <p class="lead">MySQL trades some advanced SQL features for operational simplicity and fast reads, so pick it when the workload is relational, read-heavy and must be run reliably by ordinary teams.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   A{"Need a relational database?"} -->|"Yes"| B{"Read-heavy workload?"}
@@ -389,7 +569,10 @@ CREATE TABLE orders (
 </section>
 
 <section class="s" id="avoid" data-t="When MySQL is not the fit">
-  <div class="sh"><span class="off">02</span><h2>When MySQL is not the right fit</h2></div>
+  <div class="sh"><span class="off">08</span><h2>When MySQL is not the right fit</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Knowing when not to use a tool is half of choosing well. Each weakness in this lesson is the price MySQL pays for a strength from the previous one.</div>
+  <div class="words"><h4>New words</h4><div><b>window function</b><span>SQL that computes across related rows, like a running total per customer.</span></div><div><b>JSONB</b><span>PostgreSQL’s binary JSON column type, which can be indexed.</span></div><div><b>horizontal scaling</b><span>Handling more load by adding machines rather than buying a bigger one.</span></div></div>
   <p class="lead">Each weak spot is the other side of a trade MySQL made on purpose, and naming it is what makes your “yes” believable.</p>
   <div class="tw"><table>
     <tr><th>You need</th><th>The trade-off</th><th>Often cleaner</th></tr>
@@ -413,63 +596,60 @@ CREATE TABLE orders (
 </section>
 
 <section class="s" id="arch" data-t="The path of one query">
-  <div class="sh"><span class="off">03</span><h2>The path of one query</h2></div>
-  <p class="lead">Apps talk to ProxySQL, ProxySQL sends writes to the primary and reads to replicas, and inside the primary every statement is parsed, planned and executed before InnoDB touches a page.</p>
-  <figure class="big"><div class="board"><pre class="mmd">flowchart TB
-  subgraph APPS["Client applications: checkout-api"]
-    W1["web-1"]
-    W2["web-2"]
-    W3["web-3"]
-  end
-  W1 --> PX
-  W2 --> PX
-  W3 --> PX
-  PX["ProxySQL :6033&lt;br/&gt;pooling, routing, rules"]:::ctl
-  PX -->|"writes"| SP
-  subgraph PRI["db-primary :3306"]
-    SP["SQL parser"] --> OPT["Query optimizer"] --> EX["Execution engine"]
+  <div class="sh"><span class="off">09</span><h2>The path of one query</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Think of a restaurant. A waiter takes your order (the connection), checks it is something on the menu (the parser), the head chef decides the quickest way to cook it (the optimizer), the cooks follow that plan (the executor), and they fetch ingredients from the fridge and the store room (the storage engine). Every SQL statement takes this same walk.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>parser</b><span>Checks the SQL is valid and turns the text into a structure MySQL can work with.</span></div>
+    <div><b>optimizer</b><span>Chooses the cheapest way to run the query, for example which index to use.</span></div>
+    <div><b>executor</b><span>Carries out the chosen plan step by step.</span></div>
+    <div><b>storage engine</b><span>The part that actually stores and fetches rows on disk and in memory. In this course: InnoDB.</span></div>
+  </div>
+  <p class="lead">Inside one MySQL server every statement passes through the same stages: a connection, a parser that checks the SQL, an optimizer that picks a plan, an executor that runs it, and a storage engine that touches the data.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  APP["checkout-api on web-1&lt;br/&gt;(the client)"] -->|"SQL over the network, port 3306"| CON
+  subgraph SRV["MySQL server: db-primary"]
+    CON["Connection handler&lt;br/&gt;one thread per connection"] --> SP["SQL parser"]
+    SP --> OPT["Query optimizer"]:::ctl
+    OPT --> EX["Execution engine"]
     EX --> IDB["InnoDB storage engine"]:::lead
-    IDB --> BP["Buffer pool"]
-    IDB --> RL["Redo log"]
-    EX -->|"at commit"| BL["Binary log"]
+    IDB --> BP["Buffer pool&lt;br/&gt;(memory)"]
+    IDB --> RL["Redo log&lt;br/&gt;(disk)"]
+    IDB --> DF["Data files&lt;br/&gt;(disk)"]
   end
-  PX -->|"reads"| R1["db-replica-1"]
-  PX -->|"reads"| R2["db-replica-2"]
-  BL -->|"binlog stream"| R1
-  BL -->|"binlog stream"| R2
   classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
   classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
-</pre></div><figcaption>Follow the write down the middle. Notice that replicas are fed by the binary log, not the redo log: they are two different logs.</figcaption></figure>
+</pre></div><figcaption>One server, top to bottom. The top half understands SQL; the bottom half (InnoDB) stores data. Part 2 opens up the bottom half.</figcaption></figure>
   <ol class="steps">
-    <li><b>Pool.</b> Hundreds of app connections share a few real ones inside ProxySQL. No connection storms on the database.</li>
-    <li><b>Route.</b> Query rules send writes to the primary’s hostgroup and plain reads to the replicas’.</li>
-    <li><b>Parse.</b> The SQL parser checks syntax and builds an internal tree.</li>
-    <li><b>Plan.</b> The optimizer picks indexes, join order and access paths by estimated cost.</li>
-    <li><b>Execute.</b> The executor runs the plan and calls InnoDB for each row it reads or writes.</li>
+    <li><b>Connect.</b> The app opens a connection; MySQL gives it a thread that serves it.</li>
+    <li><b>Parse.</b> The SQL text is checked for mistakes and turned into a tree.</li>
+    <li><b>Plan.</b> The optimizer estimates the cost of each way to run it, using statistics about the tables, and picks the cheapest.</li>
+    <li><b>Execute.</b> The executor follows the plan and asks InnoDB for each row it needs to read or change.</li>
+    <li><b>Store.</b> InnoDB serves rows from memory when it can, and records every change in its log before saying “done”.</li>
   </ol>
   <ul>
-    <li><b>Two layers.</b> The server layer (parser, optimizer, executor, binlog) sits on top of a pluggable storage engine. <span class="tag g">Guaranteed</span></li>
-    <li><b>Two logs.</b> InnoDB’s redo log is for crash recovery. The server’s binlog is for replication and point-in-time restore. <span class="tag g">Guaranteed</span> <span class="tag a">Added</span></li>
-    <li><b>Replicas are read-only copies.</b> They apply the primary’s binlog and should run with <code>super_read_only</code> on. <span class="tag s">Simplified</span></li>
+    <li><b>Two layers.</b> The server layer (connections, parser, optimizer, executor) sits on top of a swappable storage engine. <span class="tag g">Guaranteed</span></li>
+    <li><b>The optimizer is why SQL is declarative:</b> you say what you want, it decides how. When a query is slow, the plan it chose is the first thing to look at (Part 7).</li>
+    <li><b>Later, more servers join.</b> Your notes’ first diagram also shows a proxy and replicas; Part 5 adds those once copies have been explained. <span class="tag a">Added</span></li>
   </ul>
-  <details class="deep"><summary>Why the original picture fed replicas from the redo log</summary><div class="in"><p>Your notes’ diagram draws the replication stream coming out of the storage engine’s log. In MySQL the stream is the binary log, written by the server layer. At commit the two logs are kept consistent with an internal two-phase commit: InnoDB prepares, the binlog is written, then InnoDB commits. <span class="tag a">Added</span></p></div></details>
   <details class="q"><summary>Which component decides whether a query uses an index, and which one actually reads the rows?</summary><div class="in">The query optimizer decides (it builds the plan). The execution engine runs the plan and asks the storage engine, InnoDB, for the rows.</div></details>
-  <aside class="trk"><h4 data-id="proxysql:6033">Follow order 7001</h4><div class="in"><p>The ProxySQL rules that route our checkout. Hostgroup 10 is the primary, 20 the replicas. Locking reads must go to the primary, so that rule comes first. <span class="tag x">Example value</span></p>
-  <pre class="code"><i>-- ProxySQL admin interface, port 6032</i>
-INSERT INTO mysql_query_rules (rule_id, active, match_digest, destination_hostgroup, apply)
-VALUES (1, 1, '^SELECT.*FOR UPDATE', 10, 1),
-       (2, 1, '^SELECT', 20, 1);
-LOAD MYSQL QUERY RULES TO RUNTIME;
-
-<i>-- UPDATE inventory ... and INSERT INTO orders ... match no rule, so they go to
--- the user's default hostgroup: 10, db-primary</i></pre></div></aside>
+  <aside class="trk"><h4 data-id="connection 4182">Follow order 7001</h4><div class="in"><p>While Asha’s checkout runs, the server lists her connection and the statement it is executing. Output trimmed. <span class="tag x">Example value</span></p>
+  <pre class="code">mysql&gt; SHOW PROCESSLIST;
++------+----------+-------------+------+---------+------+----------+-------------------------------------------+
+| Id   | User     | Host        | db   | Command | Time | State    | Info                                      |
++------+----------+-------------+------+---------+------+----------+-------------------------------------------+
+| 4182 | checkout | web-1:51022 | shop | Query   |    0 | updating | UPDATE inventory SET quantity = quantity… |
++------+----------+-------------+------+---------+------+----------+-------------------------------------------+</pre></div></aside>
 </section>
 
 <section class="s" id="engines" data-t="InnoDB vs MyISAM">
-  <div class="sh"><span class="off">04</span><h2>Storage engines: InnoDB vs MyISAM</h2></div>
+  <div class="sh"><span class="off">10</span><h2>Storage engines: InnoDB vs MyISAM</h2></div>
+  
+  <div class="plain"><b>In plain words</b>MySQL is built in two halves: a front half that understands SQL, and a back half, the storage engine, that actually keeps the data. You can choose the back half per table. Almost everyone today uses one engine, InnoDB, and this lesson shows why.</div>
+  <div class="words"><h4>New words</h4><div><b>InnoDB</b><span>MySQL’s default storage engine, with transactions and crash recovery.</span></div><div><b>MyISAM</b><span>MySQL’s older engine, without transactions.</span></div><div><b>row-level locking</b><span>Blocking only the rows being changed, rather than the whole table.</span></div></div>
   <p class="lead">MySQL lets each table pick its storage engine, and for any modern system the answer is InnoDB.</p>
   <figure><div class="canvas"><div class="flow v">
-    <span class="n p">Server layer<small>connections, parser, optimizer, executor, binlog</small></span><i data-t="handler API: read row, write row"></i>
+    <span class="n p">Server layer<small>connections, parser, optimizer, executor</small></span><i data-t="handler API: read row, write row"></i>
     <div class="row"><span class="n y" style="flex:1">InnoDB<small>transactions, row locks, MVCC, crash recovery</small></span><span class="n" style="flex:1">MyISAM<small>table locks, no transactions</small></span><span class="n" style="flex:1">MEMORY, others<small>special cases</small></span></div>
   </div></div><figcaption>The engine is a plug-in below the server layer. Same SQL on top, very different guarantees underneath.</figcaption></figure>
   <div class="tw"><table>
@@ -509,7 +689,10 @@ SET default_storage_engine = InnoDB;</pre>
 <div class="part" data-part="Inside InnoDB"><h2>Part 2: Inside InnoDB</h2><p>Memory, logs, versions, layout</p></div>
 
 <section class="s" id="innodb" data-t="InnoDB architecture">
-  <div class="sh"><span class="off">05</span><h2>InnoDB architecture</h2></div>
+  <div class="sh"><span class="off">11</span><h2>InnoDB architecture</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Writing every change straight to its final place on disk would be slow. InnoDB changes data in memory, writes a short note of the change to a log first, which is fast, and copies the real data to disk later in bulk. After a power cut it replays its notes. The next four lessons zoom in on each piece.</div>
+  <div class="words"><h4>New words</h4><div><b>page</b><span>The 16 KB block InnoDB reads and writes; rows and index entries live inside pages.</span></div><div><b>buffer pool</b><span>InnoDB’s area of memory holding copies of pages.</span></div><div><b>redo log</b><span>The log of changes used to recover after a crash.</span></div><div><b>undo log</b><span>Where the previous versions of changed rows are kept.</span></div><div><b>dirty page</b><span>A page changed in memory but not yet written to disk.</span></div><div><b>checkpoint</b><span>The point up to which dirty pages have been written to disk.</span></div></div>
   <p class="lead">InnoDB changes pages in memory, writes a small redo record to survive a crash, keeps old versions in an undo log, and writes the real data files later.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   Q["Queries"]:::ctl --> BP
@@ -544,7 +727,10 @@ old inventory row (qty 10)        undo log, until no reader needs it</pre></div>
 </section>
 
 <section class="s" id="bp" data-t="The buffer pool">
-  <div class="sh"><span class="off">06</span><h2>The buffer pool</h2></div>
+  <div class="sh"><span class="off">12</span><h2>The buffer pool</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Reading from memory is roughly a thousand times faster than reading from disk. The buffer pool is the memory where InnoDB keeps copies of disk pages. If the page you need is already there, you never wait for the disk.</div>
+  <div class="words"><h4>New words</h4><div><b>hit / miss</b><span>A hit finds the page in memory; a miss has to read it from disk.</span></div><div><b>working set</b><span>The data your app actually touches regularly.</span></div><div><b>LRU</b><span>Least recently used: when memory is full, throw out what was used longest ago.</span></div></div>
   <p class="lead">The buffer pool is InnoDB’s page cache in RAM, and a read that finds its page there never touches the disk.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Buffer pool (RAM)</h4>
@@ -578,7 +764,10 @@ innodb_buffer_pool_instances = 8   <i># split the pool to reduce contention</i><
 </section>
 
 <section class="s" id="redo" data-t="The redo log">
-  <div class="sh"><span class="off">07</span><h2>The redo log (write-ahead log)</h2></div>
+  <div class="sh"><span class="off">13</span><h2>The redo log (write-ahead log)</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Before changing anything for real, InnoDB writes a short note of the change at the end of a log file. Adding to the end of a file is very fast. If the server crashes, it rereads the notes and redoes the changes. It is like a chef writing each order on a ticket before cooking: if the kitchen is interrupted, the tickets say what was promised.</div>
+  <div class="words"><h4>New words</h4><div><b>write-ahead log</b><span>A log written before the real data changes, so changes can be replayed after a crash.</span></div><div><b>fsync</b><span>Forcing data out of memory buffers onto the physical disk.</span></div><div><b>LSN</b><span>Log sequence number: a record’s position in the log. It only goes up.</span></div></div>
   <p class="lead">At commit InnoDB appends a compact description of the change to the redo log and flushes it, which is one sequential write instead of many random ones.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n b">Transaction commit</span><i></i><span class="n y">Write to redo log<small>sequential, fsync</small></span><i></i><span class="n g">Acknowledge client</span>
@@ -614,7 +803,10 @@ Last checkpoint at           21330110</pre></div></aside>
 </section>
 
 <section class="s" id="mvcc" data-t="Undo log and MVCC">
-  <div class="sh"><span class="off">08</span><h2>The undo log and MVCC</h2></div>
+  <div class="sh"><span class="off">14</span><h2>The undo log and MVCC</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If one transaction is reading the stock while another is changing it, what should the reader see? InnoDB keeps the old version around for a while, so the reader sees a consistent picture from when it started, and nobody has to wait for anybody.</div>
+  <div class="words"><h4>New words</h4><div><b>MVCC</b><span>Multi-version concurrency control: keeping several versions of a row so readers and writers do not block each other.</span></div><div><b>snapshot</b><span>The set of committed data a transaction is allowed to see, also called a read view.</span></div></div>
   <p class="lead">When a row changes, InnoDB keeps the old version in the undo log, so a reader sees the version that fits its snapshot and nobody waits.</p>
   <figure><div class="board"><pre class="mmd">flowchart LR
   subgraph T2["Transaction 2: Bob's checkout (write)"]
@@ -650,7 +842,10 @@ undo log record       product_id=501  quantity=10  version=5  DB_TRX_ID=48190   
 </section>
 
 <section class="s" id="clustered" data-t="The clustered index">
-  <div class="sh"><span class="off">09</span><h2>The clustered index</h2></div>
+  <div class="sh"><span class="off">15</span><h2>The clustered index</h2></div>
+  
+  <div class="plain"><b>In plain words</b>In InnoDB the table itself is stored sorted by its primary key, like a phone book sorted by surname where the entries are the data. Looking up by primary key is therefore the fastest read there is, and your choice of primary key affects every other part of the table.</div>
+  <div class="words"><h4>New words</h4><div><b>B+tree</b><span>A tree-shaped sorted structure that keeps lookups fast as data grows. Part 3 explains it.</span></div><div><b>clustered index</b><span>An index whose leaves hold the full rows, so the index is the table.</span></div><div><b>page split</b><span>When a full page is divided in two to make room for a new row in the middle.</span></div></div>
   <p class="lead">In InnoDB the table is the primary key index: rows are stored in the leaves of a B+tree, in primary key order.</p>
   <figure><div class="board"><pre class="mmd">flowchart LR
   subgraph CI["Clustered index on users (PRIMARY KEY id)"]
@@ -697,60 +892,14 @@ undo log record       product_id=501  quantity=10  version=5  DB_TRX_ID=48190   
            rows: 1</pre></div></aside>
 </section>
 
-<section class="s" id="smap" data-t="Where it lives, who calls whom">
-  <div class="sh"><span class="off">10</span><h2>Where it lives and who calls whom</h2></div>
-  <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port each thing is in, and who opens each connection.</p>
-  <h3>Where each thing lives</h3>
-  <figure><div class="canvas"><div class="zones">
-    <div class="zone"><b>checkout-api</b><small>web-1, web-2, web-3</small><h5>In memory</h5><span class="chip">connection pool to proxysql:6033</span><span class="chip">retry on deadlock (error 1213)</span></div>
-    <div class="zone"><b>ProxySQL</b><small>proxysql:6033, admin :6032</small><h5>On disk</h5><span class="chip C">proxysql.db: servers, users, rules</span><h5>In memory</h5><span class="chip C">hostgroups 10 (writer) and 20 (readers)</span><span class="chip C">backend connection pool</span></div>
-    <div class="zone"><b>Primary</b><small>db-primary:3306</small><h5>On disk</h5><span class="chip Y">/var/lib/mysql/shop/orders.ibd</span><span class="chip Y">#innodb_redo/: redo log</span><span class="chip Y">undo_001, undo_002</span><span class="chip Y">binlog.000042</span><span class="chip Y">mysql.ibd: data dictionary</span><h5>In memory</h5><span class="chip">buffer pool</span><span class="chip">lock system: row locks</span><span class="chip">active transactions, read views</span></div>
-    <div class="zone"><b>Replica</b><small>db-replica-1:3306</small><h5>On disk</h5><span class="chip F">relay log: db-replica-1-relay-bin.000007</span><span class="chip F">its own copy of orders.ibd</span><h5>In memory</h5><span class="chip">its own buffer pool</span><span class="chip">receiver and applier threads</span></div>
-  </div></div><figcaption>A crash wipes everything under “in memory”. The buffer pool is rebuilt from disk plus the redo log; row locks and open transactions simply vanish, and their changes are rolled back.</figcaption></figure>
-  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For order 7001</th></tr>
-    <tr><td>The row</td><td>A leaf of the clustered index, in the table’s <code>.ibd</code> file</td><td><code>shop/orders.ibd</code></td></tr>
-    <tr><td>Secondary index entries</td><td>The same <code>.ibd</code> file (one file per table) <span class="tag d">Default</span></td><td><code>idx_user_status_created</code>: (123, 'paid', …, 7001)</td></tr>
-    <tr><td>The change, for crash recovery</td><td>Redo log files in <code>#innodb_redo/</code></td><td>LSN 21342640 to 21342712</td></tr>
-    <tr><td>The old version</td><td>Undo tablespace</td><td>inventory 501, quantity 10</td></tr>
-    <tr><td>The change, for replicas</td><td>Binary log</td><td><code>binlog.000042</code>, position 1874</td></tr>
-    <tr><td>Row locks</td><td>InnoDB’s lock system, in memory, not in the row</td><td>X lock on inventory 501 until COMMIT</td></tr>
-    <tr><td>Table definitions</td><td>Data dictionary, <code>mysql.ibd</code></td><td><code>shop.orders</code></td></tr>
-    <tr><td>Who is the writer</td><td>ProxySQL hostgroup 10, checked against <code>read_only</code></td><td><code>db-primary</code> <span class="tag x">Example value</span></td></tr>
-  </table></div>
-  <h3>Who calls whom</h3>
-  <figure><div class="board"><pre class="mmd">flowchart TB
-  A["checkout-api on web-1 to web-3"] -->|"SQL on port 6033"| PX["ProxySQL"]:::ctl
-  PX -->|"writes, SQL on 3306"| P["db-primary"]:::lead
-  PX -->|"reads, SQL on 3306"| R1["db-replica-1"]
-  PX -->|"reads, SQL on 3306"| R2["db-replica-2"]
-  R1 -->|"receiver thread: send me binlog after my GTIDs"| P
-  R2 -->|"receiver thread"| P
-  PX -.->|"monitor: ping, read_only, lag"| P
-  PX -.->|"monitor"| R1
-  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
-  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
-</pre></div><figcaption>Every arrow points from the side that opens the connection. The replicas dial the primary, not the other way round.</figcaption></figure>
-  <div class="tw"><table><tr><th>Caller</th><th>Calls</th><th>Request</th><th>Why</th></tr>
-    <tr><td>checkout-api</td><td>ProxySQL :6033</td><td>Ordinary MySQL protocol</td><td>The app thinks ProxySQL is the database.</td></tr>
-    <tr><td>ProxySQL</td><td>Primary :3306</td><td>The same SQL on a pooled connection</td><td>Few real connections serve many clients.</td></tr>
-    <tr><td>ProxySQL</td><td>Replicas :3306</td><td>Plain SELECTs</td><td>Spread read load.</td></tr>
-    <tr><td>ProxySQL monitor</td><td>Every server</td><td>Ping, <code>SELECT @@read_only</code>, lag check</td><td>Move a server between hostgroups when it changes role or falls behind.</td></tr>
-    <tr><td>Replica receiver thread</td><td>Primary :3306</td><td>“Send binlog events I have not got”</td><td>The replica knows its position, so it asks.</td></tr>
-    <tr><td>Primary binlog dump thread</td><td>(answers the above)</td><td>Streams events as they are written</td><td>One dump thread per connected replica.</td></tr>
-  </table></div>
-  <h3>What that means for your network</h3>
-  <ul>
-    <li><b>Apps only need to reach ProxySQL.</b> Port 6033. Keep 6032 (admin) private.</li>
-    <li><b>Replicas must reach the primary on 3306</b> with a user that has the <code>REPLICATION SLAVE</code> privilege.</li>
-    <li><b>ProxySQL must reach every server,</b> or it cannot notice a role change.</li>
-    <li><b>Failover is not built in here.</b> Promoting a replica needs a tool (Orchestrator, InnoDB Cluster) or a human. <span class="tag s">Simplified</span> <span class="tag a">Added</span></li>
-  </ul>
-</section>
 
 <div class="part" data-part="Indexes"><h2>Part 3: Indexes</h2><p>From 5 seconds to 50 milliseconds</p></div>
 
 <section class="s" id="btree" data-t="B+tree indexes">
-  <div class="sh"><span class="off">11</span><h2>The B+tree</h2></div>
+  <div class="sh"><span class="off">16</span><h2>The B+tree</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A B+tree is how MySQL keeps an index sorted while rows keep arriving. Picture a library: a sign at the entrance says which floor holds which letters, each floor has signs for its shelves, and the shelves hold the books in order. You read three signs to find any book, however big the library.</div>
+  <div class="words"><h4>New words</h4><div><b>node</b><span>One box in the tree: a page holding sorted keys.</span></div><div><b>root / leaf</b><span>The root is the top node; leaves are the bottom nodes that hold the actual entries.</span></div><div><b>O(log N)</b><span>The work grows very slowly with the data: doubling the data adds about one extra step.</span></div></div>
   <p class="lead">Every standard MySQL index is a B+tree: a few levels of sorted signposts above a chain of linked leaves that hold the keys.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   subgraph BT["B+tree index on orders.id"]
@@ -790,7 +939,10 @@ undo log record       product_id=501  quantity=10  version=5  DB_TRX_ID=48190   
 </section>
 
 <section class="s" id="secondary" data-t="Secondary indexes">
-  <div class="sh"><span class="off">12</span><h2>Primary vs secondary indexes</h2></div>
+  <div class="sh"><span class="off">17</span><h2>Primary vs secondary indexes</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The primary key index holds the rows themselves. Any other index, for example on email, holds only the email and the primary key. So finding a row by email takes two steps: find the key in the email index, then fetch the row by that key.</div>
+  <div class="words"><h4>New words</h4><div><b>secondary index</b><span>Any index other than the primary key.</span></div></div>
   <p class="lead">A secondary index stores the primary key, not a row address, so reading a whole row through it is two lookups.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Secondary index (email)</h4>
@@ -818,7 +970,10 @@ undo log record       product_id=501  quantity=10  version=5  DB_TRX_ID=48190   
 </section>
 
 <section class="s" id="composite" data-t="Composite indexes">
-  <div class="sh"><span class="off">13</span><h2>Composite indexes and the leftmost prefix</h2></div>
+  <div class="sh"><span class="off">18</span><h2>Composite indexes and the leftmost prefix</h2></div>
+  
+  <div class="plain"><b>In plain words</b>An index can cover several columns at once: sorted by the first, then by the second within equal firsts, like a phone book sorted by surname and then first name. It only helps queries that use those columns starting from the first one.</div>
+  <div class="words"><h4>New words</h4><div><b>composite index</b><span>One index over several columns, in a fixed order.</span></div><div><b>leftmost prefix</b><span>The rule that a composite index is usable only for its first column, first two columns, and so on.</span></div><div><b>range condition</b><span>A condition like &gt;, &lt; or BETWEEN that matches a span of values rather than one value.</span></div></div>
   <p class="lead">A composite index sorts by its first column, then the second, then the third, so it helps only queries that use its columns from the left.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>A phone book</h4><div class="flow v"><span class="n">Sorted by last name</span><i data-t="then"></i><span class="n">first name</span></div><p style="font-size:.9rem;margin:.5rem 0 0">Find all Smiths: easy. Find John Smith: easy. Find every John: read the whole book.</p></div>
@@ -858,7 +1013,10 @@ undo log record       product_id=501  quantity=10  version=5  DB_TRX_ID=48190   
 </section>
 
 <section class="s" id="covering" data-t="Covering indexes">
-  <div class="sh"><span class="off">14</span><h2>Covering indexes</h2></div>
+  <div class="sh"><span class="off">19</span><h2>Covering indexes</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If an index already contains every column the query asks for, MySQL can answer from the index alone and skip fetching the row. That removes the second step from the previous lesson.</div>
+  <div class="words"><h4>New words</h4><div><b>covering index</b><span>An index that holds every column a query needs.</span></div><div><b>EXPLAIN</b><span>A command that shows how MySQL plans to run a query. Part 7 covers it in depth.</span></div></div>
   <p class="lead">If the index already holds every column the query needs, MySQL answers from the index alone and skips the trip to the table.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Regular index on (user_id)</h4><div class="flow"><span class="n y">idx_user</span><i data-t="PK"></i><span class="n">clustered index<small>fetch status, total</small></span></div></div>
@@ -887,7 +1045,10 @@ CREATE INDEX idx_user_covering ON orders (user_id, status, total);</pre>
 </section>
 
 <section class="s" id="pickindex" data-t="Choosing an index">
-  <div class="sh"><span class="off">15</span><h2>Choosing the right index</h2></div>
+  <div class="sh"><span class="off">20</span><h2>Choosing the right index</h2></div>
+  
+  <div class="plain"><b>In plain words</b>There is no single best index. You look at what a query filters on, sorts by and returns, and design the index to match. This lesson is a checklist for doing that, plus the usual mistakes.</div>
+  <div class="words"><h4>New words</h4><div><b>cardinality</b><span>How many distinct values a column has. user_id: millions. status: a handful.</span></div><div><b>full-text index</b><span>An index of the words inside text columns, for searching text.</span></div></div>
   <p class="lead">Start from the query: what it filters on, what it sorts by and what it returns decides the index.</p>
   <figure class="big"><div class="board"><pre class="mmd">flowchart TD
   Q["What does your query need?"]:::ctl --> A{"Filter on one column?"}
@@ -950,7 +1111,10 @@ mysql&gt; EXPLAIN SELECT id, status FROM orders
 <div class="part" data-part="Transactions and locking"><h2>Part 4: Transactions and locking</h2><p>Correct under contention</p></div>
 
 <section class="s" id="iso" data-t="Isolation levels">
-  <div class="sh"><span class="off">16</span><h2>Isolation levels</h2></div>
+  <div class="sh"><span class="off">21</span><h2>Isolation levels</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When two transactions run at the same time, how much of each other’s unfinished or just-finished work should they see? Seeing too much causes bugs; seeing too little forces waiting. The isolation level is the setting that picks the balance.</div>
+  <div class="words"><h4>New words</h4><div><b>isolation level</b><span>How strictly concurrent transactions are kept apart.</span></div><div><b>dirty read</b><span>Seeing another transaction’s change before it commits.</span></div><div><b>non-repeatable read</b><span>Reading the same row twice in one transaction and getting different values.</span></div><div><b>phantom</b><span>A new row appearing in a repeated query, because someone inserted it in between.</span></div></div>
   <p class="lead">An isolation level decides what one transaction may see of another’s work, and InnoDB defaults to REPEATABLE READ: one snapshot for the whole transaction.</p>
   <figure><div class="canvas"><div class="cards" style="margin:0">
     <div class="card" style="border-color:var(--bad)"><h4>Dirty read</h4><p>Reading another transaction’s changes before it commits.</p></div>
@@ -995,7 +1159,10 @@ COMMIT;</pre>
 </section>
 
 <section class="s" id="locks" data-t="InnoDB lock types">
-  <div class="sh"><span class="off">17</span><h2>InnoDB lock types</h2></div>
+  <div class="sh"><span class="off">22</span><h2>InnoDB lock types</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Snapshots take care of readers, but two writers changing the same row must take turns. InnoDB puts locks on index entries, and sometimes on the gaps between them, so that a range it is working on cannot change underneath it.</div>
+  <div class="words"><h4>New words</h4><div><b>lock</b><span>A marker saying “this is mine for now”; others who want it must wait.</span></div><div><b>gap</b><span>The space between two neighbouring index entries, where a new row could be inserted.</span></div></div>
   <p class="lead">InnoDB locks index records, and also the gaps between them, so a range it has read cannot gain new rows behind its back.</p>
   <figure><div class="canvas"><div class="cards" style="margin:0">
     <div class="card"><h4>Record lock</h4><p>Locks one index record.</p></div>
@@ -1041,7 +1208,10 @@ SELECT * FROM users WHERE id BETWEEN 10 AND 30 FOR UPDATE;</pre>
 </section>
 
 <section class="s" id="lockreads" data-t="Locking reads">
-  <div class="sh"><span class="off">18</span><h2>Locking reads</h2></div>
+  <div class="sh"><span class="off">23</span><h2>Locking reads</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A normal SELECT reads a snapshot and never waits. But when you read a value in order to change it (check the stock, then sell one), you want to lock it while you read, so nobody changes it in between. That is what FOR UPDATE does.</div>
+  <div class="words"><h4>New words</h4><div><b>locking read</b><span>A SELECT that also locks the rows it reads.</span></div><div><b>race condition</b><span>A bug where the result depends on which of two simultaneous actions happens first.</span></div></div>
   <p class="lead">A plain SELECT reads a snapshot and locks nothing; add FOR UPDATE or FOR SHARE when you are about to act on what you read.</p>
   <div class="tw"><table>
     <tr><th>Statement</th><th>Lock</th><th>Use it for</th></tr>
@@ -1077,7 +1247,10 @@ COMMIT;                                                             <i>-- Bob's 
 </section>
 
 <section class="s" id="deadlock" data-t="Deadlocks">
-  <div class="sh"><span class="off">19</span><h2>Deadlocks</h2></div>
+  <div class="sh"><span class="off">24</span><h2>Deadlocks</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Two people each hold one key and each wait for the other’s key: they would wait forever. MySQL notices this circle of waiting and cancels one of the two transactions so the other can finish.</div>
+  <div class="words"><h4>New words</h4><div><b>deadlock</b><span>Two or more transactions each waiting for a lock another holds.</span></div><div><b>victim</b><span>The transaction MySQL rolls back to break the deadlock.</span></div></div>
   <p class="lead">A deadlock is two transactions each holding a lock the other needs; InnoDB spots the cycle at once and rolls one of them back.</p>
   <figure><div class="board"><pre class="mmd">flowchart LR
   subgraph DL["Deadlock scenario"]
@@ -1132,7 +1305,10 @@ TRANSACTION 48212, ACTIVE 1 sec starting index read
 </section>
 
 <section class="s" id="optpess" data-t="Optimistic vs pessimistic">
-  <div class="sh"><span class="off">20</span><h2>Optimistic vs pessimistic locking</h2></div>
+  <div class="sh"><span class="off">25</span><h2>Optimistic vs pessimistic locking</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Two styles of avoiding conflicts. Pessimistic: lock first, just in case, like booking a meeting room. Optimistic: do not lock, but check at the end that nobody changed it meanwhile, like a shared document that warns you if someone edited it since you opened it.</div>
+  <div class="words"><h4>New words</h4><div><b>version column</b><span>A number stored in the row and increased on every change, used to detect that someone else changed it.</span></div></div>
   <p class="lead">Pessimistic locking takes the lock before reading; optimistic locking reads freely and checks a version number at write time.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Pessimistic</h4><div class="flow v"><span class="n y">SELECT … FOR UPDATE</span><i data-t="others wait"></i><span class="n">UPDATE</span><i></i><span class="n g">COMMIT, lock released</span></div></div>
@@ -1166,7 +1342,10 @@ Rows matched: <b>0</b>  Changed: 0  Warnings: 0          <i>-- conflict: re-read
 <div class="part" data-part="Replication"><h2>Part 5: Replication</h2><p>Copies for reads and for failure</p></div>
 
 <section class="s" id="repl" data-t="How replication works">
-  <div class="sh"><span class="off">21</span><h2>How replication works</h2></div>
+  <div class="sh"><span class="off">26</span><h2>How replication works</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The primary writes down every committed change in a log called the binary log. Each replica downloads that log and replays it, so its copy follows the primary a fraction of a second behind.</div>
+  <div class="words"><h4>New words</h4><div><b>binary log (binlog)</b><span>The primary’s log of committed changes, which replicas copy.</span></div><div><b>relay log</b><span>The replica’s local copy of the binlog events it has downloaded.</span></div><div><b>GTID</b><span>Global transaction ID: a unique name for every transaction, so a replica can say exactly which ones it has.</span></div><div><b>thread</b><span>A unit of work inside a program that runs alongside others.</span></div></div>
   <p class="lead">The primary records every committed change in its binary log, and each replica pulls that log, stores it in a relay log and replays it on its own copy.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   C["Clients: checkout-api"]
@@ -1212,6 +1391,21 @@ Rows matched: <b>0</b>  Changed: 0  Warnings: 0          <i>-- conflict: re-read
     <li><b>GTIDs make position simple.</b> Each transaction gets an ID <code>server_uuid:number</code>, so a replica can say “send what I don’t have” instead of tracking file offsets. <span class="tag a">Added</span></li>
   </ul>
   <details class="q"><summary>Name the three threads involved in classic MySQL replication and say what each does.</summary><div class="in">The binlog dump thread on the source sends events; the receiver (I/O) thread on the replica writes them to the relay log; the applier (SQL) thread or threads on the replica apply them.</div></details>
+    <h3>Sending reads to the replicas: a proxy</h3>
+  <p>The app should not have to know which server is the primary and which are replicas. A proxy such as ProxySQL sits in between: the app connects to the proxy, and the proxy sends writes to the primary and plain reads to a replica. It also shares a few real database connections among hundreds of app connections.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">checkout-api<small>web-1, web-2, web-3</small></span><i data-t="all SQL, port 6033"></i><span class="n p">ProxySQL<small>routes and pools</small></span>
+  </div>
+  <div class="two" style="margin-top:.7rem">
+    <div><div class="flow"><span class="n p">ProxySQL</span><i data-t="writes, locking reads"></i><span class="n y">db-primary</span></div></div>
+    <div><div class="flow"><span class="n p">ProxySQL</span><i data-t="plain SELECTs"></i><span class="n b">db-replica-1, db-replica-2</span></div></div>
+  </div></div><figcaption>The app sees one address. ProxySQL decides, per query, which server should answer.</figcaption></figure>
+  <pre class="code"><i>-- ProxySQL admin interface, port 6032. Hostgroup 10 = primary, 20 = replicas.</i>
+INSERT INTO mysql_query_rules (rule_id, active, match_digest, destination_hostgroup, apply)
+VALUES (1, 1, '^SELECT.*FOR UPDATE', 10, 1),     <i>-- locking reads must hit the primary</i>
+       (2, 1, '^SELECT', 20, 1);                 <i>-- other reads go to replicas</i>
+LOAD MYSQL QUERY RULES TO RUNTIME;
+<i>-- UPDATE and INSERT match no rule, so they go to the default hostgroup 10: the primary</i></pre>
   <aside class="trk"><h4 data-id="db-replica-1">Follow order 7001</h4><div class="in"><p>On db-replica-1, a moment after the commit. Output trimmed. <a class="tag x" href="#c12">Example value · check 12</a></p>
   <pre class="code">mysql&gt; SHOW REPLICA STATUS\G
                   Source_Host: db-primary
@@ -1226,7 +1420,10 @@ Rows matched: <b>0</b>  Changed: 0  Warnings: 0          <i>-- conflict: re-read
 </section>
 
 <section class="s" id="binlog" data-t="Binlog formats">
-  <div class="sh"><span class="off">22</span><h2>Binlog formats</h2></div>
+  <div class="sh"><span class="off">27</span><h2>Binlog formats</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The binary log can record either the SQL that was run, or the exact rows that changed. Running the same SQL again on another server can give a different answer (think of NOW() or RAND()), so recording the rows is the safe choice.</div>
+  <div class="words"><h4>New words</h4><div><b>deterministic</b><span>Always giving the same result for the same input.</span></div></div>
   <p class="lead">The binlog can record the SQL statement or the rows it changed, and recording rows is the safe choice.</p>
   <div class="tw"><table>
     <tr><th>Format</th><th>Records</th><th>Pros</th><th>Cons</th></tr>
@@ -1262,7 +1459,10 @@ COMMIT</pre></div></aside>
 </section>
 
 <section class="s" id="semisync" data-t="Async vs semi-sync">
-  <div class="sh"><span class="off">23</span><h2>Asynchronous vs semi-synchronous</h2></div>
+  <div class="sh"><span class="off">28</span><h2>Asynchronous vs semi-synchronous</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When does the primary tell the app “saved”? Asynchronous: immediately, before any replica has the change. Semi-synchronous: only after at least one replica has received it. The first is faster; the second does not lose the change if the primary dies a moment later.</div>
+  <div class="words"><h4>New words</h4><div><b>acknowledge</b><span>Tell the app the write succeeded.</span></div><div><b>failover</b><span>Switching to a replica when the primary dies.</span></div></div>
   <p class="lead">Async acknowledges the client before any replica has the change; semi-sync waits until at least one replica has received it.</p>
   <figure><div class="canvas">
     <h4 style="margin:0 0 .5rem;font:700 .95rem var(--display)">Asynchronous (default)</h4>
@@ -1312,7 +1512,10 @@ rpl_semi_sync_replica_enabled = 1</pre>
 </section>
 
 <section class="s" id="topo" data-t="Replication topologies">
-  <div class="sh"><span class="off">24</span><h2>Replication topologies</h2></div>
+  <div class="sh"><span class="off">29</span><h2>Replication topologies</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Who copies from whom can be arranged in different shapes. Each shape changes how far reads scale and what breaks when one server dies.</div>
+  <div class="words"><h4>New words</h4><div><b>topology</b><span>The shape of the connections between servers.</span></div></div>
   <p class="lead">Who replicates from whom decides how far reads scale, how lag adds up and what breaks when one server dies.</p>
   <div class="cards">
     <div class="card"><h4>One source, many replicas</h4><div class="flow v"><span class="n y">db-primary</span><i></i><div class="row"><span class="n b">replica</span><span class="n b">replica</span><span class="n b">replica</span></div></div><p>Most common. Simple read scaling.</p></div>
@@ -1329,7 +1532,10 @@ rpl_semi_sync_replica_enabled = 1</pre>
 </section>
 
 <section class="s" id="group" data-t="Group replication">
-  <div class="sh"><span class="off">25</span><h2>Group Replication</h2></div>
+  <div class="sh"><span class="off">30</span><h2>Group Replication</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Plain replication needs a person or a tool to promote a replica when the primary dies. Group Replication makes the servers vote on every change and on who leads, so failover happens by itself.</div>
+  <div class="words"><h4>New words</h4><div><b>consensus</b><span>Several servers agreeing on a decision, usually by majority vote.</span></div><div><b>quorum</b><span>The minimum number of members needed to make a decision: a majority.</span></div></div>
   <p class="lead">Group Replication turns three or more servers into a group that agrees on the order of every transaction and elects a new primary on its own.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   C["Clients"]
@@ -1372,7 +1578,10 @@ rpl_semi_sync_replica_enabled = 1</pre>
 </section>
 
 <section class="s" id="lag" data-t="Replication lag">
-  <div class="sh"><span class="off">26</span><h2>Replication lag</h2></div>
+  <div class="sh"><span class="off">31</span><h2>Replication lag</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Replicas are always a little behind the primary: usually milliseconds, sometimes seconds. A user who saves something and immediately reads it back from a replica might not see it yet. This lesson is about living with that delay.</div>
+  <div class="words"><h4>New words</h4><div><b>replication lag</b><span>How far a replica is behind the primary.</span></div><div><b>read-your-writes</b><span>The promise that a user always sees their own latest changes.</span></div></div>
   <p class="lead">Replicas are always a little behind, and the app must decide which reads can tolerate that.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>primary</label><div class="cell done"><b>1050</b><span>trx</span></div><div class="cell done"><b>1051</b><span>trx</span></div><div class="cell pend"><b>1052</b><span>order 7001</span></div></div>
@@ -1397,10 +1606,67 @@ rpl_semi_sync_replica_enabled = 1</pre>
 +--------------------------------------------------------------------------+</pre></div></aside>
 </section>
 
+<section class="s" id="smap" data-t="Where it lives, who calls whom">
+  <div class="sh"><span class="off">32</span><h2>Where it lives and who calls whom</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows, but rarely say where each piece of data physically lives, or which program connects to which. Now that you have met the app, the proxy, the primary and the replicas, this lesson answers both questions for the whole setup.</div>
+  <div class="words"><h4>New words</h4><div><b>port</b><span>A number identifying a network service on a machine. MySQL listens on 3306, ProxySQL on 6033.</span></div><div><b>.ibd file</b><span>The file on disk that holds one InnoDB table and its indexes.</span></div></div>
+  <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port each thing is in, and who opens each connection.</p>
+  <h3>Where each thing lives</h3>
+  <figure><div class="canvas"><div class="zones">
+    <div class="zone"><b>checkout-api</b><small>web-1, web-2, web-3</small><h5>In memory</h5><span class="chip">connection pool to proxysql:6033</span><span class="chip">retry on deadlock (error 1213)</span></div>
+    <div class="zone"><b>ProxySQL</b><small>proxysql:6033, admin :6032</small><h5>On disk</h5><span class="chip C">proxysql.db: servers, users, rules</span><h5>In memory</h5><span class="chip C">hostgroups 10 (writer) and 20 (readers)</span><span class="chip C">backend connection pool</span></div>
+    <div class="zone"><b>Primary</b><small>db-primary:3306</small><h5>On disk</h5><span class="chip Y">/var/lib/mysql/shop/orders.ibd</span><span class="chip Y">#innodb_redo/: redo log</span><span class="chip Y">undo_001, undo_002</span><span class="chip Y">binlog.000042</span><span class="chip Y">mysql.ibd: data dictionary</span><h5>In memory</h5><span class="chip">buffer pool</span><span class="chip">lock system: row locks</span><span class="chip">active transactions, read views</span></div>
+    <div class="zone"><b>Replica</b><small>db-replica-1:3306</small><h5>On disk</h5><span class="chip F">relay log: db-replica-1-relay-bin.000007</span><span class="chip F">its own copy of orders.ibd</span><h5>In memory</h5><span class="chip">its own buffer pool</span><span class="chip">receiver and applier threads</span></div>
+  </div></div><figcaption>A crash wipes everything under “in memory”. The buffer pool is rebuilt from disk plus the redo log; row locks and open transactions simply vanish, and their changes are rolled back.</figcaption></figure>
+  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For order 7001</th></tr>
+    <tr><td>The row</td><td>A leaf of the clustered index, in the table’s <code>.ibd</code> file</td><td><code>shop/orders.ibd</code></td></tr>
+    <tr><td>Secondary index entries</td><td>The same <code>.ibd</code> file (one file per table) <span class="tag d">Default</span></td><td><code>idx_user_status_created</code>: (123, 'paid', …, 7001)</td></tr>
+    <tr><td>The change, for crash recovery</td><td>Redo log files in <code>#innodb_redo/</code></td><td>LSN 21342640 to 21342712</td></tr>
+    <tr><td>The old version</td><td>Undo tablespace</td><td>inventory 501, quantity 10</td></tr>
+    <tr><td>The change, for replicas</td><td>Binary log</td><td><code>binlog.000042</code>, position 1874</td></tr>
+    <tr><td>Row locks</td><td>InnoDB’s lock system, in memory, not in the row</td><td>X lock on inventory 501 until COMMIT</td></tr>
+    <tr><td>Table definitions</td><td>Data dictionary, <code>mysql.ibd</code></td><td><code>shop.orders</code></td></tr>
+    <tr><td>Who is the writer</td><td>ProxySQL hostgroup 10, checked against <code>read_only</code></td><td><code>db-primary</code> <span class="tag x">Example value</span></td></tr>
+  </table></div>
+  <h3>Who calls whom</h3>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  A["checkout-api on web-1 to web-3"] -->|"SQL on port 6033"| PX["ProxySQL"]:::ctl
+  PX -->|"writes, SQL on 3306"| P["db-primary"]:::lead
+  PX -->|"reads, SQL on 3306"| R1["db-replica-1"]
+  PX -->|"reads, SQL on 3306"| R2["db-replica-2"]
+  R1 -->|"receiver thread: send me binlog after my GTIDs"| P
+  R2 -->|"receiver thread"| P
+  PX -.->|"monitor: ping, read_only, lag"| P
+  PX -.->|"monitor"| R1
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Every arrow points from the side that opens the connection. The replicas dial the primary, not the other way round.</figcaption></figure>
+  <div class="tw"><table><tr><th>Caller</th><th>Calls</th><th>Request</th><th>Why</th></tr>
+    <tr><td>checkout-api</td><td>ProxySQL :6033</td><td>Ordinary MySQL protocol</td><td>The app thinks ProxySQL is the database.</td></tr>
+    <tr><td>ProxySQL</td><td>Primary :3306</td><td>The same SQL on a pooled connection</td><td>Few real connections serve many clients.</td></tr>
+    <tr><td>ProxySQL</td><td>Replicas :3306</td><td>Plain SELECTs</td><td>Spread read load.</td></tr>
+    <tr><td>ProxySQL monitor</td><td>Every server</td><td>Ping, <code>SELECT @@read_only</code>, lag check</td><td>Move a server between hostgroups when it changes role or falls behind.</td></tr>
+    <tr><td>Replica receiver thread</td><td>Primary :3306</td><td>“Send binlog events I have not got”</td><td>The replica knows its position, so it asks.</td></tr>
+    <tr><td>Primary binlog dump thread</td><td>(answers the above)</td><td>Streams events as they are written</td><td>One dump thread per connected replica.</td></tr>
+  </table></div>
+  <h3>What that means for your network</h3>
+  <ul>
+    <li><b>Apps only need to reach ProxySQL.</b> Port 6033. Keep 6032 (admin) private.</li>
+    <li><b>Replicas must reach the primary on 3306</b> with a user that has the <code>REPLICATION SLAVE</code> privilege.</li>
+    <li><b>ProxySQL must reach every server,</b> or it cannot notice a role change.</li>
+    <li><b>Failover is not built in here.</b> Promoting a replica needs a tool (Orchestrator, InnoDB Cluster) or a human. <span class="tag s">Simplified</span> <span class="tag a">Added</span></li>
+  </ul>
+</section>
+
+
 <div class="part" data-part="Sharding"><h2>Part 6: Sharding</h2><p>When one primary is not enough</p></div>
 
 <section class="s" id="whyshard" data-t="Why shard, and when not to">
-  <div class="sh"><span class="off">27</span><h2>Why shard, and when not to</h2></div>
+  <div class="sh"><span class="off">33</span><h2>Why shard, and when not to</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Copies help with reading, but every write still goes to one primary. When one machine can no longer hold all the data or take all the writes, you split the data so that each server owns part of it.</div>
+  <div class="words"><h4>New words</h4><div><b>vertical scaling</b><span>Buying a bigger machine.</span></div><div><b>shard key</b><span>The column that decides which shard a row belongs to.</span></div></div>
   <p class="lead">Sharding splits the data across several primaries so storage and write throughput add up, at the price of complexity you own forever.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Before sharding</h4><div class="row"><div class="bk dead" style="opacity:1"><b>Single MySQL</b><small>1 TB, 10K QPS</small><span class="chip X">one primary is the limit</span></div></div></div>
@@ -1429,7 +1695,10 @@ rpl_semi_sync_replica_enabled = 1</pre>
 </section>
 
 <section class="s" id="shardways" data-t="Range, hash, directory">
-  <div class="sh"><span class="off">28</span><h2>Range, hash and directory sharding</h2></div>
+  <div class="sh"><span class="off">34</span><h2>Range, hash and directory sharding</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Once the data is split, every query must know which shard to ask. There are three common rules: by ranges of the key, by a hash of the key, or by looking it up in a directory.</div>
+  <div class="words"><h4>New words</h4><div><b>hash</b><span>A function that turns a value into a number that looks random but is always the same for the same input.</span></div><div><b>modulo (mod)</b><span>The remainder after division: 10 mod 4 = 2.</span></div></div>
   <p class="lead">A router needs a rule to map a key to a shard: by range, by hash, or by looking it up in a table.</p>
   <div class="cards">
     <div class="card"><h4>Range</h4><pre class="code" style="margin:.3rem 0">Shard 1: user_id 1–1,000,000
@@ -1459,7 +1728,10 @@ directory:  SELECT shard FROM shard_map WHERE user_id = 123  → 3</pre></div></
 </section>
 
 <section class="s" id="shardkey" data-t="Shard keys and cross-shard queries">
-  <div class="sh"><span class="off">29</span><h2>Choosing a shard key</h2></div>
+  <div class="sh"><span class="off">35</span><h2>Choosing a shard key</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The shard key decides where each row lives. Choose the column your app almost always queries by, and most queries touch only one shard.</div>
+  <div class="words"><h4>New words</h4><div><b>scatter-gather</b><span>Sending a query to every shard and combining the answers.</span></div></div>
   <p class="lead">The shard key decides where every row lives and which queries stay on one shard, so pick the key your app already routes by.</p>
   <div class="tw"><table>
     <tr><th>Entity</th><th>Good shard key</th><th>Why</th></tr>
@@ -1508,7 +1780,10 @@ SELECT * FROM orders WHERE created_at &gt; '2026-10-01';         <i>-- all 4 sha
 </section>
 
 <section class="s" id="vitess" data-t="Vitess">
-  <div class="sh"><span class="off">30</span><h2>Vitess for MySQL sharding</h2></div>
+  <div class="sh"><span class="off">36</span><h2>Vitess for MySQL sharding</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Writing sharding logic into your own app is hard and error-prone. Vitess is a layer in front of many MySQL servers that does the routing for you, so the app talks to it as if it were one database.</div>
+  <div class="words"><h4>New words</h4><div><b>keyspace</b><span>Vitess’s name for a logical database, possibly spread over many shards.</span></div><div><b>vindex</b><span>Vitess’s rule for turning a column value into a shard.</span></div></div>
   <p class="lead">Vitess puts a sharding-aware proxy in front of many MySQL servers, so the app sends ordinary SQL and Vitess finds the right shard.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   APP["Application: checkout-api"] --> VG["VTGate&lt;br/&gt;query router"]:::ctl
@@ -1549,7 +1824,10 @@ SELECT * FROM orders WHERE created_at &gt; '2026-10-01';         <i>-- all 4 sha
 <div class="part" data-part="Query optimization"><h2>Part 7: Query optimization</h2><p>Find the expensive query, fix it</p></div>
 
 <section class="s" id="explain" data-t="EXPLAIN">
-  <div class="sh"><span class="off">31</span><h2>EXPLAIN and EXPLAIN ANALYZE</h2></div>
+  <div class="sh"><span class="off">37</span><h2>EXPLAIN and EXPLAIN ANALYZE</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Before running a query, MySQL makes a plan: which index to use and in which order to read tables. EXPLAIN shows that plan, so you can see why a query is slow before guessing.</div>
+  <div class="words"><h4>New words</h4><div><b>query plan</b><span>The steps MySQL intends to follow to answer a query.</span></div></div>
   <p class="lead">EXPLAIN shows the plan MySQL intends to run; EXPLAIN ANALYZE runs it and shows what actually happened.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">const<small>one row by key</small></span><i></i><span class="n g">eq_ref<small>one row per join</small></span><i></i><span class="n b">ref<small>rows by index</small></span><i></i><span class="n b">range<small>index range</small></span><i></i><span class="n y">index<small>whole index</small></span><i></i><span class="n r">ALL<small>whole table</small></span>
@@ -1583,7 +1861,10 @@ mysql&gt; EXPLAIN ANALYZE SELECT * FROM orders WHERE user_id = 123;
 </section>
 
 <section class="s" id="qopt" data-t="Common query fixes">
-  <div class="sh"><span class="off">32</span><h2>Common query fixes</h2></div>
+  <div class="sh"><span class="off">38</span><h2>Common query fixes</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Most slow queries are slow for a handful of predictable reasons: they read more rows or columns, or make more round trips, than they need to. This lesson lists the common ones and their fixes.</div>
+  <div class="words"><h4>New words</h4><div><b>round trip</b><span>One request from the app to the database and the reply back.</span></div></div>
   <p class="lead">Most slow queries are fixed by reading fewer rows, fewer columns or fewer round trips.</p>
   <div class="two" style="max-width:820px">
     <div><h4>Bad</h4><pre class="code" style="margin:0">SELECT * FROM orders WHERE user_id = 123;
@@ -1618,7 +1899,10 @@ INSERT INTO events VALUES
 </section>
 
 <section class="s" id="paging" data-t="Pagination without OFFSET">
-  <div class="sh"><span class="off">33</span><h2>Pagination without OFFSET</h2></div>
+  <div class="sh"><span class="off">39</span><h2>Pagination without OFFSET</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Showing results page by page with OFFSET makes MySQL count past every earlier row each time. Remembering where the last page ended, and starting from there, is far cheaper.</div>
+  <div class="words"><h4>New words</h4><div><b>pagination</b><span>Splitting a long result into pages.</span></div><div><b>keyset pagination</b><span>Fetching the next page with WHERE key &gt; last-key-seen instead of OFFSET.</span></div></div>
   <p class="lead">OFFSET makes MySQL read and throw away every skipped row; a cursor on the last key seen jumps straight to the next page.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>OFFSET 10000</label><div class="cell gone"><b>1</b><span>read, skip</span></div><div class="cell gone"><b>…</b><span>read, skip</span></div><div class="cell gone"><b>10000</b><span>read, skip</span></div><div class="cell pend"><b>10001</b><span>return</span></div><div class="cell pend"><b>…</b><span>return</span></div><div class="cell pend"><b>10010</b><span>return</span></div></div>
@@ -1649,7 +1933,10 @@ SELECT * FROM orders
 </section>
 
 <section class="s" id="slow" data-t="Finding slow queries">
-  <div class="sh"><span class="off">34</span><h2>Finding slow queries</h2></div>
+  <div class="sh"><span class="off">40</span><h2>Finding slow queries</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Before fixing anything, find out which queries cost the most time overall. MySQL can log slow queries and keep statistics for every query shape.</div>
+  <div class="words"><h4>New words</h4><div><b>slow query log</b><span>A file where MySQL records queries slower than a threshold.</span></div><div><b>digest</b><span>A query with its literal values removed, so similar queries are counted together.</span></div></div>
   <p class="lead">Optimisation starts with seeing which queries cost the most time in total, then reading their plans.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n p">Slow log + digest table</span><i data-t="rank by total time"></i><span class="n y">Top query</span><i data-t="EXPLAIN"></i><span class="n">Plan</span><i data-t="index, rewrite, cache"></i><span class="n g">Fix</span><i data-t="measure again"></i><span class="n b">EXPLAIN ANALYZE</span>
@@ -1692,7 +1979,9 @@ KILL QUERY 4182;</pre>
 <div class="part" data-part="Choose and revise"><h2>Part 8: Choose and revise</h2><p>Compare, test yourself, prove it</p></div>
 
 <section class="s" id="vs" data-t="MySQL vs the others">
-  <div class="sh"><span class="off">35</span><h2>MySQL vs the other databases</h2></div>
+  <div class="sh"><span class="off">41</span><h2>MySQL vs the other databases</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Interviewers often ask why MySQL and not something else. A good answer names what the system needs, and which database is built for exactly that.</div>
   <p class="lead">Never answer “it is what I know”; say which trade-off each database makes and why yours fits the requirement.</p>
   <h3>MySQL vs PostgreSQL</h3>
   <div class="tw"><table>
@@ -1747,7 +2036,9 @@ only when one primary can no longer take the writes.</pre></div></aside>
 </section>
 
 <section class="s" id="srev" data-t="Revision and glossary">
-  <div class="sh"><span class="off">36</span><h2>Quick revision and glossary</h2></div>
+  <div class="sh"><span class="off">42</span><h2>Quick revision and glossary</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten in the glossary.</div>
   <p class="lead">Test yourself, then look up any term.</p>
   <div class="demo selftest" id="selftest"></div>
   <details class="q"><summary>Which two logs does a commit write on a MySQL primary, and what is each one for?</summary><div class="in">InnoDB’s redo log, for crash recovery of the data files, and the server’s binary log, for replication and point-in-time recovery.</div></details>
@@ -1782,7 +2073,9 @@ only when one primary can no longer take the writes.</pre></div></aside>
 </section>
 
 <section class="s" id="slab" data-t="Proof checklist">
-  <div class="sh"><span class="off">37</span><h2>Proof checklist</h2></div>
+  <div class="sh"><span class="off">43</span><h2>Proof checklist</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a real MySQL server. These experiments show you how, one row at a time.</div>
   <p class="lead">17 small experiments on a real MySQL 8.4 server (a replica pair for rows 11 to 14). Each one settles a tagged statement from the lessons.</p>
   <p id="labProg" aria-live="polite"></p>
   <div class="tw" style="max-width:none"><table class="lab">
@@ -1801,7 +2094,7 @@ only when one primary can no longer take the writes.</pre></div></aside>
     <tr id="c12"><td><input type="checkbox" data-lab="c12" aria-label="Passed: replica status"></td><td>12</td><td><b>Replication threads and lag</b><br>Are both replica threads running?</td><td>On a replica: <code>SHOW REPLICA STATUS\G</code>. Then run a 30-second <code>UPDATE</code> on the primary and watch again.</td><td>Both <code>Running: Yes</code>; <code>Seconds_Behind_Source</code> jumps during the big transaction.</td></tr>
     <tr id="c13"><td><input type="checkbox" data-lab="c13" aria-label="Passed: semi-sync fallback"></td><td>13</td><td><b>Semi-sync fallback</b><br>What happens when no replica answers?</td><td>Enable semi-sync, <code>STOP REPLICA</code> on every replica, commit on the primary. Check <code>@@rpl_semi_sync_source_wait_point</code>.</td><td>The commit takes about 10 s, then <code>Rpl_semi_sync_source_status</code> is OFF. Wait point is <code>AFTER_SYNC</code>.</td></tr>
     <tr id="c14"><td><input type="checkbox" data-lab="c14" aria-label="Passed: parallel applier"></td><td>14</td><td><b>Parallel applier</b><br>How many workers apply on a replica?</td><td><code>SELECT @@replica_parallel_workers, @@replica_preserve_commit_order;</code></td><td><code>4</code> and <code>1</code> on a stock 8.4 replica.</td></tr>
-    <tr id="c15"><td><input type="checkbox" data-lab="c15" aria-label="Passed: pagination"></td><td>15</td><td><b>OFFSET vs keyset</b><br>Does OFFSET read the skipped rows?</td><td><code>EXPLAIN ANALYZE</code> both pagination queries from lesson 33 on a 100,000-row table.</td><td>OFFSET reports about offset + 10 rows read; keyset about 10.</td></tr>
+    <tr id="c15"><td><input type="checkbox" data-lab="c15" aria-label="Passed: pagination"></td><td>15</td><td><b>OFFSET vs keyset</b><br>Does OFFSET read the skipped rows?</td><td><code>EXPLAIN ANALYZE</code> both pagination queries from lesson 39 on a 100,000-row table.</td><td>OFFSET reports about offset + 10 rows read; keyset about 10.</td></tr>
     <tr id="c16"><td><input type="checkbox" data-lab="c16" aria-label="Passed: adaptive hash index"></td><td>16</td><td><b>Adaptive hash index</b><br>Is it off on 8.4?</td><td><code>SELECT @@innodb_adaptive_hash_index;</code></td><td><code>0</code> on a stock 8.4 install (<code>1</code> on 8.0).</td></tr>
     <tr id="c17"><td><input type="checkbox" data-lab="c17" aria-label="Passed: redo capacity"></td><td>17</td><td><b>Redo log size</b><br>Which setting sizes the redo log?</td><td><code>SELECT @@innodb_redo_log_capacity/1024/1024 AS mb;</code> and <code>ls /var/lib/mysql/#innodb_redo</code></td><td>100 MB by default, stored as <code>#ib_redo…</code> files.</td></tr>
   </table></div>
@@ -1895,7 +2188,7 @@ const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
   terms.sort((a,b)=>b.name.length-a.name.length);
   terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
   /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
-  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk';
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk,.words';
   lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
     nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
       for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;

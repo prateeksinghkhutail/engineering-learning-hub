@@ -101,16 +101,16 @@
   },
   {
     "id": "mysql",
-    "title": "MySQL, from one query to a sharded fleet",
+    "title": "MySQL, from zero to a sharded fleet",
     "category": "Databases",
-    "description": "37 lessons on MySQL and InnoDB for system design: storage internals, indexes, locking, replication and sharding",
+    "description": "43 lessons that start from “what is a database” and go deep: InnoDB internals, indexes, locking, replication and sharding",
     "path": "artifacts/mysql.html",
     "highlights": [
+      "Start here: tables, SQL, transactions, indexes",
       "InnoDB: buffer pool, redo, undo, MVCC",
-      "Indexes & the leftmost prefix",
-      "Isolation, gap locks & deadlocks",
-      "Replication: async, semi-sync, group",
-      "Sharding & Vitess"
+      "Indexes and the leftmost prefix",
+      "Isolation, locks and deadlocks",
+      "Replication, sharding and Vitess"
     ],
     "tags": [
       "MySQL",
