@@ -25,5 +25,14 @@
     "path": "artifacts/postgresql.html",
     "highlights": ["WAL, pages & buffer cache", "ACID, MVCC & isolation", "Indexes", "Replication & HA", "Performance"],
     "tags": ["PostgreSQL", "MVCC", "WAL", "System Design"]
+  },
+  {
+    "id": "mongodb",
+    "title": "MongoDB, from one document to a sharded cluster",
+    "category": "Databases",
+    "description": "60 lessons on MongoDB, from one document on one server to a sharded production cluster",
+    "path": "artifacts/mongodb.html",
+    "highlights": ["Document model", "Replica sets & oplog", "Sharding", "Data modelling & indexes", "Consistency & change streams"],
+    "tags": ["MongoDB", "NoSQL", "Sharding", "System Design"]
   }
 ]
