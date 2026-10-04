@@ -81,14 +81,14 @@
   },
   {
     "id": "mongodb",
-    "title": "MongoDB, from one document to a sharded cluster",
+    "title": "MongoDB, from zero to a sharded cluster",
     "category": "Databases",
-    "description": "60 lessons on MongoDB, from one document on one server to a sharded production cluster",
+    "description": "63 lessons that start from “what is a database” and JSON documents, then go all the way to a sharded production cluster",
     "path": "artifacts/mongodb.html",
     "highlights": [
-      "Document model",
-      "Replica sets & oplog",
-      "Sharding",
+      "Start here: documents, JSON, first commands",
+      "Replica sets & the oplog",
+      "Sharding and shard keys",
       "Data modelling & indexes",
       "Consistency & change streams"
     ],
