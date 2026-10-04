@@ -159,5 +159,26 @@
       "Analytics",
       "SQL"
     ]
+  },
+  {
+    "id": "prometheus",
+    "title": "Prometheus, from zero to production monitoring",
+    "category": "Observability",
+    "description": "41 lessons from “why monitor at all” through metric types, scraping, the TSDB, PromQL, alerting and Alertmanager to HA, federation and long-term storage, with a 114-term keyword index",
+    "path": "artifacts/prometheus.html",
+    "highlights": [
+      "Start here: metrics, scraping, your first query",
+      "Counters, gauges, histograms, cardinality",
+      "Scraping, service discovery, relabeling, exporters",
+      "PromQL: rate, aggregation, histogram_quantile",
+      "Alerting rules, Alertmanager, HA, remote write"
+    ],
+    "tags": [
+      "Prometheus",
+      "Monitoring",
+      "PromQL",
+      "Alerting",
+      "Observability"
+    ]
   }
 ]

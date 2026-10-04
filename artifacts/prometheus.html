@@ -1,0 +1,1599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prometheus, from zero to production monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f7;--surface:#ffffff;--surface2:#e2e9f2;--ink:#16233a;--muted:#52617a;--line:#c7d2e0;
+  --leader:#f2b705;--leader-ink:#16233a;--follower:#2f6fde;--follower-bg:#e3edff;
+  --ctrl:#7a4fd6;--ctrl-bg:#efe8ff;--ok:#17885c;--ok-bg:#dff5ea;--bad:#cf3f36;--bad-bg:#fde6e3;
+  --link:#2459c4;--board:#111c2e;--board-ink:#e8eef7;--board-line:#2c3e5e;
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",Verdana,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 70px);scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--body);-webkit-text-size-adjust:100%}
+a{color:var(--link)}
+:focus-visible{outline:3px solid var(--leader);outline-offset:2px;border-radius:4px}
+code,kbd{font-family:var(--mono);font-size:.86em;background:var(--surface2);padding:.1em .35em;border-radius:4px}
+h1,h2,h3{font-family:var(--display);line-height:1.1;margin:0}
+p{margin:.7em 0;max-width:68ch}
+ul,ol{max-width:68ch;padding-left:1.2em;margin:.6em 0}
+li{margin:.3em 0}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:.6rem;
+  padding:.55rem 1rem;background:var(--surface);border-bottom:1px solid var(--line)}
+.top strong{font-family:var(--display);font-size:1.05rem;margin-right:auto}
+.btn{font:700 .9rem var(--body);color:var(--ink);background:var(--surface2);border:1px solid var(--line);
+  padding:.45rem .8rem;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn{white-space:nowrap}
+.top strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.btn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.warn{background:var(--bad-bg);border-color:var(--bad);color:var(--ink)}
+#bar{position:absolute;left:0;bottom:-3px;height:3px;width:0;background:var(--leader)}
+#menuBtn{display:none}
+
+.shell{display:grid;grid-template-columns:270px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav#toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);align-self:start;max-height:calc(100vh - 60px);
+  overflow:auto;padding:1.2rem 1rem 2rem;font-size:.9rem}
+nav#toc h3{font-size:.95rem;margin:1.1rem 0 .3rem;color:var(--muted)}
+nav#toc a{display:flex;gap:.5rem;padding:.22rem .4rem;border-radius:6px;color:var(--ink);text-decoration:none}
+nav#toc a span{font-family:var(--mono);font-size:.78rem;color:var(--muted);min-width:1.4rem;padding-top:.15rem}
+nav#toc a:hover{background:var(--surface2)}
+nav#toc a.cur{background:var(--leader);color:var(--leader-ink)}
+nav#toc a.cur span{color:var(--leader-ink)}
+main{padding:0 1.25rem 5rem;min-width:0}
+@media (max-width:980px){
+  .shell{display:block}
+  #menuBtn{display:inline-block}
+  nav#toc{display:none;position:fixed;inset:calc(env(safe-area-inset-top,0px) + 50px) 0 0 0;max-height:none;background:var(--bg);z-index:15}
+  nav#toc.open{display:block}
+}
+
+/* hero */
+.hero{padding:3.2rem 0 2.2rem;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(2.5rem,7vw,4.6rem);font-weight:800;letter-spacing:-.03em;max-width:14ch}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:52ch}
+.herolog{margin-top:1.8rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.88rem;color:var(--muted);margin-top:1.2rem}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+
+/* part divider + sections */
+.part{margin:3.5rem 0 0;padding:1rem 1.2rem;background:var(--ink);color:var(--bg);border-radius:14px}
+.part h2{font-size:1.5rem;font-weight:700}
+.part p{margin:.2rem 0 0;opacity:.8;font-size:.95rem}
+section.s{padding:2.6rem 0 1rem;border-bottom:1px dashed var(--line)}
+.sh{display:flex;align-items:center;gap:.9rem;margin-bottom:.4rem}
+.sh .off{font:600 .95rem var(--mono);background:var(--leader);color:var(--leader-ink);min-width:2.6rem;height:2.6rem;
+  display:grid;place-items:center;border-radius:8px;border:2px solid var(--ink)}
+.sh h2{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em}
+.lead{font-size:1.15rem;margin:.6rem 0 1rem}
+h3{font-size:1.2rem;margin:1.6rem 0 .3rem}
+
+/* what / why / how */
+.wwh{display:grid;gap:.5rem;margin:1rem 0;max-width:72ch}
+.wwh div{display:grid;grid-template-columns:4.2rem 1fr;gap:.8rem;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:.6rem .8rem}
+.wwh b{font-family:var(--display);color:var(--follower)}
+
+/* figures */
+figure{margin:1.2rem 0;max-width:820px}
+.canvas{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.1rem;overflow-x:auto}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.45rem;max-width:68ch}
+.cluster{border:2px dashed var(--muted);border-radius:14px;padding:1.6rem .8rem .8rem;position:relative;min-width:max-content}
+.cluster>em{position:absolute;top:-.8rem;left:.9rem;background:var(--surface);padding:0 .5rem;font:700 .9rem var(--display);font-style:normal}
+.row{display:flex;gap:.7rem;flex-wrap:wrap;align-items:stretch}
+.row.nowrap{flex-wrap:nowrap}
+.bk{flex:1 1 150px;min-width:150px;background:var(--surface2);border:2px solid var(--ink);border-radius:10px;padding:.6rem}
+.bk>b{display:block;font-family:var(--display);margin-bottom:.35rem}
+.bk small{color:var(--muted);display:block;font-size:.8rem}
+.bk.dead{opacity:.45;border-style:dashed;border-color:var(--bad)}
+.bk.ctl{border-color:var(--ctrl);background:var(--ctrl-bg)}
+button.bk{font:inherit;color:inherit;text-align:left;cursor:pointer}
+.chip{display:block;font:600 .8rem var(--mono);padding:.3rem .5rem;border-radius:6px;margin-top:.3rem;
+  background:var(--surface);border:1px solid var(--line)}
+.chip.L{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.L::before{content:"L  "}
+.chip.Y{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.F{background:var(--follower-bg);border-color:var(--follower)}
+.chip.F::before{content:"F  "}
+.chip.C{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.chip.X{background:var(--bad-bg);border-color:var(--bad)}
+.chip.inl{display:inline-block;margin:0}
+.log{display:flex;align-items:flex-end;gap:3px;margin:.35rem 0;min-width:max-content}
+.log>label,.log>em{font:600 .82rem var(--mono);font-style:normal;min-width:5.6rem;padding-bottom:.45rem;color:var(--muted)}
+.cell{border:1.5px solid var(--ink);background:var(--surface);border-radius:5px;min-width:4.6rem;text-align:center;
+  font:400 .78rem var(--mono);overflow:hidden}
+.cell b{display:block;background:var(--ink);color:var(--surface);font-weight:600;padding:.05rem 0}
+.cell span{display:block;padding:.28rem .35rem}
+.cell.new{animation:pop .45s ease-out}
+.cell.done span{background:var(--ok-bg)}
+.cell.pend span{background:var(--leader);color:var(--leader-ink)}
+.cell.ghost{border-style:dashed;opacity:.55}
+.cell.gone{opacity:.3;text-decoration:line-through}
+@keyframes pop{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+.flow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.flow.v{flex-direction:column;align-items:flex-start}
+.flow .n{background:var(--surface2);border:1.5px solid var(--ink);border-radius:8px;padding:.4rem .7rem;font-weight:700;font-size:.92rem}
+.flow .n small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.flow .n.y{background:var(--leader);color:var(--leader-ink)}
+.flow .n.y small{color:var(--leader-ink)}
+.flow .n.b{background:var(--follower-bg);border-color:var(--follower)}
+.flow .n.p{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.flow .n.r{background:var(--bad-bg);border-color:var(--bad)}
+.flow .n.g{background:var(--ok-bg);border-color:var(--ok)}
+.flow>i{font-style:normal;color:var(--muted);font-weight:700}
+.flow>i::before{content:"→"}
+.flow.v>i{padding-left:1.2rem}
+.flow.v>i::before{content:"↓"}
+.flow>i[data-t]::after{content:" " attr(data-t);font:400 .78rem var(--body)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.8rem}
+.two>div{background:var(--surface2);border-radius:10px;padding:.8rem}
+.two h4{margin:0 0 .5rem;font:700 .95rem var(--display)}
+
+/* mermaid board follows the theme; code blocks stay dark */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;overflow-x:auto}
+.board pre.mmd{margin:0;font:400 .8rem/1.5 var(--mono);color:var(--muted);white-space:pre-wrap}
+.board .svgw{text-align:center;min-width:min(100%,520px)}
+.board svg{max-width:100%;height:auto}
+pre.code{background:var(--board);color:var(--board-ink);border:1px solid var(--board-line);border-radius:12px;padding:.9rem 1rem;
+  font:400 .84rem/1.55 var(--mono);overflow-x:auto;max-width:820px}
+pre.code i{color:#9fb3d1;font-style:normal}
+pre.code b{color:var(--leader);font-weight:600}
+
+/* callouts */
+.tip,.fail,.remember{border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;border-left:6px solid}
+.tip{background:var(--follower-bg);border-color:var(--follower)}
+.fail{background:var(--bad-bg);border-color:var(--bad)}
+.remember{background:var(--leader);color:var(--leader-ink);border-color:var(--ink);font-weight:700}
+.tip>b,.fail>b{font-family:var(--display)}
+details.deep,details.q{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:1rem 0;max-width:72ch}
+details summary{cursor:pointer;padding:.65rem .9rem;font-weight:700}
+details .in{padding:0 .9rem .7rem}
+details.q{border-color:var(--ok)}
+details.q summary::before{content:"Quick check: ";color:var(--ok)}
+
+/* steps */
+ol.steps{list-style:none;padding:0;counter-reset:s;max-width:72ch}
+ol.steps li{counter-increment:s;position:relative;padding:.1rem 0 .7rem 2.6rem;margin:0;border-left:2px solid var(--line);margin-left:.9rem}
+ol.steps li::before{content:counter(s);position:absolute;left:-.95rem;top:0;width:1.8rem;height:1.8rem;border-radius:50%;
+  background:var(--ink);color:var(--bg);display:grid;place-items:center;font:600 .82rem var(--mono)}
+ol.steps li:last-child{border-color:transparent}
+ol.steps b{font-family:var(--display)}
+
+/* demos */
+.demo{background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:1rem;margin:1.2rem 0;max-width:820px}
+.demo>h4{margin:0 0 .6rem;font:700 1.05rem var(--display)}
+.ctrls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.8rem}
+.ctrls input,.ctrls select{font:400 .95rem var(--mono);padding:.42rem .6rem;border-radius:8px;border:1.5px solid var(--ink);
+  background:var(--bg);color:var(--ink);min-width:0}
+.ctrls label{font-size:.88rem;color:var(--muted)}
+.out{font:400 .88rem var(--mono);background:var(--surface2);border-radius:8px;padding:.55rem .7rem;margin:.6rem 0;min-height:2.4rem}
+.scroll{overflow-x:auto}
+
+/* tables + cards */
+.tw{overflow-x:auto;max-width:820px}
+table{border-collapse:collapse;width:100%;background:var(--surface);font-size:.94rem}
+th,td{border:1px solid var(--line);padding:.5rem .7rem;text-align:left;vertical-align:top}
+th{background:var(--ink);color:var(--bg);font-family:var(--display)}
+.yes{color:var(--ok);font-weight:700}.no{color:var(--bad);font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.8rem;max-width:900px;margin:1rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:.8rem .9rem}
+.card h4{margin:0 0 .3rem;font:700 1rem var(--display)}
+.card p{margin:.3rem 0;font-size:.94rem}
+.myth .w{background:var(--bad-bg);border-radius:8px;padding:.5rem .6rem;margin:0 0 .4rem}
+.myth .c{background:var(--ok-bg);border-radius:8px;padding:.5rem .6rem;margin:0}
+.myth .w::before{content:"✗ ";color:var(--bad);font-weight:700}
+.myth .c::before{content:"✓ ";color:var(--ok);font-weight:700}
+.final{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.tag{display:inline-block;font:700 .72rem var(--body);padding:.08rem .5rem;border-radius:999px;border:1.5px solid;text-decoration:none;vertical-align:.08em;white-space:nowrap;margin-left:.15rem}
+.tag.g{color:var(--ok);background:var(--ok-bg)}
+.tag.d{color:var(--follower);background:var(--follower-bg)}
+.tag.s{color:var(--ctrl);background:var(--ctrl-bg)}
+.tag.x{color:var(--muted);background:var(--surface2);border-style:dashed}
+a.tag:hover{filter:brightness(.92)}
+.remember .tag,.chip.Y .tag{background:var(--surface)}
+.trk{border:2px solid var(--ink);border-radius:12px;margin:1.6rem 0 .8rem;max-width:820px;background:var(--surface);overflow:hidden}
+.trk h4{margin:0;padding:.35rem .8rem;background:var(--leader);color:var(--leader-ink);font:700 .95rem var(--display);border-bottom:2px solid var(--ink)}
+.trk h4::after{content:attr(data-id);float:right;font:600 .8rem var(--mono)}
+.trk .in{padding:.2rem .8rem .7rem}
+.trk pre.code{margin:.4rem 0 0;border-radius:8px}
+.zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.7rem}
+.zone{border:2px solid var(--ink);border-radius:10px;padding:.6rem;background:var(--surface2)}
+.zone>b{font-family:var(--display);display:block}
+.zone>small{color:var(--muted);font:400 .78rem var(--mono);display:block;margin-bottom:.3rem}
+.zone h5{margin:.5rem 0 0;font:700 .78rem var(--body);color:var(--muted)}
+table.lab td:first-child{text-align:center}
+table.lab input{width:1.2rem;height:1.2rem;accent-color:var(--ok)}
+table.lab code{white-space:normal;word-break:break-word}
+table.lab tr.ok td{background:var(--ok-bg)}
+#labProg{font-weight:700}
+footer{color:var(--muted);font-size:.88rem;padding:2rem 0}
+
+/* reader tools: search, lesson progress, glossary tooltips, self-test */
+.srch{margin:0 0 .5rem}
+.srch input{width:100%;font:400 .9rem var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:.45rem .6rem}
+.srch .res{margin-top:.3rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.25rem;max-height:55vh;overflow:auto}
+.srch .res small{display:block;color:var(--muted);font-size:.78rem}
+.srch .res p{margin:.3rem .45rem;color:var(--muted);font-size:.85rem}
+#doneProg{font-size:.82rem;color:var(--muted);margin:0 0 .2rem}
+.btn.done{font-size:.8rem;padding:.25rem .6rem;margin:.1rem 0 .3rem}
+.btn.done.ok{background:var(--ok-bg);border-color:var(--ok)}
+nav#toc a.ok span{color:var(--ok);font-weight:700}
+nav#toc a.cur.ok span{color:var(--leader-ink)}
+abbr.gl{text-decoration:none;border-bottom:2px dotted var(--follower);cursor:help;position:relative}
+abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolute;left:0;top:1.6em;z-index:12;width:max-content;max-width:min(20rem,70vw);
+  background:var(--ink);color:var(--bg);font:400 .82rem/1.4 var(--body);padding:.5rem .7rem;border-radius:8px;white-space:normal}
+.selftest .q{font:700 1.1rem var(--display);margin:.2rem 0 .6rem}
+.selftest .a{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:8px;padding:.6rem .8rem;margin:0 0 .7rem}
+.selftest .from{font-size:.82rem;color:var(--muted);margin:0}
+.selftest ul{margin:.3rem 0 .7rem}
+.chip.L::before{content:"P  "}
+.chip.F::before{content:"R  "}
+.tag.a{color:var(--leader-ink);background:var(--leader);border-color:var(--ink)}
+figure.big{max-width:none}
+.bk.hit{outline:3px solid var(--leader);outline-offset:1px}
+.cell.lost{border-color:var(--bad)}
+.cell.lost span{background:var(--bad-bg);color:var(--ink)}
+.cards .flow{margin:.4rem 0}
+.card pre.code{font-size:.78rem;padding:.5rem .6rem;white-space:pre-wrap}
+.ctrls input[type=checkbox]{min-width:0;width:auto}
+/* beginner layer */
+.plain{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;font-size:1.02rem}
+.plain>b:first-child{display:block;font:700 .82rem var(--display);color:var(--ok);letter-spacing:.02em;margin-bottom:.25rem}
+.words{display:grid;gap:.3rem;margin:.4rem 0 1.1rem;max-width:72ch;font-size:.93rem}
+.words>h4{margin:0 0 .1rem;font:700 .82rem var(--display);color:var(--muted)}
+.words>div{display:grid;grid-template-columns:minmax(7.5rem,max-content) 1fr;gap:.7rem;padding:.35rem .6rem;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.words>div>b{font-family:var(--mono);font-size:.86rem}
+@media (max-width:520px){.words>div{grid-template-columns:1fr;gap:.1rem}}
+</style>
+</head>
+<body>
+<div class="top">
+  <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
+  <strong>Prometheus, from zero to production monitoring</strong>
+  <button class="btn" id="themeBtn">Dark theme</button>
+  <div id="bar"></div>
+</div>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+<div class="hero">
+  <h1>Count everything. Ask questions in numbers. Wake someone only when it matters.</h1>
+  <p>A course on Prometheus that starts from zero. Part 0 explains why systems need monitoring, what a metric is, and has you look at real metrics in a minute. Then it goes deep: the data model and metric types, scraping and service discovery, the storage engine, PromQL, alerting with Alertmanager, and scaling to many clusters. One failing checkout is followed through every lesson, with five simulators.</p>
+  <div class="canvas herolog scroll">
+    <div class="flow" style="margin-bottom:1rem"><span class="n g">checkout-1..3<small>expose /metrics</small></span><i data-t="scraped every 15 s"></i><span class="n y">Prometheus<small>stores, evaluates rules</small></span><i data-t="alert fires"></i><span class="n p">Alertmanager<small>groups, routes</small></span><i data-t="page"></i><span class="n g">on-call engineer</span></div>
+    <div class="log"><label>5xx rate</label><div class="cell done"><b>10:05</b><span>0.2%</span></div><div class="cell done"><b>10:06</b><span>0.3%</span></div><div class="cell pend new"><b>10:07</b><span>8.1%</span></div><div class="cell pend"><b>10:12</b><span>firing</span></div><div class="cell ghost"><b>next</b><span>…</span></div></div>
+    <div style="font:400 .82rem var(--mono);color:var(--muted)">Numbers collected every few seconds become a graph, a rule, and finally one well-timed page.</div>
+  </div>
+  <div class="legend">
+    <span><span class="chip Y inl">Prometheus</span> the server collecting and querying. Yellow also marks our metric</span>
+    <span><span class="chip F inl">targets</span> services and exporters being scraped</span>
+    <span><span class="chip C inl">control</span> Alertmanager, rules, service discovery</span>
+    <span><span class="chip X inl">problem</span> errors, down targets, firing alerts</span>
+    <span><span class="flow" style="display:inline-flex"><span class="n g" style="padding:.1rem .5rem">people</span></span> engineers, dashboards, pagers</span>
+  </div>
+</div>
+
+<section class="s" id="s0" data-t="Running example and tags">
+  <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  <div class="plain"><b>In plain words</b>This course follows one bad morning: at 10:07 QuickCart’s checkout service starts failing some payments. We follow one number, the count of failed checkout requests, from the service that counts it, to Prometheus, to a graph, to an alert that wakes the on-call engineer. Do not worry if the words below are new: Part 0, right after this lesson, starts from zero.</div>
+  <p class="lead">QuickCart’s checkout service starts returning errors at 10:07; we follow its error counter from the service to an alert that pages the on-call engineer at 10:12.</p>
+  <pre class="code"><i># the one time series we follow</i>
+http_requests_total{job="checkout", instance="checkout-1:8080", method="POST", path="/checkout", status="500"}
+
+<i># the alert it eventually triggers</i>
+CheckoutHighErrorRate: more than 5% of checkout requests failing, for 5 minutes</pre>
+  <div class="tw"><table>
+    <tr><th>Piece</th><th>In this guide</th></tr>
+    <tr><td>Company</td><td>QuickCart, an online shop</td></tr>
+    <tr><td>Service</td><td><code>checkout</code>, 3 instances: <code>checkout-1:8080</code>, <code>checkout-2:8080</code>, <code>checkout-3:8080</code></td></tr>
+    <tr><td>Metrics it exposes</td><td><code>http_requests_total</code> (counter), <code>http_request_duration_seconds</code> (histogram), <code>checkout_in_flight_requests</code> (gauge)</td></tr>
+    <tr><td>Prometheus server</td><td><code>prom-1:9090</code>, scraping every 15 s, keeping 15 days</td></tr>
+    <tr><td>Machine metrics</td><td><code>node_exporter</code> on every host, port 9100</td></tr>
+    <tr><td>Alertmanager</td><td><code>am-1:9093</code>, sending pages to receiver <code>oncall-pager</code> and messages to <code>#checkout-alerts</code></td></tr>
+    <tr><td>Dashboard</td><td>Grafana, “Checkout overview”</td></tr>
+    <tr><td>On-call engineer</td><td>Sam</td></tr>
+    <tr><td>Incident</td><td>a payment provider timeout causes HTTP 500s from 10:07</td></tr>
+  </table></div>
+  <p>Every name, number and timing is invented for the example, unless a lesson says it is computed or quoted from the Prometheus documentation. The course covers Prometheus 3.x.</p>
+  <h3>Four tags tell you how far to trust a statement</h3>
+  <div class="tw"><table>
+    <tr><th>Tag</th><th>Meaning</th></tr>
+    <tr><td><span class="tag g">Guaranteed</span></td><td>Holds on every Prometheus. Part of the design.</td></tr>
+    <tr><td><span class="tag d">Default</span></td><td>The stock setting. Yours may be configured differently.</td></tr>
+    <tr><td><span class="tag s">Simplified</span></td><td>True in spirit. A detail was left out, or it is a rule of thumb.</td></tr>
+    <tr><td><span class="tag x">Example value</span></td><td>A number or name invented for the running example.</td></tr>
+  </table></div>
+  <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>, which you can run on a laptop with Docker.</p>
+</section>
+
+<div class="part" data-part="Start here"><h2>Part 0: Start here</h2><p>No monitoring knowledge needed</p></div>
+
+<section class="s" id="whymon" data-t="Why monitor at all">
+  <div class="sh"><span class="off">01</span><h2>Why monitor at all?</h2></div>
+  <div class="plain"><b>In plain words</b>A car has a dashboard: speed, fuel, engine temperature, and a warning light when something is wrong. Without it you would only find out about trouble when the car stops. Software services need the same: numbers that show how they are doing, and warnings before customers notice. That is monitoring.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>monitoring</b><span>Continuously measuring how systems behave, and warning people when something is wrong.</span></div>
+    <div><b>observability</b><span>How well you can understand what a system is doing from the data it emits.</span></div>
+    <div><b>metric</b><span>A number measured over time, such as requests per second.</span></div>
+    <div><b>log</b><span>A text record of one event, such as one error message.</span></div>
+    <div><b>trace</b><span>The path of one request through several services, with timings.</span></div>
+  </div>
+  <p class="lead">Monitoring turns a running system into numbers you can watch and alert on; metrics, logs and traces are the three kinds of data used for it, and Prometheus handles metrics.</p>
+  <figure><div class="canvas"><div class="cards" style="margin:0">
+    <div class="card"><h4>Metrics</h4><p>“8% of checkouts failed in the last 5 minutes.” Cheap, numeric, great for graphs and alerts.</p></div>
+    <div class="card"><h4>Logs</h4><p>“10:07:12 payment provider timeout for order 4471.” Detail about single events.</p></div>
+    <div class="card"><h4>Traces</h4><p>“This checkout spent 2.9 s waiting on the payment service.” One request across services.</p></div>
+  </div></div><figcaption>The three pillars. Metrics tell you something is wrong; logs and traces help find why. Prometheus is a metrics system.</figcaption></figure>
+  <ul>
+    <li><b>Metrics are cheap:</b> a counter is a single number however many requests it counts.</li>
+    <li><b>Alerts need metrics:</b> “error rate above 5% for 5 minutes” is a question about numbers over time.</li>
+  </ul>
+  <details class="q"><summary>Which of the three (metrics, logs, traces) is best for “alert me when more than 5% of requests fail”, and why?</summary><div class="in">Metrics: they are numbers over time that can be computed and compared cheaply and continuously. Logs and traces are better for investigating why, after the alert fires.</div></details>
+  <aside class="trk"><h4 data-id="checkout">Follow the checkout</h4><div class="in"><p>Without monitoring, QuickCart learned about failed payments from angry customer emails, hours later. This course is about catching the 10:07 incident within minutes.</p></div></aside>
+</section>
+
+<section class="s" id="whatmetric" data-t="What a metric is">
+  <div class="sh"><span class="off">02</span><h2>What a metric is: numbers over time</h2></div>
+  <div class="plain"><b>In plain words</b>A thermometer read every minute gives a list of (time, temperature) pairs. Draw them and you have a graph. A metric is exactly that: a named number recorded again and again. Each recorded value is a sample, and the whole list is a time series.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>sample</b><span>One measurement: a value at a timestamp.</span></div>
+    <div><b>time series</b><span>A list of samples for one thing over time.</span></div>
+    <div><b>label</b><span>A key–value tag that says which thing a series is about, such as <code>instance="checkout-1"</code>.</span></div>
+  </div>
+  <p class="lead">A metric is a named measurement; each combination of the name and its labels is one time series, a list of timestamped samples.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>checkout-1 requests</label><div class="cell"><b>10:00:00</b><span>1200</span></div><div class="cell"><b>10:00:15</b><span>1243</span></div><div class="cell"><b>10:00:30</b><span>1290</span></div><div class="cell pend"><b>10:00:45</b><span>1338</span></div></div>
+    <div class="log"><label>checkout-2 requests</label><div class="cell"><b>10:00:00</b><span>1180</span></div><div class="cell"><b>10:00:15</b><span>1219</span></div><div class="cell"><b>10:00:30</b><span>1262</span></div><div class="cell"><b>10:00:45</b><span>1301</span></div></div>
+  </div><figcaption>Two time series of the same metric, told apart by a label. Each cell is a sample, taken every 15 seconds.</figcaption></figure>
+  <ul>
+    <li><b>Values are numbers</b> (floating point). No text: text belongs in labels or logs. <span class="tag g">Guaranteed</span></li>
+    <li><b>Labels split one metric into many series:</b> per instance, per status code, per path.</li>
+  </ul>
+  <details class="q"><summary>A metric has one label, instance, and runs on 3 instances. How many time series is that?</summary><div class="in">Three: one per distinct value of the instance label.</div></details>
+  <aside class="trk"><h4 data-id="http_requests_total">Follow the checkout</h4><div class="in"><p>The checkout service counts every request it handles. That running count, recorded every 15 seconds, is the metric we follow.</p></div></aside>
+</section>
+
+<section class="s" id="whatprom" data-t="What Prometheus is">
+  <div class="sh"><span class="off">03</span><h2>What Prometheus is</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus is a program that, every few seconds, visits each of your services and asks “what are your numbers right now?”. It writes the answers into its own database, lets you ask questions about them in a query language, and checks rules you write, such as “are errors above 5%?”. Like a meter reader who walks round every house, instead of each house mailing in its reading.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>scrape</b><span>Prometheus fetching the current metric values from a service over HTTP.</span></div>
+    <div><b>target</b><span>One endpoint Prometheus scrapes, such as <code>checkout-1:8080/metrics</code>.</span></div>
+    <div><b>TSDB</b><span>Time-series database: Prometheus’s built-in storage.</span></div>
+    <div><b>PromQL</b><span>Prometheus’s query language.</span></div>
+  </div>
+  <p class="lead">Prometheus is an open-source monitoring server that pulls metrics from targets over HTTP, stores them in its own time-series database, queries them with PromQL and evaluates alerting rules.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n b">targets<small>/metrics endpoints</small></span><i data-t="pulled every 15 s"></i><span class="n y">Prometheus<small>TSDB + PromQL + rules</small></span><i data-t="queries"></i><span class="n g">graphs, Grafana</span>
+  </div><div class="flow" style="margin-top:.6rem"><span class="n y">Prometheus</span><i data-t="alerts"></i><span class="n p">Alertmanager</span><i data-t="notifications"></i><span class="n g">pager, chat, email</span></div></div><figcaption>The whole system in two lines. Every later part opens one of these boxes.</figcaption></figure>
+  <ul>
+    <li><b>Born at SoundCloud in 2012,</b> the second project to graduate in the Cloud Native Computing Foundation, after Kubernetes.</li>
+    <li><b>One binary, no external database.</b> It runs fine on a laptop or a large server. <span class="tag g">Guaranteed</span></li>
+    <li><b>Listens on port 9090</b> for its web UI and API. <span class="tag d">Default</span></li>
+  </ul>
+  <details class="q"><summary>Does a service send its metrics to Prometheus, or does Prometheus fetch them?</summary><div class="in">Prometheus fetches them (pulls), by sending an HTTP request to each target’s /metrics endpoint on a schedule.</div></details>
+  <aside class="trk"><h4 data-id="prom-1:9090">Follow the checkout</h4><div class="in"><p>QuickCart runs one Prometheus server, <code>prom-1</code>, that scrapes the three checkout instances every 15 seconds.</p></div></aside>
+</section>
+
+<section class="s" id="firstlook" data-t="Your first metrics">
+  <div class="sh"><span class="off">04</span><h2>Your first metrics, hands on</h2></div>
+  <div class="plain"><b>In plain words</b>The quickest way to understand Prometheus is to look at it. Start it, open its own /metrics page to see what a service exposes, then run one query in its web UI.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>/metrics</b><span>The HTTP page where a service lists its current metric values as text.</span></div>
+    <div><b>up</b><span>A metric Prometheus creates per target: 1 if the last scrape worked, 0 if not.</span></div>
+  </div>
+  <p class="lead">With one Docker command you can run Prometheus, read a /metrics page, and query the <code>up</code> metric that tells you which targets are reachable.</p>
+  <pre class="code">$ docker run -d -p 9090:9090 prom/prometheus
+$ curl -s localhost:9090/metrics | grep prometheus_http_requests_total | head -3
+# HELP prometheus_http_requests_total Counter of HTTP requests.
+# TYPE prometheus_http_requests_total counter
+prometheus_http_requests_total{code="200",handler="/metrics"} 12
+
+<i># in the browser: http://localhost:9090, type a query, press Execute</i>
+up
+up{instance="localhost:9090", job="prometheus"}   1</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">Prometheus</span><i data-t="scrapes itself"></i><span class="n b">localhost:9090/metrics</span><i data-t="stored as"></i><span class="n">up = 1</span>
+  </div></div><figcaption>Out of the box Prometheus monitors itself, so you have a target to play with immediately.</figcaption></figure>
+  <ul>
+    <li><b>The /metrics page is plain text,</b> one line per series. Part 1 reads it line by line.</li>
+    <li><b><code>up</code> is the first thing to check</b> when a graph looks empty. <a class="tag g" href="#c3">Guaranteed · check 3</a></li>
+  </ul>
+  <details class="q"><summary>A dashboard for one service is suddenly empty. Which metric do you query first, and what does it tell you?</summary><div class="in">up for that service’s job: 0 means Prometheus cannot scrape the target (down, wrong address, network), so there are no new samples to show.</div></details>
+  <aside class="trk"><h4 data-id="up">Follow the checkout</h4><div class="in"><p>At 10:07 all three checkout instances still show up = 1: the service is reachable, but failing requests. That is why we need more than “is it up?”. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="vocab" data-t="The monitoring vocabulary">
+  <div class="sh"><span class="off">05</span><h2>The rest of the vocabulary, in one picture</h2></div>
+  <div class="plain"><b>In plain words</b>Around Prometheus are a few helpers. Exporters translate metrics from systems that cannot speak Prometheus. Alertmanager decides who to notify. Grafana draws dashboards. This lesson only names them; later parts explain each.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>exporter</b><span>A small program that reads metrics from something (a machine, a database) and exposes them on /metrics.</span></div>
+    <div><b>instrumentation</b><span>Code inside your own service that counts and times things.</span></div>
+    <div><b>alerting rule</b><span>A PromQL condition that, when true long enough, sends an alert.</span></div>
+    <div><b>Alertmanager</b><span>The separate service that groups alerts and sends notifications.</span></div>
+    <div><b>Grafana</b><span>A popular dashboard tool that queries Prometheus.</span></div>
+  </div>
+  <p class="lead">Exporters and instrumented services expose metrics, Prometheus scrapes and evaluates rules, Alertmanager notifies people, and Grafana shows dashboards.</p>
+  <figure><div class="board"><pre class="mmd">flowchart LR
+  APP["checkout service&lt;br/&gt;(instrumented)"] --> P
+  NE["node_exporter&lt;br/&gt;(machine metrics)"] --> P
+  P["Prometheus"]:::lead -->|"alerts"| AM["Alertmanager"]:::ctl
+  AM --> PG["pager, chat"]
+  G["Grafana"] -->|"PromQL"| P
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Arrows show the direction data flows. Note Grafana asks Prometheus; Prometheus never pushes to Grafana.</figcaption></figure>
+  <details class="q"><summary>Who sends the page to the on-call engineer: Prometheus or Alertmanager?</summary><div class="in">Alertmanager. Prometheus decides that an alert is firing and sends it to Alertmanager, which groups, routes and delivers notifications.</div></details>
+  <aside class="trk"><h4 data-id="QuickCart">Follow the checkout</h4><div class="in"><p>QuickCart has all five pieces: the instrumented checkout service, node_exporter on every host, prom-1, am-1 and a Grafana dashboard.</p></div></aside>
+</section>
+
+<div class="part" data-part="The data model"><h2>Part 1: The data model</h2><p>Series, labels and the four metric types</p></div>
+
+<section class="s" id="series" data-t="Series and labels">
+  <div class="sh"><span class="off">06</span><h2>Time series and labels</h2></div>
+  <div class="plain"><b>In plain words</b>In Prometheus a series is identified by its metric name plus every label on it. Change any label value and it is a different series. So <code>http_requests_total</code> is not one series but a family: one per instance, per method, per path, per status code that has actually happened.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>metric name</b><span>What is measured, such as <code>http_requests_total</code>.</span></div>
+    <div><b>label set</b><span>All the key–value labels on a series.</span></div>
+    <div><b>job / instance</b><span>Labels Prometheus adds to every scraped series: which group of targets and which single target.</span></div>
+  </div>
+  <p class="lead">A time series is identified by its metric name together with its full set of labels, and each series is a stream of (timestamp, float) samples.</p>
+  <figure><div class="canvas scroll"><div class="flow">
+    <span class="n y">http_requests_total</span><span class="n b">job="checkout"</span><span class="n b">instance="checkout-1:8080"</span><span class="n">method="POST"</span><span class="n">path="/checkout"</span><span class="n r">status="500"</span>
+  </div></div><figcaption>The name plus five labels: together they are the identity of the one series this course follows.</figcaption></figure>
+  <ul>
+    <li><b>The name is just a label too:</b> internally it is stored as <code>__name__</code>. <span class="tag g">Guaranteed</span></li>
+    <li><b>job and instance are added at scrape time</b> from the configuration and the target address.</li>
+    <li><b>A series is created the first time a label combination appears</b>, for example the first 500 on POST /checkout.</li>
+  </ul>
+  <details class="q"><summary>Are http_requests_total{status="200"} and http_requests_total{status="500"} the same series?</summary><div class="in">No. Any difference in label values makes a different series, so they are two separate streams of samples.</div></details>
+  <aside class="trk"><h4 data-id="status=500">Follow the checkout</h4><div class="in"><p>Before 10:07, checkout-1 had never returned a 500 on POST /checkout, so this series did not exist. The first failed payment created it.</p></div></aside>
+</section>
+
+<section class="s" id="exposition" data-t="The /metrics format">
+  <div class="sh"><span class="off">07</span><h2>Reading a /metrics page</h2></div>
+  <div class="plain"><b>In plain words</b>A service shows its metrics as a simple text page. Lines starting with # describe the metric; every other line is one series and its current value. Prometheus reads this page on every scrape and stamps each value with the time it read it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>exposition format</b><span>The text format of a /metrics page.</span></div>
+    <div><b># HELP / # TYPE</b><span>Comment lines giving a metric’s description and its type.</span></div>
+    <div><b>OpenMetrics</b><span>A standardised version of the same format.</span></div>
+  </div>
+  <p class="lead">The exposition format lists each metric’s help text and type, then one line per series with its labels and current value; Prometheus adds the timestamp when it scrapes.</p>
+  <pre class="code">$ curl -s checkout-1:8080/metrics
+# HELP http_requests_total Total HTTP requests handled.
+# TYPE http_requests_total counter
+http_requests_total{method="POST",path="/checkout",status="200"} 18342
+http_requests_total{method="POST",path="/checkout",status="500"} 37
+# HELP checkout_in_flight_requests Requests being handled right now.
+# TYPE checkout_in_flight_requests gauge
+checkout_in_flight_requests 12</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n b">text page</span><i data-t="scrape at 10:07:00"></i><span class="n y">samples stored<small>(10:07:00, 18342), (10:07:00, 37), (10:07:00, 12)</small></span>
+  </div></div><figcaption>The page has no timestamps. Prometheus stamps every line with the scrape time.</figcaption></figure>
+  <ul>
+    <li><b>No job or instance in the page:</b> Prometheus adds them. <span class="tag g">Guaranteed</span></li>
+    <li><b>A client library writes this page for you;</b> you rarely produce it by hand.</li>
+  </ul>
+  <details class="q"><summary>Where does the timestamp of a scraped sample come from, normally?</summary><div class="in">From Prometheus, at the moment it scrapes the page. The exposition lines usually carry only labels and a value.</div></details>
+  <aside class="trk"><h4 data-id="checkout-1:8080">Follow the checkout</h4><div class="in"><p>The highlighted value 37 is the one we follow: 37 failed checkouts on checkout-1 so far, as read at 10:07:00. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="counter" data-t="Counters">
+  <div class="sh"><span class="off">08</span><h2>Counters</h2></div>
+  <div class="plain"><b>In plain words</b>A counter is like a car’s odometer: it only goes up. The raw number (“18,342 requests since the service started”) is rarely interesting by itself. What you want is how fast it is going up: requests per second. That is why counters are almost always used with <code>rate()</code>.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>counter</b><span>A value that only increases, and resets to zero when the process restarts.</span></div>
+    <div><b>reset</b><span>A counter dropping back to zero because its process restarted.</span></div>
+    <div><b>_total</b><span>The conventional ending for counter names.</span></div>
+  </div>
+  <p class="lead">A counter only goes up (or resets to zero on restart), so you read it through functions like rate() and increase() that turn it into a per-second or per-period change.</p>
+  <figure><div class="canvas scroll"><div class="log"><label>value</label><div class="cell"><b>10:06</b><span>0</span></div><div class="cell"><b>10:07</b><span>37</span></div><div class="cell"><b>10:08</b><span>121</span></div><div class="cell lost"><b>10:09</b><span>3 (restart)</span></div><div class="cell"><b>10:10</b><span>90</span></div></div></div><figcaption>An odometer that can be reset by a restart. rate() notices the drop and treats it as a reset, not as negative traffic.</figcaption></figure>
+  <ul>
+    <li><b>Use counters for things that happen:</b> requests, errors, bytes sent.</li>
+    <li><b>Never alert on the raw value</b> of a counter; alert on its rate.</li>
+  </ul>
+  <details class="q"><summary>Why is the raw value of http_requests_total almost never what you graph?</summary><div class="in">It is a running total since the process started, so it only grows and resets on restart. The useful information is how quickly it grows, which rate() gives.</div></details>
+  <aside class="trk"><h4 data-id="status=500">Follow the checkout</h4><div class="in"><p>Our 500 counter went 0 → 37 → 121 in two minutes: about 1.4 failures per second, which Part 4 computes properly.</p></div></aside>
+</section>
+
+<section class="s" id="gauge" data-t="Gauges">
+  <div class="sh"><span class="off">09</span><h2>Gauges</h2></div>
+  <div class="plain"><b>In plain words</b>A gauge is like a speedometer or a thermometer: it goes up and down, and its current value is the interesting thing. Memory in use, requests in flight, queue length, temperature.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>gauge</b><span>A value that can go up and down, read as it is.</span></div>
+  </div>
+  <p class="lead">A gauge reports a current level that can rise and fall, and you graph or alert on its value directly, often with avg, max or min over time.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Counter</h4><span class="chip">requests handled: 18342 → 18390</span><span class="chip">only up</span><span class="chip Y">read with rate()</span></div>
+    <div><h4>Gauge</h4><span class="chip">requests in flight: 12 → 47 → 9</span><span class="chip">up and down</span><span class="chip Y">read as is</span></div>
+  </div></div><figcaption>The test: does it make sense to say “how fast is it growing?” If yes, it is a counter.</figcaption></figure>
+  <ul>
+    <li><b>Do not use rate() on a gauge;</b> use <code>deriv()</code> or <code>delta()</code> if you need its change.</li>
+    <li><b>A gauge sampled every 15 s can miss short spikes</b> between scrapes. <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>Is “number of items in the job queue” a counter or a gauge?</summary><div class="in">A gauge: the queue grows and shrinks. “Jobs processed so far” would be a counter.</div></details>
+  <aside class="trk"><h4 data-id="checkout_in_flight_requests">Follow the checkout</h4><div class="in"><p>At 10:07 in-flight requests on checkout-1 jump from about 12 to 47: requests are piling up waiting for the slow payment provider. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="histogram" data-t="Histograms">
+  <div class="sh"><span class="off">10</span><h2>Histograms</h2></div>
+  <div class="plain"><b>In plain words</b>To know how slow requests are, an average hides the painful ones. A histogram sorts every request into buckets by duration: under 0.1 s, under 0.25 s, under 0.5 s, and so on, and counts each bucket. From those counts you can estimate “95% of requests were faster than X”.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>histogram</b><span>A metric that counts observations into buckets by value.</span></div>
+    <div><b>bucket</b><span>A counter of observations at or below a bound, written <code>le="0.5"</code> (less than or equal).</span></div>
+    <div><b>quantile / percentile</b><span>The value below which a given share of observations fall: p95 = 95% are faster.</span></div>
+  </div>
+  <p class="lead">A histogram exposes cumulative bucket counters (le labels), plus a _sum and a _count, so PromQL can compute rates, averages and estimated percentiles across many instances.</p>
+  <pre class="code"># TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{path="/checkout",le="0.1"}   14210
+http_request_duration_seconds_bucket{path="/checkout",le="0.25"}  17520
+http_request_duration_seconds_bucket{path="/checkout",le="0.5"}   18010
+http_request_duration_seconds_bucket{path="/checkout",le="1"}     18190
+http_request_duration_seconds_bucket{path="/checkout",le="2.5"}   18290
+http_request_duration_seconds_bucket{path="/checkout",le="+Inf"}  18379
+http_request_duration_seconds_sum{path="/checkout"}   2861.4
+http_request_duration_seconds_count{path="/checkout"} 18379</pre>
+  <figure><div class="canvas scroll"><div class="log"><label>≤ bound</label><div class="cell done"><b>0.1 s</b><span>14210</span></div><div class="cell done"><b>0.25 s</b><span>17520</span></div><div class="cell"><b>0.5 s</b><span>18010</span></div><div class="cell"><b>1 s</b><span>18190</span></div><div class="cell pend"><b>2.5 s</b><span>18290</span></div><div class="cell lost"><b>+Inf</b><span>18379</span></div></div></div><figcaption>Buckets are cumulative: each counts everything at or below its bound. The +Inf bucket always equals the total count.</figcaption></figure>
+  <ul>
+    <li><b>Buckets are cumulative.</b> <span class="tag g">Guaranteed</span></li>
+    <li><b>Average latency = _sum ÷ _count:</b> here 2861.4 ÷ 18379 ≈ 0.156 s (computed).</li>
+    <li><b>Choose bucket bounds around your target,</b> because percentiles are estimated within a bucket. Client libraries default to .005 … 10 seconds.</li>
+    <li><b>Native histograms</b> (newer) pick buckets automatically and are far more precise. <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>Why is a histogram better than an average for latency?</summary><div class="in">An average hides the slow tail: a few 3-second requests barely move it. Histogram buckets let you estimate percentiles such as p95 and p99, which show what the slowest users experience.</div></details>
+  <aside class="trk"><h4 data-id="http_request_duration_seconds">Follow the checkout</h4><div class="in"><p>After 10:07 the 2.5 s and +Inf buckets grow fastest: payments waiting on the provider’s timeout. 89 requests took longer than 2.5 s (18379 − 18290, computed).</p></div></aside>
+</section>
+
+<section class="s" id="summary" data-t="Summaries vs histograms">
+  <div class="sh"><span class="off">11</span><h2>Summaries, and why histograms usually win</h2></div>
+  <div class="plain"><b>In plain words</b>A summary computes percentiles inside the service and exposes them ready-made. That sounds convenient, but percentiles cannot be added up: the p95 of three servers is not the average of their three p95s. Histograms expose raw bucket counts, which can be added across servers and then turned into a true overall percentile.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>summary</b><span>A metric whose client library computes quantiles locally.</span></div>
+    <div><b>aggregate</b><span>Combine values from many series, such as summing them.</span></div>
+  </div>
+  <p class="lead">Summaries compute exact quantiles per instance but cannot be aggregated across instances; histograms can, so they are the usual choice.</p>
+  <div class="tw"><table>
+    <tr><th></th><th>Histogram</th><th>Summary</th></tr>
+    <tr><td>Quantiles computed</td><td>In Prometheus (PromQL)</td><td>In the service</td></tr>
+    <tr><td>Aggregate across instances</td><td class="yes">Yes</td><td class="no">No</td></tr>
+    <tr><td>Accuracy</td><td>Estimated within a bucket</td><td>Exact for that instance</td></tr>
+    <tr><td>Change the quantile later</td><td class="yes">Yes</td><td class="no">No, fixed in code</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Averaging three p95s</h4><span class="chip X">(0.2 + 0.2 + 3.0) ÷ 3 = 1.13 s: meaningless</span></div>
+    <div><h4>Summing three histograms</h4><span class="chip Y">add bucket counts, then compute p95: correct</span></div>
+  </div></div><figcaption>Quantiles cannot be averaged; bucket counts can be added, then turned into a quantile.</figcaption></figure>
+  <details class="q"><summary>Three servers each report a p99 latency. Can you average them to get the p99 of the whole service?</summary><div class="in">No. Quantiles do not average; the result depends on how many requests each server handled and their distributions. Sum histogram buckets across servers instead, then compute the quantile.</div></details>
+  <aside class="trk"><h4 data-id="checkout">Follow the checkout</h4><div class="in"><p>Only checkout-1 talks to the failing payment region, so its p95 jumps while the other two stay low. The overall p95 must come from summed histograms.</p></div></aside>
+</section>
+
+<section class="s" id="cardinality" data-t="Cardinality">
+  <div class="sh"><span class="off">12</span><h2>Cardinality: the number of series</h2></div>
+  <div class="plain"><b>In plain words</b>Every new combination of label values is a new series, and every series costs memory and disk. A label with a handful of values is fine. A label with a value per user, per order or per request ID multiplies the series count into millions and can knock Prometheus over. This is the most common way to break it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>cardinality</b><span>How many distinct series a metric (or a whole server) has.</span></div>
+    <div><b>active series</b><span>Series that received a sample recently and are held in memory.</span></div>
+    <div><b>unbounded label</b><span>A label whose values never stop growing, such as user_id.</span></div>
+  </div>
+  <p class="lead">A metric’s series count is the product of its labels’ distinct values, so a single high-cardinality label such as a user ID can multiply memory use by orders of magnitude.</p>
+  <div class="demo">
+    <h4>Try it: how many series does http_requests_total make?</h4>
+    <div class="ctrls"><label for="cdInst">instances</label><input id="cdInst" type="number" value="3" min="1" style="width:4.5rem"><label for="cdMeth">methods</label><input id="cdMeth" type="number" value="2" min="1" style="width:4.5rem"><label for="cdPath">paths</label><input id="cdPath" type="number" value="5" min="1" style="width:4.5rem"><label for="cdStat">status codes</label><input id="cdStat" type="number" value="6" min="1" style="width:4.5rem"></div>
+    <div class="ctrls"><label><input type="checkbox" id="cdUser"> add a <code>user_id</code> label (50,000 active users)</label></div>
+    <div class="out" id="cdOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Worst case: every combination occurs. Memory assumes about 4 KB per active series. <span class="tag s">Simplified</span></p>
+  </div>
+  <ul>
+    <li><b>Never put IDs, emails, URLs with parameters or timestamps in labels.</b> Put them in logs or traces.</li>
+    <li><b>Check the biggest metrics</b> on the TSDB status page (/tsdb-status). <a class="tag g" href="#c4">Guaranteed · check 4</a></li>
+  </ul>
+  <details class="q"><summary>Why is adding a user_id label to http_requests_total dangerous?</summary><div class="in">Every user creates new series for every combination of the other labels, so series count grows with the number of users, potentially millions, exhausting Prometheus’s memory and slowing queries.</div></details>
+  <aside class="trk"><h4 data-id="http_requests_total">Follow the checkout</h4><div class="in"><p>A developer once added <code>order_id</code> as a label to debug a bug; prom-1 ran out of memory within an hour. The label now lives in logs instead. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="naming" data-t="Naming and units">
+  <div class="sh"><span class="off">13</span><h2>Naming metrics and labels</h2></div>
+  <div class="plain"><b>In plain words</b>Good names make queries readable and stop mistakes like mixing milliseconds with seconds. Prometheus has simple conventions: say what is measured, the unit at the end in plain base units, and <code>_total</code> for counters.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>base unit</b><span>Seconds, bytes, ratios between 0 and 1: no milliseconds or kilobytes.</span></div>
+    <div><b>namespace prefix</b><span>The first word of a name saying which system it is from, such as <code>checkout_</code> or <code>node_</code>.</span></div>
+  </div>
+  <p class="lead">Metric names use snake_case with a namespace prefix, a base-unit suffix and _total for counters; labels describe dimensions with small, fixed sets of values.</p>
+  <div class="tw"><table>
+    <tr><th>Good</th><th>Avoid</th><th>Why</th></tr>
+    <tr><td><code>http_request_duration_seconds</code></td><td><code>http_latency_ms</code></td><td>Base unit, and says what kind of duration</td></tr>
+    <tr><td><code>node_memory_used_bytes</code></td><td><code>mem_used_mb</code></td><td>Bytes, with a namespace</td></tr>
+    <tr><td><code>http_requests_total{status="500"}</code></td><td><code>http_500_errors_total</code></td><td>Status is a dimension: a label, not part of the name</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n p">checkout_</span><span class="n">payment_attempts</span><span class="n y">_total</span>
+  </div></div><figcaption>Namespace, what is counted, and the suffix that tells everyone it is a counter.</figcaption></figure>
+  <details class="q"><summary>Should failed and successful payments be two metrics or one metric with a label?</summary><div class="in">One metric with a label (for example result="failed" / "succeeded"), so you can sum them for the total and divide one by the total for a failure ratio.</div></details>
+  <aside class="trk"><h4 data-id="checkout">Follow the checkout</h4><div class="in"><p>QuickCart’s alert divides <code>http_requests_total{status=~"5.."}</code> by <code>http_requests_total</code>: possible only because status is a label on one metric.</p></div></aside>
+</section>
+
+<div class="part" data-part="Collecting metrics"><h2>Part 2: Collecting metrics</h2><p>Scraping, discovery, exporters</p></div>
+
+<section class="s" id="scrape" data-t="The pull model">
+  <div class="sh"><span class="off">14</span><h2>The pull model and the scrape loop</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus keeps a list of targets and visits each one on a fixed schedule, say every 15 seconds. Because Prometheus does the visiting, it always knows when a target stops answering: the visit fails and <code>up</code> turns to 0. Targets do not need to know Prometheus exists.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>scrape interval</b><span>How often each target is scraped.</span></div>
+    <div><b>scrape timeout</b><span>How long one scrape may take before it counts as failed.</span></div>
+    <div><b>pull vs push</b><span>The server fetches data / the clients send it.</span></div>
+  </div>
+  <p class="lead">Prometheus scrapes each target’s /metrics endpoint at a fixed interval, records whether it worked in <code>up</code>, and stores every line with the scrape timestamp.</p>
+  <pre class="code"># prometheus.yml
+global:
+  scrape_interval: 15s          <i># stock default is 1m</i>
+  evaluation_interval: 15s      <i># how often rules run; stock default 1m</i>
+scrape_configs:
+  - job_name: checkout
+    static_configs:
+      - targets: ['checkout-1:8080', 'checkout-2:8080', 'checkout-3:8080']</pre>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant P as Prometheus prom-1
+  participant T as checkout-1:8080
+  loop every 15 s
+    P->>T: GET /metrics
+    T-->>P: text page (about 300 series)
+    Note over P: stamp with scrape time,&lt;br/&gt;add job and instance,&lt;br/&gt;append to TSDB, set up = 1
+  end
+</pre></div><figcaption>One scrape loop per target. A failed or timed-out request writes up = 0 instead.</figcaption></figure>
+  <ul>
+    <li><b>Stock defaults:</b> scrape every 1 minute, time out after 10 seconds, evaluate rules every 1 minute. <a class="tag d" href="#c1">Default · check 1</a></li>
+    <li><b>Pull makes health free:</b> a dead target is noticed on the next scrape. <span class="tag g">Guaranteed</span></li>
+    <li><b>Also recorded per scrape:</b> <code>scrape_duration_seconds</code> and <code>scrape_samples_scraped</code>.</li>
+  </ul>
+  <details class="q"><summary>Why does the pull model make it easy to detect a service that has died?</summary><div class="in">Prometheus initiates every scrape, so a dead service simply fails the next scrape and up becomes 0. With push, silence could mean either “dead” or “nothing to report”.</div></details>
+  <aside class="trk"><h4 data-id="checkout-1:8080">Follow the checkout</h4><div class="in"><p>At 10:07:00 prom-1 scrapes checkout-1 and reads <code>…status="500"} 37</code>; at 10:07:15 it reads 58. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="sd" data-t="Service discovery">
+  <div class="sh"><span class="off">15</span><h2>Finding targets: service discovery</h2></div>
+  <div class="plain"><b>In plain words</b>Typing every server’s address into a file works for three servers, not for three hundred containers that come and go every hour. Service discovery asks a system that already knows (Kubernetes, AWS, Consul, a file your tooling writes) for the current list of targets, and keeps it up to date automatically.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>service discovery</b><span>Getting the list of targets from another system instead of typing it.</span></div>
+    <div><b>static config</b><span>A fixed, hand-written list of targets.</span></div>
+    <div><b>meta labels</b><span>Temporary labels from discovery, like <code>__meta_kubernetes_pod_name</code>, used for relabeling.</span></div>
+  </div>
+  <p class="lead">Service discovery mechanisms such as Kubernetes, EC2, Consul and file-based discovery keep the target list current, attaching metadata labels you can use to filter and label targets.</p>
+  <pre class="code">scrape_configs:
+  - job_name: checkout
+    kubernetes_sd_configs:
+      - role: pod                    <i># ask the Kubernetes API for pods</i>
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: checkout
+        action: keep                 <i># only pods labelled app=checkout</i></pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n p">Kubernetes API</span><i data-t="current pods + metadata"></i><span class="n y">Prometheus</span><i data-t="scrape each one"></i><span class="n b">checkout pods</span>
+  </div></div><figcaption>When a fourth checkout pod starts, it is scraped within moments, with no config change.</figcaption></figure>
+  <ul>
+    <li><b>Many built-in mechanisms:</b> Kubernetes, EC2, Azure, GCE, Consul, DNS, file, HTTP and more.</li>
+    <li><b>Meta labels disappear after relabeling</b> unless you copy them into real labels. <span class="tag g">Guaranteed</span></li>
+  </ul>
+  <details class="q"><summary>Why is static configuration a poor fit for containers on Kubernetes?</summary><div class="in">Pods are created and destroyed constantly with changing addresses. Service discovery queries the Kubernetes API for the current set of pods, so targets stay correct without editing configuration.</div></details>
+  <aside class="trk"><h4 data-id="job=checkout">Follow the checkout</h4><div class="in"><p>When the team scaled checkout from 3 to 5 pods at 10:20, Kubernetes discovery added checkout-4 and checkout-5 to prom-1 automatically.</p></div></aside>
+</section>
+
+<section class="s" id="relabel" data-t="Relabeling">
+  <div class="sh"><span class="off">16</span><h2>Relabeling</h2></div>
+  <div class="plain"><b>In plain words</b>Relabeling is a small rule language for editing labels on the way in. Before a scrape you can drop targets you do not want and turn discovery metadata into useful labels. After a scrape you can drop noisy metrics or labels before they are stored.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>relabel_configs</b><span>Rules applied to targets before scraping.</span></div>
+    <div><b>metric_relabel_configs</b><span>Rules applied to scraped series before storing them.</span></div>
+    <div><b>action</b><span>What a rule does: keep, drop, replace, labelmap, labeldrop, hashmod…</span></div>
+  </div>
+  <p class="lead">relabel_configs rewrite or filter targets before a scrape, and metric_relabel_configs rewrite or filter samples after it, which is how you shape labels and cut cardinality.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n p">discovered target<small>__meta_* labels</small></span><i data-t="relabel_configs"></i><span class="n y">scrape</span><i data-t="metric_relabel_configs"></i><span class="n b">stored series</span>
+  </div></div><figcaption>Two checkpoints: one decides what to scrape, the other what to keep.</figcaption></figure>
+  <pre class="code">relabel_configs:
+  - source_labels: [__meta_kubernetes_namespace]
+    target_label: namespace                    <i># copy metadata into a real label</i>
+metric_relabel_configs:
+  - source_labels: [__name__]
+    regex: 'go_gc_.*'
+    action: drop                               <i># throw away noisy runtime metrics</i></pre>
+  <details class="q"><summary>A target exposes thousands of series you never query. Which config can drop them, and when does it run?</summary><div class="in">metric_relabel_configs with action drop. It runs after the scrape and before storage, so the unwanted series are never stored.</div></details>
+  <aside class="trk"><h4 data-id="namespace=shop">Follow the checkout</h4><div class="in"><p>Relabeling adds <code>namespace="shop"</code> to every checkout series, so alerts can route by team. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="exporters" data-t="Exporters and instrumentation">
+  <div class="sh"><span class="off">17</span><h2>Exporters and instrumentation</h2></div>
+  <div class="plain"><b>In plain words</b>There are two ways to get metrics. For your own code, you add a client library and count things where they happen: a line to count each request, a timer around each payment call. For software you cannot change, like Linux or MySQL, you run an exporter beside it that reads its stats and exposes them in Prometheus format.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>client library</b><span>The Prometheus library for your language (Go, Java, Python…) that creates metrics and serves /metrics.</span></div>
+    <div><b>node_exporter</b><span>The standard exporter for machine metrics: CPU, memory, disk, network.</span></div>
+    <div><b>blackbox_exporter</b><span>An exporter that probes endpoints from outside (HTTP, TCP, ping).</span></div>
+  </div>
+  <p class="lead">Your own services are instrumented with client libraries; third-party systems are covered by exporters such as node_exporter, which translate their stats into the Prometheus format.</p>
+  <pre class="code"># Python: instrumenting the checkout handler
+from prometheus_client import Counter, Histogram, start_http_server
+REQUESTS = Counter('http_requests_total', 'Total HTTP requests.', ['method', 'path', 'status'])
+LATENCY  = Histogram('http_request_duration_seconds', 'Request duration.', ['path'])
+
+def checkout(request):
+    with LATENCY.labels(path='/checkout').time():
+        status = handle(request)
+    REQUESTS.labels(method='POST', path='/checkout', status=str(status)).inc()
+
+start_http_server(8080)     <i># serves /metrics</i></pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Instrumentation</h4><div class="flow v"><span class="n g">your code</span><span class="n y">client library</span><span class="n b">/metrics</span></div></div>
+    <div><h4>Exporter</h4><div class="flow v"><span class="n g">Linux, MySQL, Redis…</span><span class="n y">exporter process</span><span class="n b">/metrics</span></div></div>
+  </div></div><figcaption>Both end in the same place: a /metrics page Prometheus can scrape.</figcaption></figure>
+  <ul>
+    <li><b>node_exporter listens on 9100.</b> <span class="tag d">Default</span></li>
+    <li><b>Hundreds of exporters exist:</b> databases, queues, proxies, hardware, cloud services.</li>
+  </ul>
+  <details class="q"><summary>You want metrics from a PostgreSQL database you cannot modify. Instrument or exporter?</summary><div class="in">An exporter (postgres_exporter): it connects to the database, reads its statistics and exposes them on /metrics for Prometheus to scrape.</div></details>
+  <aside class="trk"><h4 data-id="checkout code">Follow the checkout</h4><div class="in"><p>The <code>.inc()</code> line above is what turned each failed payment at 10:07 into +1 on our series.</p></div></aside>
+</section>
+
+<section class="s" id="pushgw" data-t="Pushgateway">
+  <div class="sh"><span class="off">18</span><h2>Short-lived jobs and the Pushgateway</h2></div>
+  <div class="plain"><b>In plain words</b>A nightly batch job may run for 30 seconds and exit, long before Prometheus would scrape it. The Pushgateway is a small always-on service the job can push its final numbers to; Prometheus then scrapes the Pushgateway. It is a workaround for batch jobs, not a way to monitor ordinary services.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Pushgateway</b><span>A service that holds metrics pushed by short-lived jobs until Prometheus scrapes them.</span></div>
+    <div><b>batch job</b><span>A program that runs, does a task, and exits.</span></div>
+  </div>
+  <p class="lead">The Pushgateway lets short-lived batch jobs push their metrics so Prometheus can scrape them later; it is meant for service-level batch jobs, not for long-running services.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">nightly invoice job<small>runs 30 s</small></span><i data-t="push at the end"></i><span class="n p">Pushgateway :9091</span><i data-t="scraped"></i><span class="n y">Prometheus</span>
+  </div></div><figcaption>The Pushgateway remembers the last value pushed forever, until it is deleted.</figcaption></figure>
+  <ul>
+    <li><b>It never forgets:</b> a job that stopped running still shows its last push, so alert on a “last success” timestamp. <span class="tag g">Guaranteed</span></li>
+    <li><b>It is a single point</b> every pushing job depends on, and you lose the automatic <code>up</code> health signal.</li>
+  </ul>
+  <details class="q"><summary>Why should a long-running web service not push to the Pushgateway?</summary><div class="in">Prometheus would lose per-instance health (up), stale values would linger after the service died, and the Pushgateway becomes a bottleneck. Long-running services should be scraped directly.</div></details>
+  <aside class="trk"><h4 data-id="invoice job">Follow the checkout</h4><div class="in"><p>QuickCart’s nightly payout job pushes <code>payout_last_success_timestamp_seconds</code>; checkout itself is scraped directly.</p></div></aside>
+</section>
+
+<div class="part" data-part="Storage"><h2>Part 3: Storage</h2><p>The time-series database inside Prometheus</p></div>
+
+<section class="s" id="tsdb" data-t="The TSDB">
+  <div class="sh"><span class="off">19</span><h2>Inside the TSDB</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus writes new samples to memory first, and also to a log on disk so nothing is lost if it crashes. Every two hours it packs the last two hours of samples into a compact, read-only block on disk. Later, small blocks are merged into bigger ones. Old blocks are simply deleted when they pass the retention period.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>head block</b><span>The in-memory part holding the most recent samples.</span></div>
+    <div><b>WAL</b><span>Write-ahead log: every sample is appended here first, so the head can be rebuilt after a crash.</span></div>
+    <div><b>block</b><span>A read-only directory of compressed samples covering a time range (2 hours to start with).</span></div>
+    <div><b>compaction</b><span>Merging smaller blocks into larger ones.</span></div>
+  </div>
+  <p class="lead">Recent samples live in the in-memory head, protected by a write-ahead log; every two hours they are cut into immutable on-disk blocks, which compaction later merges and retention deletes.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>data/</label><div class="cell done"><b>block</b><span>2 h</span></div><div class="cell done"><b>block</b><span>2 h</span></div><div class="cell done"><b>compacted</b><span>6 h</span></div><div class="cell pend"><b>head</b><span>memory + WAL</span></div></div>
+  </div><figcaption>New samples enter on the right, in memory. Older data sits in compressed blocks on disk.</figcaption></figure>
+  <ul>
+    <li><b>Samples compress to about 1–2 bytes each,</b> using delta encoding of timestamps and XOR encoding of values (the “Gorilla” technique). <span class="tag s">Simplified</span></li>
+    <li><b>Blocks are immutable:</b> deleting old data means removing whole directories, which is cheap.</li>
+    <li><b>Single node, local disk.</b> Prometheus does not replicate its own data; Part 6 covers what to do about that. <span class="tag g">Guaranteed</span></li>
+  </ul>
+  <details class="q"><summary>Prometheus crashes. How does it recover the samples that were only in memory?</summary><div class="in">It replays the write-ahead log on startup, which recorded every sample appended to the head block.</div></details>
+  <aside class="trk"><h4 data-id="prom-1 data/">Follow the checkout</h4><div class="in"><p>Our 10:07 samples sit in the head until prom-1 cuts the 10:00–12:00 block shortly after noon. <span class="tag s">Simplified</span></p></div></aside>
+</section>
+
+<section class="s" id="retention" data-t="Retention and sizing">
+  <div class="sh"><span class="off">20</span><h2>Retention and disk sizing</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus keeps data for a set time, 15 days unless told otherwise, then deletes it. How much disk that needs is simple arithmetic: how many samples arrive per second, times bytes per sample, times how many seconds you keep them.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>retention</b><span>How long data is kept before deletion.</span></div>
+    <div><b>ingestion rate</b><span>Samples stored per second: active series ÷ scrape interval.</span></div>
+  </div>
+  <p class="lead">Disk needed ≈ retention seconds × samples per second × bytes per sample, and samples per second ≈ active series ÷ scrape interval.</p>
+  <div class="demo">
+    <h4>Try it: how much disk does prom-1 need?</h4>
+    <div class="ctrls"><label for="dsSeries">active series</label><input id="dsSeries" type="number" value="200000" step="10000" style="width:8rem"><label for="dsInt">scrape interval (s)</label><input id="dsInt" type="number" value="15" min="1" style="width:4.5rem"><label for="dsRet">retention (days)</label><input id="dsRet" type="number" value="15" min="1" style="width:4.5rem"><label for="dsBps">bytes/sample</label><input id="dsBps" type="number" value="1.5" step="0.1" min="0.5" style="width:4.5rem"></div>
+    <div class="out" id="dsOut" aria-live="polite"></div>
+  </div>
+  <pre class="code">prometheus --storage.tsdb.retention.time=30d --storage.tsdb.retention.size=200GB</pre>
+  <ul>
+    <li><b>Default retention is 15 days.</b> <a class="tag d" href="#c2">Default · check 2</a></li>
+    <li><b>A size limit can be set too;</b> the oldest blocks go first when either limit is reached.</li>
+    <li><b>Need months or years?</b> Send data to long-term storage (Part 6) instead of growing one server.</li>
+  </ul>
+  <details class="q"><summary>Halving the scrape interval from 30 s to 15 s: what happens to disk usage?</summary><div class="in">It roughly doubles, because each series now produces twice as many samples per second.</div></details>
+  <aside class="trk"><h4 data-id="prom-1">Follow the checkout</h4><div class="in"><p>prom-1 holds about 200,000 active series at 15 s for 15 days: the demo’s defaults give its disk estimate.</p></div></aside>
+</section>
+
+<section class="s" id="stale" data-t="Staleness and gaps">
+  <div class="sh"><span class="off">21</span><h2>Staleness and missing data</h2></div>
+  <div class="plain"><b>In plain words</b>Samples arrive every 15 seconds, but a query can ask for any instant. Prometheus answers with the most recent sample up to 5 minutes old. When a target disappears, Prometheus writes a special “stale” marker so the series stops showing at once instead of hanging on for 5 minutes.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>lookback delta</b><span>How far back a query looks for the latest sample: 5 minutes by default.</span></div>
+    <div><b>stale marker</b><span>A special sample saying “this series has ended”.</span></div>
+  </div>
+  <p class="lead">An instant query returns each series’ latest sample within the 5-minute lookback window, and stale markers end a series immediately when its target or the series itself disappears.</p>
+  <figure><div class="canvas scroll"><div class="log"><label>series</label><div class="cell done"><b>10:00:00</b><span>12</span></div><div class="cell done"><b>10:00:15</b><span>14</span></div><div class="cell ghost"><b>10:00:20</b><span>query → 14</span></div><div class="cell lost"><b>10:00:30</b><span>stale marker</span></div><div class="cell ghost"><b>10:00:40</b><span>query → nothing</span></div></div></div><figcaption>Between samples, a query sees the previous value. After a stale marker, it sees nothing.</figcaption></figure>
+  <ul>
+    <li><b>Lookback is 5 minutes.</b> <span class="tag d">Default</span></li>
+    <li><b>Absent data is not zero:</b> to alert on a series that vanished, use <code>absent()</code> or alert on <code>up == 0</code>.</li>
+  </ul>
+  <details class="q"><summary>A checkout pod is deleted. Why does its series stop appearing in queries almost immediately rather than after 5 minutes?</summary><div class="in">When the target disappears, Prometheus writes stale markers for its series, so queries treat them as ended right away instead of reusing the last sample for up to the 5-minute lookback.</div></details>
+  <aside class="trk"><h4 data-id="checkout-1">Follow the checkout</h4><div class="in"><p>When checkout-1 was restarted at 10:09, its series got stale markers; the new process’s series started again from 0.</p></div></aside>
+</section>
+
+<div class="part" data-part="PromQL"><h2>Part 4: PromQL</h2><p>Asking questions in numbers</p></div>
+
+<section class="s" id="selectors" data-t="Selectors">
+  <div class="sh"><span class="off">22</span><h2>Selecting series</h2></div>
+  <div class="plain"><b>In plain words</b>The simplest query is just a metric name, which returns every series with that name. Curly braces narrow it down by labels, a bit like a WHERE clause. You can match exactly, exclude, or match a pattern.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>instant vector</b><span>A set of series with one sample each, at one moment.</span></div>
+    <div><b>label matcher</b><span>A condition on a label: <code>=</code>, <code>!=</code>, <code>=~</code> (regex), <code>!~</code> (not regex).</span></div>
+    <div><b>regex</b><span>A text pattern, such as <code>5..</code> for any three-character code starting with 5.</span></div>
+  </div>
+  <p class="lead">A selector names a metric and filters its series with label matchers, returning an instant vector: the latest sample of every matching series.</p>
+  <pre class="code">http_requests_total                                         <i># every series of the metric</i>
+http_requests_total{job="checkout"}                         <i># exact match</i>
+http_requests_total{job="checkout", status=~"5.."}          <i># regex: any 5xx</i>
+http_requests_total{job="checkout", path!="/health"}        <i># exclude a path</i></pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">all http_requests_total series<small>~180</small></span><i data-t="job=checkout"></i><span class="n">checkout only<small>~60</small></span><i data-t='status=~"5.."'></i><span class="n y">checkout 5xx<small>3</small></span>
+  </div></div><figcaption>Each matcher narrows the set. Regex matches are anchored: <code>"5.."</code> means the whole value. <span class="tag x">Example value</span></figcaption></figure>
+  <details class="q"><summary>What does the matcher status=~"5.." select?</summary><div class="in">Series whose status label is any three-character value starting with 5 (500, 502, 503…), because Prometheus regex matches are anchored to the whole value.</div></details>
+  <aside class="trk"><h4 data-id="status=~5..">Follow the checkout</h4><div class="in"><p>At 10:08 the 5xx selector returns three series, one per checkout instance; only checkout-1’s is rising fast.</p></div></aside>
+</section>
+
+<section class="s" id="rate" data-t="rate and range vectors">
+  <div class="sh"><span class="off">23</span><h2>Range vectors and rate()</h2></div>
+  <div class="plain"><b>In plain words</b>A counter’s raw value only tells you a total. <code>rate()</code> looks at the samples over a window, such as the last 5 minutes, and works out how fast the counter grew, per second. It also notices when a counter dropped back to zero because the service restarted, and counts that as a reset rather than negative traffic.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>range vector</b><span>For each series, all samples in a time window: <code>[5m]</code>.</span></div>
+    <div><b>rate()</b><span>Average per-second increase of a counter over the window, handling resets.</span></div>
+    <div><b>increase()</b><span>The total increase over the window (rate × window length).</span></div>
+    <div><b>irate()</b><span>Per-second increase using only the last two samples: spiky, for fast graphs.</span></div>
+  </div>
+  <p class="lead">rate(counter[5m]) turns a counter into an average per-second rate over the last five minutes, correcting for counter resets, and is the basis of nearly every useful query.</p>
+  <div class="demo">
+    <h4>Try it: compute rate() over 2 minutes of samples</h4>
+    <div class="ctrls"><label><input type="checkbox" id="rtReset" checked> checkout-1 restarts in the middle</label><button class="btn on" id="rtGo">Compute</button></div>
+    <div class="scroll"><div class="log" id="rtLog"><label>samples</label></div></div>
+    <div class="out" id="rtOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Real reset handling; the real rate() also extrapolates slightly to the window edges, which is left out here. <span class="tag s">Simplified</span></p>
+  </div>
+  <pre class="code">rate(http_requests_total{job="checkout", status=~"5.."}[5m])        <i># failures per second</i>
+increase(http_requests_total{job="checkout", status=~"5.."}[1h])    <i># failures in the last hour</i></pre>
+  <ul>
+    <li><b>Always take rate() before summing</b> counters, never sum then rate: resets on one instance would corrupt the total. <a class="tag g" href="#c8">Guaranteed · check 8</a></li>
+    <li><b>Make the window at least 4 × the scrape interval</b> so it always holds enough samples: [1m] or more at 15 s. <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>A counter goes 100, 150, 20, 60 over four samples because the process restarted. What increase does rate() account for?</summary><div class="in">90: +50 (100→150), then a reset, counted as +20 (from 0 to 20), then +40 (20→60). A naive “last minus first” would give −40.</div></details>
+  <aside class="trk"><h4 data-id="rate 5xx">Follow the checkout</h4><div class="in"><p>At 10:12 the failure rate across checkout is about 1.6 per second. <span class="tag x">Example value</span></p>
+  <pre class="code">sum(rate(http_requests_total{job="checkout", status=~"5.."}[5m]))
+{}  1.61</pre></div></aside>
+</section>
+
+<section class="s" id="aggregation" data-t="Aggregation">
+  <div class="sh"><span class="off">24</span><h2>Aggregation: sum, avg, topk and friends</h2></div>
+  <div class="plain"><b>In plain words</b>Usually you do not want one line per instance, method and status; you want one number per service, or one line per status code. Aggregation operators add, average or rank series together, keeping only the labels you name.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>by (…)</b><span>Keep these labels in the result; combine across all others.</span></div>
+    <div><b>without (…)</b><span>Drop these labels; keep all others.</span></div>
+    <div><b>topk</b><span>The k series with the highest values.</span></div>
+  </div>
+  <p class="lead">Aggregation operators such as sum, avg, max, count and topk combine series, and by or without decide which labels survive.</p>
+  <pre class="code">sum(rate(http_requests_total{job="checkout"}[5m]))                       <i># total requests/s</i>
+sum by (status) (rate(http_requests_total{job="checkout"}[5m]))           <i># one line per status</i>
+sum by (instance) (rate(http_requests_total{job="checkout",status=~"5.."}[5m]))
+topk(3, sum by (path) (rate(http_requests_total[5m])))                    <i># 3 busiest paths</i></pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">60 series<small>instance × method × path × status</small></span><i data-t="sum by (status)"></i><span class="n y">4 series<small>one per status code</small></span>
+  </div></div><figcaption>Everything not named in by() is added together. <span class="tag x">Example value</span></figcaption></figure>
+  <details class="q"><summary>What is the difference between sum by (instance) and sum without (instance)?</summary><div class="in">sum by (instance) keeps only the instance label and adds up everything else. sum without (instance) removes instance and keeps every other label, adding up across instances.</div></details>
+  <aside class="trk"><h4 data-id="by instance">Follow the checkout</h4><div class="in"><p>Breaking failures down by instance shows the culprit at once. <span class="tag x">Example value</span></p>
+  <pre class="code">{instance="checkout-1:8080"}  1.52
+{instance="checkout-2:8080"}  0.05
+{instance="checkout-3:8080"}  0.04</pre></div></aside>
+</section>
+
+<section class="s" id="quantile" data-t="histogram_quantile">
+  <div class="sh"><span class="off">25</span><h2>Percentiles with histogram_quantile()</h2></div>
+  <div class="plain"><b>In plain words</b>To get the 95th-percentile latency, take the rate of each histogram bucket, add the buckets up across instances, then ask PromQL which duration 95% of requests stayed under. It finds the bucket where the 95% mark falls and assumes requests are spread evenly inside it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>histogram_quantile()</b><span>Estimates a quantile from histogram bucket rates.</span></div>
+    <div><b>le</b><span>The bucket’s upper bound label (“less than or equal”).</span></div>
+    <div><b>linear interpolation</b><span>Assuming values are evenly spread between a bucket’s lower and upper bound.</span></div>
+  </div>
+  <p class="lead">histogram_quantile(φ, sum by (le) (rate(…_bucket[5m]))) estimates a latency percentile from bucket rates, interpolating linearly inside the bucket that contains it.</p>
+  <div class="demo">
+    <h4>Try it: estimate a percentile from buckets</h4>
+    <div class="ctrls"><label for="hqQ">quantile</label><select id="hqQ"><option value="0.5">0.5 (median)</option><option value="0.9">0.9</option><option value="0.95" selected>0.95</option><option value="0.99">0.99</option></select><label><input type="checkbox" id="hqInc"> during the 10:07 incident</label></div>
+    <div class="scroll"><div class="log" id="hqLog"><label>bucket rates</label></div></div>
+    <div class="out" id="hqOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Same algorithm as Prometheus: find the bucket, interpolate linearly inside it. Bucket rates are invented. <a class="tag g" href="#c5">Guaranteed · check 5</a></p>
+  </div>
+  <pre class="code">histogram_quantile(0.95,
+  sum by (le) (rate(http_request_duration_seconds_bucket{job="checkout", path="/checkout"}[5m])))</pre>
+  <ul>
+    <li><b>Keep the le label</b> when aggregating; without it there are no buckets left to work with.</li>
+    <li><b>The answer is only as precise as the buckets:</b> if p95 falls in 1–2.5 s, the true value could be anywhere in that range.</li>
+  </ul>
+  <details class="q"><summary>Why must you write sum by (le) inside histogram_quantile when combining instances?</summary><div class="in">histogram_quantile needs the bucket boundaries, which are the le label. Summing by le adds each bucket across instances while keeping the buckets separate.</div></details>
+  <aside class="trk"><h4 data-id="p95 /checkout">Follow the checkout</h4><div class="in"><p>Turn on “during the incident” in the demo: p95 for /checkout jumps from under 0.25 s to more than 2 s as payments wait for the provider’s timeout.</p></div></aside>
+</section>
+
+<section class="s" id="binops" data-t="Ratios and vector matching">
+  <div class="sh"><span class="off">26</span><h2>Ratios and vector matching</h2></div>
+  <div class="plain"><b>In plain words</b>The most useful alert numbers are ratios: failures divided by all requests. PromQL can do arithmetic between two sets of series, pairing up series that have the same labels. When the label sets differ, you say which labels to match on.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>binary operator</b><span>Arithmetic or comparison between two values or vectors: + − * / &gt; &lt; ==.</span></div>
+    <div><b>vector matching</b><span>Pairing series from two sides of an operator by their labels.</span></div>
+    <div><b>on / ignoring</b><span>Match only on these labels / on all labels except these.</span></div>
+    <div><b>group_left</b><span>Allow many series on the left to match one on the right.</span></div>
+  </div>
+  <p class="lead">Binary operators combine vectors by matching series with identical labels, and on, ignoring and group_left control the matching when label sets differ.</p>
+  <pre class="code"><i># error ratio of the whole service</i>
+  sum(rate(http_requests_total{job="checkout", status=~"5.."}[5m]))
+/ sum(rate(http_requests_total{job="checkout"}[5m]))
+
+<i># per instance: both sides keep the instance label, so they pair up</i>
+  sum by (instance) (rate(http_requests_total{job="checkout", status=~"5.."}[5m]))
+/ sum by (instance) (rate(http_requests_total{job="checkout"}[5m]))
+
+<i># comparison as a filter: only return instances above 5%</i>
+(…the ratio above…) &gt; 0.05</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n r">5xx per second</span><i data-t="÷ same labels"></i><span class="n">all requests per second</span><i data-t="="></i><span class="n y">error ratio</span>
+  </div></div><figcaption>Aggregate both sides to the same labels first, and the division pairs them automatically.</figcaption></figure>
+  <details class="q"><summary>Why does a comparison like ratio &gt; 0.05 return fewer series rather than true/false values?</summary><div class="in">In PromQL a comparison filters by default: series that fail the condition are dropped, and the rest keep their values. Add the bool modifier to get 0/1 instead.</div></details>
+  <aside class="trk"><h4 data-id="error ratio">Follow the checkout</h4><div class="in"><p>At 10:08 the service-wide error ratio is 0.081: 8.1% of checkouts failing. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="recording" data-t="Recording rules">
+  <div class="sh"><span class="off">27</span><h2>Recording rules</h2></div>
+  <div class="plain"><b>In plain words</b>Some queries are expensive and asked over and over by dashboards and alerts. A recording rule runs a query on a schedule and stores the answer as a new, cheap series. Dashboards then read the pre-computed series instead of crunching raw data every time.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>recording rule</b><span>A query Prometheus evaluates regularly and stores as a new series.</span></div>
+    <div><b>rule group</b><span>Rules evaluated together, in order, at the same interval.</span></div>
+  </div>
+  <p class="lead">Recording rules pre-compute expensive or frequently used expressions into new series at every evaluation interval, named by the convention level:metric:operations.</p>
+  <pre class="code"># rules/checkout.yml
+groups:
+  - name: checkout
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+      - record: job:http_errors:ratio_rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          / sum by (job) (rate(http_requests_total[5m]))</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">raw series<small>thousands</small></span><i data-t="every 15 s"></i><span class="n p">recording rule</span><i data-t="writes"></i><span class="n y">job:http_errors:ratio_rate5m<small>one series per job</small></span>
+  </div></div><figcaption>Dashboards and alerts read the small result instead of the raw series.</figcaption></figure>
+  <details class="q"><summary>What does the name job:http_errors:ratio_rate5m tell you?</summary><div class="in">By convention: aggregated to the job level, about HTTP errors, and computed as a ratio of 5-minute rates.</div></details>
+  <aside class="trk"><h4 data-id="job:http_errors:ratio_rate5m">Follow the checkout</h4><div class="in"><p>The alert in Part 5 reads this recorded series; at 10:08 its value for job="checkout" is 0.081.</p></div></aside>
+</section>
+
+<section class="s" id="methods" data-t="What to measure">
+  <div class="sh"><span class="off">28</span><h2>What to measure: golden signals, RED and USE</h2></div>
+  <div class="plain"><b>In plain words</b>You could measure a thousand things. Three well-known checklists say which few matter most. For a service handling requests: how many, how many fail, how long they take (RED). For a resource like a disk or CPU: how busy, how overloaded, how many errors (USE). Google’s “four golden signals” combine the two.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>RED</b><span>Rate, Errors, Duration: the key metrics for a request-driven service.</span></div>
+    <div><b>USE</b><span>Utilization, Saturation, Errors: the key metrics for a resource.</span></div>
+    <div><b>golden signals</b><span>Latency, traffic, errors, saturation.</span></div>
+    <div><b>saturation</b><span>How much work is waiting because a resource is full.</span></div>
+  </div>
+  <p class="lead">RED (rate, errors, duration) covers services, USE (utilization, saturation, errors) covers resources, and the four golden signals combine them into what to put on every dashboard.</p>
+  <div class="tw"><table>
+    <tr><th>Signal</th><th>Checkout query</th></tr>
+    <tr><td>Rate / traffic</td><td><code>sum(rate(http_requests_total{job="checkout"}[5m]))</code></td></tr>
+    <tr><td>Errors</td><td><code>job:http_errors:ratio_rate5m{job="checkout"}</code></td></tr>
+    <tr><td>Duration / latency</td><td><code>histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))</code></td></tr>
+    <tr><td>Saturation</td><td><code>checkout_in_flight_requests</code>, CPU and memory from node_exporter</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>RED, for the checkout service</h4><span class="chip">Rate</span><span class="chip X">Errors</span><span class="chip Y">Duration</span></div>
+    <div><h4>USE, for the host’s CPU</h4><span class="chip">Utilization</span><span class="chip Y">Saturation</span><span class="chip X">Errors</span></div>
+  </div></div><figcaption>Two checklists: one for things that serve requests, one for things that get used up.</figcaption></figure>
+  <details class="q"><summary>Name the three RED metrics for a web service.</summary><div class="in">Rate (requests per second), Errors (failed requests, usually as a ratio) and Duration (latency, usually percentiles from a histogram).</div></details>
+  <aside class="trk"><h4 data-id="Checkout overview">Follow the checkout</h4><div class="in"><p>The Grafana “Checkout overview” has exactly these four panels. At 10:07 two of them turn red: errors and latency.</p></div></aside>
+</section>
+
+<section class="s" id="grafana" data-t="Dashboards with Grafana">
+  <div class="sh"><span class="off">29</span><h2>Dashboards with Grafana</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus has a basic graph page, but teams build dashboards in Grafana. Grafana stores nothing itself: each panel is a PromQL query sent to Prometheus whenever the dashboard refreshes, drawn as a graph, number or table.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>data source</b><span>A system Grafana queries, here Prometheus.</span></div>
+    <div><b>panel</b><span>One chart or number on a dashboard, backed by a query.</span></div>
+    <div><b>variable</b><span>A dropdown on a dashboard that fills a label value into every query.</span></div>
+  </div>
+  <p class="lead">Grafana dashboards are collections of panels, each running a PromQL query against Prometheus over the HTTP API on every refresh.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">browser</span><i data-t="open dashboard"></i><span class="n">Grafana</span><i data-t="PromQL over HTTP /api/v1/query_range"></i><span class="n y">Prometheus</span>
+  </div></div><figcaption>Every panel refresh is a query. Ten people watching a 10-panel dashboard every 10 s is 10 queries a second.</figcaption></figure>
+  <ul>
+    <li><b>Use variables</b> like <code>$instance</code> so one dashboard works for every service.</li>
+    <li><b>Point heavy panels at recording rules</b> to keep dashboards fast.</li>
+  </ul>
+  <details class="q"><summary>Does Grafana store the metrics it displays?</summary><div class="in">No. It queries Prometheus on each refresh and only draws the results.</div></details>
+  <aside class="trk"><h4 data-id="Checkout overview">Follow the checkout</h4><div class="in"><p>Sam opens the dashboard from the page at 10:12 and sees checkout-1’s error line far above the others.</p></div></aside>
+</section>
+
+<div class="part" data-part="Alerting"><h2>Part 5: Alerting</h2><p>From a condition to a person</p></div>
+
+<section class="s" id="alertrules" data-t="Alerting rules">
+  <div class="sh"><span class="off">30</span><h2>Alerting rules</h2></div>
+  <div class="plain"><b>In plain words</b>An alerting rule is a PromQL condition with a waiting period. Prometheus checks it every evaluation interval. When it first becomes true the alert is “pending”; if it stays true for the whole waiting period, it becomes “firing” and is sent to Alertmanager. A short blip never pages anyone.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>for</b><span>How long a condition must stay true before the alert fires.</span></div>
+    <div><b>pending / firing</b><span>Condition true but waiting / condition true long enough, alert sent.</span></div>
+    <div><b>annotations</b><span>Human text attached to an alert: summary, description, runbook link.</span></div>
+  </div>
+  <p class="lead">An alerting rule fires when its expression returns results continuously for the <code>for</code> duration; it moves from inactive to pending to firing and is sent to Alertmanager while firing.</p>
+  <pre class="code">groups:
+  - name: checkout-alerts
+    rules:
+      - alert: CheckoutHighErrorRate
+        expr: job:http_errors:ratio_rate5m{job="checkout"} &gt; 0.05
+        for: 5m
+        labels:
+          severity: page
+          team: payments
+        annotations:
+          summary: "Checkout errors at &#123;&#123; $value | humanizePercentage &#125;&#125;"
+          runbook_url: "https://wiki.quickcart.example/runbooks/checkout-errors"</pre>
+  <div class="demo">
+    <h4>Try it: when does the alert fire?</h4>
+    <div class="ctrls"><label for="afFor">for</label><select id="afFor"><option value="0">0 (no wait)</option><option value="1">1m</option><option value="5" selected>5m</option></select><label for="afPat">error ratio pattern</label><select id="afPat"><option value="incident">10:07 incident (sustained)</option><option value="blip">one-minute blip</option></select><button class="btn on" id="afGo">Evaluate</button></div>
+    <div class="scroll"><div class="log" id="afLog"><label>state</label></div></div>
+    <div class="out" id="afOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Rule evaluated once a minute here for clarity; QuickCart evaluates every 15 s. <span class="tag s">Simplified</span></p>
+  </div>
+  <ul>
+    <li><b>States: inactive → pending → firing.</b> <a class="tag g" href="#c6">Guaranteed · check 6</a></li>
+    <li><b>The for clause trades speed for calm:</b> longer waits mean fewer false pages, later real ones.</li>
+  </ul>
+  <details class="q"><summary>A rule has for: 5m. The condition is true from 10:07 and is evaluated every 15 s. Roughly when does it fire?</summary><div class="in">About 10:12, once the condition has been continuously true for 5 minutes. Before that it is pending.</div></details>
+  <aside class="trk"><h4 data-id="CheckoutHighErrorRate">Follow the checkout</h4><div class="in"><p>Pending at 10:07:15, firing at 10:12:15. <span class="tag x">Example value</span></p>
+  <pre class="code">ALERTS{alertname="CheckoutHighErrorRate", alertstate="firing", job="checkout", severity="page", team="payments"}  1</pre></div></aside>
+</section>
+
+<section class="s" id="alertmanager" data-t="Alertmanager">
+  <div class="sh"><span class="off">31</span><h2>Alertmanager: grouping, routing, silencing</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus only says “this alert is firing”. Alertmanager decides what people receive: it bundles related alerts into one message, sends each bundle to the right team’s pager or chat, holds back follow-on alerts when a bigger one explains them, and stays quiet during planned maintenance.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>grouping</b><span>Combining alerts with the same chosen labels into one notification.</span></div>
+    <div><b>route / receiver</b><span>The rule tree that picks a destination / the destination itself (pager, Slack, email).</span></div>
+    <div><b>inhibition</b><span>Suppressing some alerts while another, more important one is firing.</span></div>
+    <div><b>silence</b><span>A temporary mute for alerts matching given labels.</span></div>
+  </div>
+  <p class="lead">Alertmanager deduplicates, groups, routes, inhibits and silences alerts from Prometheus, and sends notifications to receivers such as pagers and chat.</p>
+  <pre class="code"># alertmanager.yml
+route:
+  receiver: checkout-chat
+  group_by: ['alertname', 'job']
+  group_wait: 30s          <i># wait to batch the first notification</i>
+  group_interval: 5m       <i># wait before notifying about changes in a group</i>
+  repeat_interval: 4h      <i># re-send while still firing</i>
+  routes:
+    - matchers: [ 'severity="page"' ]
+      receiver: oncall-pager
+inhibit_rules:
+  - source_matchers: [ 'alertname="CheckoutDown"' ]
+    target_matchers: [ 'alertname="CheckoutHighErrorRate"' ]
+    equal: ['job']</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">Prometheus<small>3 firing alerts</small></span><i data-t="dedup + group"></i><span class="n p">Alertmanager<small>1 group</small></span><i data-t="severity=page"></i><span class="n g">oncall-pager: Sam</span>
+  </div></div><figcaption>Three instance-level alerts with the same alertname and job become one page.</figcaption></figure>
+  <ul>
+    <li><b>Stock timers:</b> group_wait 30 s, group_interval 5 m, repeat_interval 4 h. <a class="tag d" href="#c7">Default · check 7</a></li>
+    <li><b>Listens on port 9093;</b> several Alertmanagers form a cluster that deduplicates notifications. <span class="tag d">Default</span></li>
+  </ul>
+  <details class="q"><summary>The database goes down and fifty services start alerting on errors. Which Alertmanager feature stops fifty pages?</summary><div class="in">Grouping (by alertname or cluster) and inhibition: a “database down” alert can inhibit the dependent services’ error alerts, so the on-call sees the root cause instead of fifty symptoms.</div></details>
+  <aside class="trk"><h4 data-id="oncall-pager">Follow the checkout</h4><div class="in"><p>At 10:12:45 (10:12:15 plus 30 s group_wait) Sam’s phone buzzes: one page for CheckoutHighErrorRate, with the runbook link.</p></div></aside>
+</section>
+
+<section class="s" id="goodalerts" data-t="Good alerts and SLOs">
+  <div class="sh"><span class="off">32</span><h2>Good alerts, SLOs and burn rates</h2></div>
+  <div class="plain"><b>In plain words</b>An alert should mean “a human must act now”. Page on what users feel (errors, slowness), not on every internal cause (high CPU). A service level objective says how good is good enough, such as 99.9% successful checkouts a month, and the best alerts fire when you are using up that small allowance of failures too fast.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>SLI</b><span>Service level indicator: the measured number, such as the success ratio.</span></div>
+    <div><b>SLO</b><span>Service level objective: the target for the SLI, such as 99.9% over 30 days.</span></div>
+    <div><b>error budget</b><span>The failures the SLO allows: 0.1% of requests for a 99.9% SLO.</span></div>
+    <div><b>burn rate</b><span>How fast the error budget is being used compared with “exactly on budget”.</span></div>
+  </div>
+  <p class="lead">Good alerts page on user-visible symptoms tied to service level objectives, and burn-rate alerts fire when the error budget is being consumed fast enough to matter.</p>
+  <div class="tw"><table>
+    <tr><th>Page on</th><th>Do not page on</th></tr>
+    <tr><td>Checkout error ratio above budget</td><td>CPU at 85% on one host</td></tr>
+    <tr><td>p95 checkout latency above 1 s</td><td>A single pod restart</td></tr>
+    <tr><td>No successful checkouts in 10 minutes</td><td>Disk at 70% (ticket, not page)</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">SLO 99.9%</span><i data-t="budget"></i><span class="n">0.1% may fail</span><i data-t="8.1% failing"></i><span class="n r">burn rate 81×</span>
+  </div></div><figcaption>At 8.1% errors, a month’s budget of 0.1% lasts about 9 hours (30 days ÷ 81, computed). That justifies a page.</figcaption></figure>
+  <details class="q"><summary>Why page on the checkout error ratio rather than on high CPU?</summary><div class="in">The error ratio is what users experience and always needs action. High CPU may be harmless (the service still answers fine) and would page people for nothing.</div></details>
+  <aside class="trk"><h4 data-id="SLO 99.9%">Follow the checkout</h4><div class="in"><p>QuickCart’s checkout SLO is 99.9% success per 30 days; the 10:07 incident burns budget 81 times faster than allowed. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="smap" data-t="Where it lives, who calls whom">
+  <div class="sh"><span class="off">33</span><h2>Where it lives and who calls whom</h2></div>
+  <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows, but rarely say where each piece of data physically lives, or which program opens each connection. Now that you know scraping, storage, rules and Alertmanager, this lesson answers both for QuickCart’s whole setup.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>port</b><span>A number identifying a network service on a machine: Prometheus 9090, node_exporter 9100, Alertmanager 9093.</span></div>
+    <div><b>HTTP API</b><span>Prometheus’s query endpoints, such as <code>/api/v1/query</code>, used by Grafana and scripts.</span></div>
+  </div>
+  <p class="lead">Metrics live in each process’s memory until scraped, then in Prometheus’s local TSDB; rules run inside Prometheus; notification state lives in Alertmanager; and every connection is opened by the side that wants data.</p>
+  <h3>Where each thing lives</h3>
+  <figure><div class="canvas"><div class="zones">
+    <div class="zone"><b>checkout-1..3</b><small>:8080/metrics</small><h5>In memory</h5><span class="chip F">current counter, gauge and bucket values</span><span class="chip">lost on restart (counters reset)</span></div>
+    <div class="zone"><b>node_exporter</b><small>each host :9100</small><h5>Reads</h5><span class="chip F">/proc and /sys of the host</span></div>
+    <div class="zone"><b>Prometheus prom-1</b><small>:9090</small><h5>On disk</h5><span class="chip Y">data/: WAL and 2-hour blocks</span><span class="chip Y">prometheus.yml, rules/*.yml</span><h5>In memory</h5><span class="chip">head block, active series</span><span class="chip">alert states (pending, firing)</span></div>
+    <div class="zone"><b>Alertmanager am-1</b><small>:9093</small><h5>On disk</h5><span class="chip C">silences and notification log</span><h5>In memory</h5><span class="chip C">alert groups, timers</span></div>
+    <div class="zone"><b>Grafana</b><small>:3000</small><h5>Stores</h5><span class="chip">dashboard definitions only, no metrics</span></div>
+  </div></div><figcaption>The only long-term copy of metric history is prom-1’s data directory. Lose that disk and history is gone, which is why Part 6 exists.</figcaption></figure>
+  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For the incident</th></tr>
+    <tr><td>Current failure count</td><td>checkout-1’s memory</td><td><code>…status="500"} 37</code> at 10:07:00</td></tr>
+    <tr><td>History of that count</td><td>prom-1 TSDB head, then a block</td><td>samples every 15 s</td></tr>
+    <tr><td>Error ratio</td><td>Recorded series in prom-1</td><td><code>job:http_errors:ratio_rate5m</code> = 0.081</td></tr>
+    <tr><td>Alert state</td><td>prom-1 memory (and the <code>ALERTS</code> series)</td><td>firing since 10:12:15</td></tr>
+    <tr><td>Who gets paged</td><td>am-1 routing config</td><td>receiver oncall-pager</td></tr>
+  </table></div>
+  <h3>Who calls whom</h3>
+  <figure><div class="board"><pre class="mmd">flowchart LR
+  P["prom-1 :9090"]:::lead -->|"GET /metrics every 15 s"| C["checkout-1..3 :8080"]
+  P -->|"GET /metrics"| N["node_exporter :9100"]
+  P -->|"POST firing alerts"| A["am-1 :9093"]:::ctl
+  A -->|"notify"| PG["pager, chat"]
+  G["Grafana"] -->|"PromQL over HTTP"| P
+  K["Kubernetes API"] -.->|"targets (prom-1 watches it)"| P
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Arrows point from the side that opens the connection. Prometheus calls targets; Grafana calls Prometheus.</figcaption></figure>
+  <ul>
+    <li><b>Prometheus must reach every target’s port</b>; targets never need to reach Prometheus. <span class="tag g">Guaranteed</span></li>
+    <li><b>Alertmanager must reach the pager and chat services</b> on the internet.</li>
+  </ul>
+  <details class="q"><summary>A firewall blocks prom-1 from reaching checkout-3:8080. What do you see, and where?</summary><div class="in">up{instance="checkout-3:8080"} becomes 0 in Prometheus and checkout-3’s series go stale, because Prometheus opens the connection and it fails. checkout-3 itself notices nothing.</div></details>
+  <aside class="trk"><h4 data-id="QuickCart">Follow the checkout</h4><div class="in"><p>The incident’s data path in one line: checkout-1 memory → scraped by prom-1 → stored → recorded ratio → alert → am-1 → Sam’s phone.</p></div></aside>
+</section>
+
+<div class="part" data-part="Scaling"><h2>Part 6: Scaling and reliability</h2><p>Beyond one server</p></div>
+
+<section class="s" id="ha" data-t="High availability">
+  <div class="sh"><span class="off">34</span><h2>High availability</h2></div>
+  <div class="plain"><b>In plain words</b>One Prometheus is one point of failure: if it is down, nobody gets alerts. The simple fix is to run two identical copies that scrape the same targets and evaluate the same rules. Both send alerts to a cluster of Alertmanagers, which make sure each alert is sent only once.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>HA pair</b><span>Two identical Prometheus servers scraping the same targets.</span></div>
+    <div><b>deduplication</b><span>Making sure the same alert from both servers produces one notification.</span></div>
+    <div><b>gossip</b><span>How Alertmanager cluster members share state with each other.</span></div>
+  </div>
+  <p class="lead">High availability means running identical Prometheus replicas that independently scrape and alert, with a clustered Alertmanager deduplicating their notifications.</p>
+  <figure><div class="board"><pre class="mmd">flowchart LR
+  T["checkout targets"]
+  P1["prom-1"]:::lead -->|"scrape"| T
+  P2["prom-2"]:::lead -->|"scrape"| T
+  P1 -->|"alerts"| A1["am-1"]:::ctl
+  P1 -->|"alerts"| A2["am-2"]:::ctl
+  P2 -->|"alerts"| A1
+  P2 -->|"alerts"| A2
+  A1 &lt;--&gt;|"gossip"| A2
+  A1 -->|"one page"| PG["oncall-pager"]
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Every Prometheus sends to every Alertmanager. The Alertmanagers agree among themselves so only one page goes out.</figcaption></figure>
+  <ul>
+    <li><b>The two copies are not identical byte for byte:</b> scrapes happen at slightly different moments. Dashboards pick one, or a querying layer merges them (next lessons).</li>
+    <li><b>Point Prometheus at all Alertmanagers,</b> not a load balancer, so deduplication works. <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>Two Prometheus servers both detect CheckoutHighErrorRate. Why does Sam get one page, not two?</summary><div class="in">Both send the alert to the Alertmanager cluster, which recognises them as the same alert (same labels) and, sharing state by gossip, sends a single notification.</div></details>
+  <aside class="trk"><h4 data-id="prom-1, prom-2">Follow the checkout</h4><div class="in"><p>After an outage of prom-1 during an upgrade, QuickCart added prom-2. On 10:07 both fired; Sam got one page.</p></div></aside>
+</section>
+
+<section class="s" id="federation" data-t="Federation">
+  <div class="sh"><span class="off">35</span><h2>Federation</h2></div>
+  <div class="plain"><b>In plain words</b>A large company runs one Prometheus per cluster or region, each close to its targets. To see the big picture, a global Prometheus can scrape a summary from each of them, usually just the pre-computed recording rules, rather than every raw series.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>federation</b><span>One Prometheus scraping selected series from others through their /federate endpoint.</span></div>
+    <div><b>hierarchical</b><span>Arranged in levels: local servers below, a global one above.</span></div>
+  </div>
+  <p class="lead">Federation lets a higher-level Prometheus scrape selected series, typically aggregated recording rules, from lower-level servers via /federate.</p>
+  <figure><div class="canvas"><div class="flow v">
+    <span class="n y">global Prometheus<small>job-level aggregates from every region</small></span><i data-t="scrapes /federate"></i>
+    <div class="row"><span class="n b">prom-eu</span><span class="n b">prom-us</span><span class="n b">prom-asia</span></div><i data-t="scrape"></i>
+    <span class="n">targets in each region</span>
+  </div></div><figcaption>Detail stays local; summaries travel up.</figcaption></figure>
+  <pre class="code">scrape_configs:
+  - job_name: federate
+    honor_labels: true
+    metrics_path: /federate
+    params:
+      'match[]': ['{__name__=~"job:.*"}']     <i># only recording-rule aggregates</i>
+    static_configs:
+      - targets: ['prom-eu:9090', 'prom-us:9090']</pre>
+  <details class="q"><summary>Why federate only recording-rule series rather than everything?</summary><div class="in">Pulling every raw series into one global server would recreate the single-server limits federation is meant to avoid. Aggregates are small and enough for a global view.</div></details>
+  <aside class="trk"><h4 data-id="job:http_errors:ratio_rate5m">Follow the checkout</h4><div class="in"><p>QuickCart’s global dashboard shows the checkout error ratio per region, federated from each region’s recorded series.</p></div></aside>
+</section>
+
+<section class="s" id="longterm" data-t="Remote write and long-term storage">
+  <div class="sh"><span class="off">36</span><h2>Remote write and long-term storage</h2></div>
+  <div class="plain"><b>In plain words</b>One Prometheus keeps two weeks on one disk. For a year of history, one place to query every cluster, and protection against losing a disk, Prometheus can stream every sample to a separate storage system built for that, such as Thanos, Grafana Mimir or VictoriaMetrics, which keeps data in cheap object storage.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>remote write</b><span>Prometheus streaming samples to another system as they arrive.</span></div>
+    <div><b>long-term storage</b><span>A system that keeps metrics for months or years, usually in object storage.</span></div>
+    <div><b>global view</b><span>Querying all clusters’ metrics in one place.</span></div>
+  </div>
+  <p class="lead">remote_write streams samples to long-term, horizontally scalable stores such as Thanos, Mimir, Cortex or VictoriaMetrics, which add durable retention, a global query view and deduplication of HA pairs.</p>
+  <figure><div class="board"><pre class="mmd">flowchart LR
+  P1["prom (cluster A)"]:::lead -->|"remote_write"| M["Mimir / Thanos receive"]
+  P2["prom (cluster B)"]:::lead -->|"remote_write"| M
+  M --> S3["object storage&lt;br/&gt;(months to years)"]
+  G["Grafana"] -->|"PromQL"| Q["query layer"]:::ctl
+  Q --> M
+  Q --> S3
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Local Prometheus keeps doing scraping and alerting; the long-term store keeps history and answers global queries.</figcaption></figure>
+  <pre class="code">remote_write:
+  - url: https://mimir.quickcart.example/api/v1/push</pre>
+  <div class="tw"><table>
+    <tr><th>System</th><th>Approach</th></tr>
+    <tr><td>Thanos</td><td>Sidecar uploads Prometheus blocks to object storage, or a receiver takes remote write; a querier merges everything</td></tr>
+    <tr><td>Grafana Mimir / Cortex</td><td>Horizontally scaled remote-write store, multi-tenant</td></tr>
+    <tr><td>VictoriaMetrics</td><td>A compact, fast time-series database accepting remote write</td></tr>
+  </table></div>
+  <details class="q"><summary>Why add a long-term store instead of setting Prometheus retention to one year?</summary><div class="in">A single Prometheus stores data on one local disk with no replication and limited capacity. A long-term store keeps data durably in object storage, scales horizontally, and can query many Prometheus servers together.</div></details>
+  <aside class="trk"><h4 data-id="mimir">Follow the checkout</h4><div class="in"><p>The 10:07 incident’s samples stay in Mimir for 13 months, so next year’s capacity review can compare. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="k8s" data-t="Prometheus on Kubernetes">
+  <div class="sh"><span class="off">37</span><h2>Prometheus on Kubernetes</h2></div>
+  <div class="plain"><b>In plain words</b>On Kubernetes, the Prometheus Operator manages Prometheus for you. Instead of editing prometheus.yml, teams create small Kubernetes objects that say “scrape pods with these labels” or “here are my alert rules”, and the operator turns them into configuration.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Prometheus Operator</b><span>A Kubernetes controller that runs Prometheus and generates its configuration.</span></div>
+    <div><b>ServiceMonitor / PodMonitor</b><span>Custom objects describing which services or pods to scrape.</span></div>
+    <div><b>PrometheusRule</b><span>A custom object holding recording and alerting rules.</span></div>
+    <div><b>kube-state-metrics</b><span>An exporter for the state of Kubernetes objects: deployments, pods, restarts.</span></div>
+  </div>
+  <p class="lead">On Kubernetes the Prometheus Operator turns ServiceMonitor, PodMonitor and PrometheusRule objects into scrape and rule configuration, while kube-state-metrics and the kubelet’s cAdvisor expose cluster and container metrics.</p>
+  <pre class="code">apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: checkout
+spec:
+  selector:
+    matchLabels: { app: checkout }
+  endpoints:
+    - port: http
+      interval: 15s</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">team applies ServiceMonitor</span><i data-t="watched by"></i><span class="n p">Prometheus Operator</span><i data-t="writes config"></i><span class="n y">Prometheus</span><i data-t="scrapes"></i><span class="n b">checkout pods</span>
+  </div></div><figcaption>Each team owns its own monitoring objects next to its app; nobody edits one shared config file.</figcaption></figure>
+  <ul>
+    <li><b>Container CPU and memory</b> come from cAdvisor in the kubelet; <b>object state</b> from kube-state-metrics.</li>
+    <li><b>kube-prometheus-stack</b> (a Helm chart) installs the operator, Prometheus, Alertmanager, Grafana and standard dashboards together.</li>
+  </ul>
+  <details class="q"><summary>Where would you look for “how many times did a checkout pod restart?”</summary><div class="in">kube-state-metrics, for example kube_pod_container_status_restarts_total, which exposes the state of Kubernetes objects.</div></details>
+  <aside class="trk"><h4 data-id="ServiceMonitor checkout">Follow the checkout</h4><div class="in"><p>The ServiceMonitor above is how prom-1 found checkout-4 and checkout-5 when the team scaled up during the incident.</p></div></aside>
+</section>
+
+<div class="part" data-part="Choose and revise"><h2>Part 7: Choose and revise</h2><p>Compare, test yourself, prove it</p></div>
+
+<section class="s" id="vs" data-t="Prometheus vs the others">
+  <div class="sh"><span class="off">38</span><h2>Prometheus vs the alternatives</h2></div>
+  <div class="plain"><b>In plain words</b>Prometheus is the default for metrics in cloud-native systems, but not the only option. Hosted services do the running for you at a price; other databases push instead of pull; and OpenTelemetry is a standard way to produce metrics that can feed Prometheus or anything else.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>OpenTelemetry</b><span>An open standard and toolkit for producing metrics, logs and traces.</span></div>
+    <div><b>SaaS monitoring</b><span>Hosted products such as Datadog or Grafana Cloud that run the backend for you.</span></div>
+  </div>
+  <p class="lead">Choose by who runs it, how data gets in (pull or push), how long you keep it and how you query it; Prometheus wins on ecosystem and PromQL, hosted tools on effort.</p>
+  <div class="tw"><table>
+    <tr><th></th><th>Prometheus</th><th>Datadog (SaaS)</th><th>InfluxDB</th><th>Graphite</th></tr>
+    <tr><td>Collection</td><td>Pull</td><td>Agent push</td><td>Push</td><td>Push</td></tr>
+    <tr><td>Who runs it</td><td>You</td><td>The vendor</td><td>You or the vendor</td><td>You</td></tr>
+    <tr><td>Labels / tags</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Dotted names only</td></tr>
+    <tr><td>Long-term storage</td><td>Add Thanos / Mimir</td><td>Built in</td><td>Built in</td><td>Built in</td></tr>
+    <tr><td>Cost</td><td>Your infrastructure</td><td>Per host and per metric</td><td>Varies</td><td>Your infrastructure</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">app with OpenTelemetry SDK</span><i data-t="metrics"></i><div class="row"><span class="n y">Prometheus</span><span class="n">Datadog</span><span class="n">others</span></div>
+  </div></div><figcaption>Instrument once with OpenTelemetry, and the backend can change later.</figcaption></figure>
+  <details class="q"><summary>Name one reason a small team might choose a hosted product over running Prometheus.</summary><div class="in">No servers, storage, upgrades or high availability to run themselves; the vendor handles scaling and retention, at a per-host or per-metric price.</div></details>
+  <aside class="trk"><h4 data-id="QuickCart">Follow the checkout</h4><div class="in"><p>QuickCart runs Prometheus because its engineers already know PromQL and the kube-prometheus-stack set everything up in an afternoon.</p></div></aside>
+</section>
+
+<section class="s" id="kwindex" data-t="Keyword index">
+  <div class="sh"><span class="off">39</span><h2>Keyword index: every term in the course</h2></div>
+  <div class="plain"><b>In plain words</b>Every word introduced anywhere in this course, A to Z, with a one-line meaning and a link to the lesson that teaches it. Use it as a dictionary, or read it top to bottom as a final check of what you know.</div>
+  <p class="lead">114 keywords, each defined in plain words and linked to the lesson where it is explained.</p>
+  <p style="font:600 .95rem var(--mono);line-height:2"><a href="#kw-A">A</a> <a href="#kw-B">B</a> <a href="#kw-C">C</a> <a href="#kw-D">D</a> <a href="#kw-E">E</a> <a href="#kw-F">F</a> <a href="#kw-G">G</a> <a href="#kw-H">H</a> <a href="#kw-I">I</a> <a href="#kw-J">J</a> <a href="#kw-K">K</a> <a href="#kw-L">L</a> <a href="#kw-M">M</a> <a href="#kw-N">N</a> <a href="#kw-O">O</a> <a href="#kw-P">P</a> <a href="#kw-Q">Q</a> <a href="#kw-R">R</a> <a href="#kw-S">S</a> <a href="#kw-T">T</a> <a href="#kw-U">U</a> <a href="#kw-V">V</a> <a href="#kw-W">W</a> </p>
+  <div class="tw"><table class="kw"><tr><th>Keyword</th><th>Meaning</th><th>Learn it in</th></tr><tr id="kw-A"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">A</td></tr><tr><td><b>action</b></td><td>What a rule does: keep, drop, replace, labelmap, labeldrop, hashmod…</td><td><a href="#relabel">Relabeling</a></td></tr><tr><td><b>active series</b></td><td>Series that received a sample recently and are held in memory.</td><td><a href="#cardinality">Cardinality</a></td></tr><tr><td><b>aggregate</b></td><td>Combine values from many series, such as summing them.</td><td><a href="#summary">Summaries vs histograms</a></td></tr><tr><td><b>alerting rule</b></td><td>A PromQL condition that, when true long enough, sends an alert.</td><td><a href="#vocab">The monitoring vocabulary</a></td></tr><tr><td><b>Alertmanager</b></td><td>The separate service that groups alerts and sends notifications.</td><td><a href="#vocab">The monitoring vocabulary</a></td></tr><tr><td><b>annotations</b></td><td>Human text attached to an alert: summary, description, runbook link.</td><td><a href="#alertrules">Alerting rules</a></td></tr><tr id="kw-B"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">B</td></tr><tr><td><b>base unit</b></td><td>Seconds, bytes, ratios between 0 and 1: no milliseconds or kilobytes.</td><td><a href="#naming">Naming and units</a></td></tr><tr><td><b>batch job</b></td><td>A program that runs, does a task, and exits.</td><td><a href="#pushgw">Pushgateway</a></td></tr><tr><td><b>binary operator</b></td><td>Arithmetic or comparison between two values or vectors: + − * / &gt; &lt; ==.</td><td><a href="#binops">Ratios and vector matching</a></td></tr><tr><td><b>blackbox_exporter</b></td><td>An exporter that probes endpoints from outside (HTTP, TCP, ping).</td><td><a href="#exporters">Exporters and instrumentation</a></td></tr><tr><td><b>block</b></td><td>A read-only directory of compressed samples covering a time range (2 hours to start with).</td><td><a href="#tsdb">The TSDB</a></td></tr><tr><td><b>bucket</b></td><td>A counter of observations at or below a bound, written <code>le="0.5"</code> (less than or equal).</td><td><a href="#histogram">Histograms</a></td></tr><tr><td><b>burn rate</b></td><td>How fast the error budget is being used compared with “exactly on budget”.</td><td><a href="#goodalerts">Good alerts and SLOs</a></td></tr><tr><td><b>by (…)</b></td><td>Keep these labels in the result; combine across all others.</td><td><a href="#aggregation">Aggregation</a></td></tr><tr id="kw-C"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">C</td></tr><tr><td><b>cardinality</b></td><td>How many distinct series a metric (or a whole server) has.</td><td><a href="#cardinality">Cardinality</a></td></tr><tr><td><b>client library</b></td><td>The Prometheus library for your language (Go, Java, Python…) that creates metrics and serves /metrics.</td><td><a href="#exporters">Exporters and instrumentation</a></td></tr><tr><td><b>compaction</b></td><td>Merging smaller blocks into larger ones.</td><td><a href="#tsdb">The TSDB</a></td></tr><tr><td><b>counter</b></td><td>A value that only increases, and resets to zero when the process restarts.</td><td><a href="#counter">Counters</a></td></tr><tr id="kw-D"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">D</td></tr><tr><td><b>data source</b></td><td>A system Grafana queries, here Prometheus.</td><td><a href="#grafana">Dashboards with Grafana</a></td></tr><tr><td><b>deduplication</b></td><td>Making sure the same alert from both servers produces one notification.</td><td><a href="#ha">High availability</a></td></tr><tr id="kw-E"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">E</td></tr><tr><td><b>error budget</b></td><td>The failures the SLO allows: 0.1% of requests for a 99.9% SLO.</td><td><a href="#goodalerts">Good alerts and SLOs</a></td></tr><tr><td><b>exporter</b></td><td>A small program that reads metrics from something (a machine, a database) and exposes them on /metrics.</td><td><a href="#vocab">The monitoring vocabulary</a></td></tr><tr><td><b>exposition format</b></td><td>The text format of a /metrics page.</td><td><a href="#exposition">The /metrics format</a></td></tr><tr id="kw-F"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">F</td></tr><tr><td><b>federation</b></td><td>One Prometheus scraping selected series from others through their /federate endpoint.</td><td><a href="#federation">Federation</a></td></tr><tr><td><b>for</b></td><td>How long a condition must stay true before the alert fires.</td><td><a href="#alertrules">Alerting rules</a></td></tr><tr id="kw-G"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">G</td></tr><tr><td><b>gauge</b></td><td>A value that can go up and down, read as it is.</td><td><a href="#gauge">Gauges</a></td></tr><tr><td><b>global view</b></td><td>Querying all clusters’ metrics in one place.</td><td><a href="#longterm">Remote write and long-term storage</a></td></tr><tr><td><b>golden signals</b></td><td>Latency, traffic, errors, saturation.</td><td><a href="#methods">What to measure</a></td></tr><tr><td><b>gossip</b></td><td>How Alertmanager cluster members share state with each other.</td><td><a href="#ha">High availability</a></td></tr><tr><td><b>Grafana</b></td><td>A popular dashboard tool that queries Prometheus.</td><td><a href="#vocab">The monitoring vocabulary</a></td></tr><tr><td><b>grouping</b></td><td>Combining alerts with the same chosen labels into one notification.</td><td><a href="#alertmanager">Alertmanager</a></td></tr><tr><td><b>group_left</b></td><td>Allow many series on the left to match one on the right.</td><td><a href="#binops">Ratios and vector matching</a></td></tr><tr id="kw-H"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">H</td></tr><tr><td><b>HA pair</b></td><td>Two identical Prometheus servers scraping the same targets.</td><td><a href="#ha">High availability</a></td></tr><tr><td><b>head block</b></td><td>The in-memory part holding the most recent samples.</td><td><a href="#tsdb">The TSDB</a></td></tr><tr><td><b># HELP / # TYPE</b></td><td>Comment lines giving a metric’s description and its type.</td><td><a href="#exposition">The /metrics format</a></td></tr><tr><td><b>hierarchical</b></td><td>Arranged in levels: local servers below, a global one above.</td><td><a href="#federation">Federation</a></td></tr><tr><td><b>histogram</b></td><td>A metric that counts observations into buckets by value.</td><td><a href="#histogram">Histograms</a></td></tr><tr><td><b>histogram_quantile()</b></td><td>Estimates a quantile from histogram bucket rates.</td><td><a href="#quantile">histogram_quantile</a></td></tr><tr><td><b>HTTP API</b></td><td>Prometheus’s query endpoints, such as <code>/api/v1/query</code>, used by Grafana and scripts.</td><td><a href="#smap">Where it lives, who calls whom</a></td></tr><tr id="kw-I"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">I</td></tr><tr><td><b>increase()</b></td><td>The total increase over the window (rate × window length).</td><td><a href="#rate">rate and range vectors</a></td></tr><tr><td><b>ingestion rate</b></td><td>Samples stored per second: active series ÷ scrape interval.</td><td><a href="#retention">Retention and sizing</a></td></tr><tr><td><b>inhibition</b></td><td>Suppressing some alerts while another, more important one is firing.</td><td><a href="#alertmanager">Alertmanager</a></td></tr><tr><td><b>instant vector</b></td><td>A set of series with one sample each, at one moment.</td><td><a href="#selectors">Selectors</a></td></tr><tr><td><b>instrumentation</b></td><td>Code inside your own service that counts and times things.</td><td><a href="#vocab">The monitoring vocabulary</a></td></tr><tr><td><b>irate()</b></td><td>Per-second increase using only the last two samples: spiky, for fast graphs.</td><td><a href="#rate">rate and range vectors</a></td></tr><tr id="kw-J"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">J</td></tr><tr><td><b>job / instance</b></td><td>Labels Prometheus adds to every scraped series: which group of targets and which single target.</td><td><a href="#series">Series and labels</a></td></tr><tr id="kw-K"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">K</td></tr><tr><td><b>kube-state-metrics</b></td><td>An exporter for the state of Kubernetes objects: deployments, pods, restarts.</td><td><a href="#k8s">Prometheus on Kubernetes</a></td></tr><tr id="kw-L"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">L</td></tr><tr><td><b>label</b></td><td>A key–value tag that says which thing a series is about, such as <code>instance="checkout-1"</code>.</td><td><a href="#whatmetric">What a metric is</a></td></tr><tr><td><b>label matcher</b></td><td>A condition on a label: <code>=</code>, <code>!=</code>, <code>=~</code> (regex), <code>!~</code> (not regex).</td><td><a href="#selectors">Selectors</a></td></tr><tr><td><b>label set</b></td><td>All the key–value labels on a series.</td><td><a href="#series">Series and labels</a></td></tr><tr><td><b>le</b></td><td>The bucket’s upper bound label (“less than or equal”).</td><td><a href="#quantile">histogram_quantile</a></td></tr><tr><td><b>linear interpolation</b></td><td>Assuming values are evenly spread between a bucket’s lower and upper bound.</td><td><a href="#quantile">histogram_quantile</a></td></tr><tr><td><b>log</b></td><td>A text record of one event, such as one error message.</td><td><a href="#whymon">Why monitor at all</a></td></tr><tr><td><b>long-term storage</b></td><td>A system that keeps metrics for months or years, usually in object storage.</td><td><a href="#longterm">Remote write and long-term storage</a></td></tr><tr><td><b>lookback delta</b></td><td>How far back a query looks for the latest sample: 5 minutes by default.</td><td><a href="#stale">Staleness and gaps</a></td></tr><tr id="kw-M"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">M</td></tr><tr><td><b>meta labels</b></td><td>Temporary labels from discovery, like <code>__meta_kubernetes_pod_name</code>, used for relabeling.</td><td><a href="#sd">Service discovery</a></td></tr><tr><td><b>metric</b></td><td>A number measured over time, such as requests per second.</td><td><a href="#whymon">Why monitor at all</a></td></tr><tr><td><b>metric name</b></td><td>What is measured, such as <code>http_requests_total</code>.</td><td><a href="#series">Series and labels</a></td></tr><tr><td><b>metric_relabel_configs</b></td><td>Rules applied to scraped series before storing them.</td><td><a href="#relabel">Relabeling</a></td></tr><tr><td><b>/metrics</b></td><td>The HTTP page where a service lists its current metric values as text.</td><td><a href="#firstlook">Your first metrics</a></td></tr><tr><td><b>monitoring</b></td><td>Continuously measuring how systems behave, and warning people when something is wrong.</td><td><a href="#whymon">Why monitor at all</a></td></tr><tr id="kw-N"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">N</td></tr><tr><td><b>namespace prefix</b></td><td>The first word of a name saying which system it is from, such as <code>checkout_</code> or <code>node_</code>.</td><td><a href="#naming">Naming and units</a></td></tr><tr><td><b>node_exporter</b></td><td>The standard exporter for machine metrics: CPU, memory, disk, network.</td><td><a href="#exporters">Exporters and instrumentation</a></td></tr><tr id="kw-O"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">O</td></tr><tr><td><b>observability</b></td><td>How well you can understand what a system is doing from the data it emits.</td><td><a href="#whymon">Why monitor at all</a></td></tr><tr><td><b>on / ignoring</b></td><td>Match only on these labels / on all labels except these.</td><td><a href="#binops">Ratios and vector matching</a></td></tr><tr><td><b>OpenMetrics</b></td><td>A standardised version of the same format.</td><td><a href="#exposition">The /metrics format</a></td></tr><tr><td><b>OpenTelemetry</b></td><td>An open standard and toolkit for producing metrics, logs and traces.</td><td><a href="#vs">Prometheus vs the others</a></td></tr><tr id="kw-P"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">P</td></tr><tr><td><b>panel</b></td><td>One chart or number on a dashboard, backed by a query.</td><td><a href="#grafana">Dashboards with Grafana</a></td></tr><tr><td><b>pending / firing</b></td><td>Condition true but waiting / condition true long enough, alert sent.</td><td><a href="#alertrules">Alerting rules</a></td></tr><tr><td><b>port</b></td><td>A number identifying a network service on a machine: Prometheus 9090, node_exporter 9100, Alertmanager 9093.</td><td><a href="#smap">Where it lives, who calls whom</a></td></tr><tr><td><b>Prometheus Operator</b></td><td>A Kubernetes controller that runs Prometheus and generates its configuration.</td><td><a href="#k8s">Prometheus on Kubernetes</a></td></tr><tr><td><b>PrometheusRule</b></td><td>A custom object holding recording and alerting rules.</td><td><a href="#k8s">Prometheus on Kubernetes</a></td></tr><tr><td><b>PromQL</b></td><td>Prometheus’s query language.</td><td><a href="#whatprom">What Prometheus is</a></td></tr><tr><td><b>pull vs push</b></td><td>The server fetches data / the clients send it.</td><td><a href="#scrape">The pull model</a></td></tr><tr><td><b>Pushgateway</b></td><td>A service that holds metrics pushed by short-lived jobs until Prometheus scrapes them.</td><td><a href="#pushgw">Pushgateway</a></td></tr><tr id="kw-Q"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">Q</td></tr><tr><td><b>quantile / percentile</b></td><td>The value below which a given share of observations fall: p95 = 95% are faster.</td><td><a href="#histogram">Histograms</a></td></tr><tr id="kw-R"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">R</td></tr><tr><td><b>range vector</b></td><td>For each series, all samples in a time window: <code>[5m]</code>.</td><td><a href="#rate">rate and range vectors</a></td></tr><tr><td><b>rate()</b></td><td>Average per-second increase of a counter over the window, handling resets.</td><td><a href="#rate">rate and range vectors</a></td></tr><tr><td><b>recording rule</b></td><td>A query Prometheus evaluates regularly and stores as a new series.</td><td><a href="#recording">Recording rules</a></td></tr><tr><td><b>RED</b></td><td>Rate, Errors, Duration: the key metrics for a request-driven service.</td><td><a href="#methods">What to measure</a></td></tr><tr><td><b>regex</b></td><td>A text pattern, such as <code>5..</code> for any three-character code starting with 5.</td><td><a href="#selectors">Selectors</a></td></tr><tr><td><b>relabel_configs</b></td><td>Rules applied to targets before scraping.</td><td><a href="#relabel">Relabeling</a></td></tr><tr><td><b>remote write</b></td><td>Prometheus streaming samples to another system as they arrive.</td><td><a href="#longterm">Remote write and long-term storage</a></td></tr><tr><td><b>reset</b></td><td>A counter dropping back to zero because its process restarted.</td><td><a href="#counter">Counters</a></td></tr><tr><td><b>retention</b></td><td>How long data is kept before deletion.</td><td><a href="#retention">Retention and sizing</a></td></tr><tr><td><b>route / receiver</b></td><td>The rule tree that picks a destination / the destination itself (pager, Slack, email).</td><td><a href="#alertmanager">Alertmanager</a></td></tr><tr><td><b>rule group</b></td><td>Rules evaluated together, in order, at the same interval.</td><td><a href="#recording">Recording rules</a></td></tr><tr id="kw-S"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">S</td></tr><tr><td><b>SaaS monitoring</b></td><td>Hosted products such as Datadog or Grafana Cloud that run the backend for you.</td><td><a href="#vs">Prometheus vs the others</a></td></tr><tr><td><b>sample</b></td><td>One measurement: a value at a timestamp.</td><td><a href="#whatmetric">What a metric is</a></td></tr><tr><td><b>saturation</b></td><td>How much work is waiting because a resource is full.</td><td><a href="#methods">What to measure</a></td></tr><tr><td><b>scrape</b></td><td>Prometheus fetching the current metric values from a service over HTTP.</td><td><a href="#whatprom">What Prometheus is</a></td></tr><tr><td><b>scrape interval</b></td><td>How often each target is scraped.</td><td><a href="#scrape">The pull model</a></td></tr><tr><td><b>scrape timeout</b></td><td>How long one scrape may take before it counts as failed.</td><td><a href="#scrape">The pull model</a></td></tr><tr><td><b>service discovery</b></td><td>Getting the list of targets from another system instead of typing it.</td><td><a href="#sd">Service discovery</a></td></tr><tr><td><b>ServiceMonitor / PodMonitor</b></td><td>Custom objects describing which services or pods to scrape.</td><td><a href="#k8s">Prometheus on Kubernetes</a></td></tr><tr><td><b>silence</b></td><td>A temporary mute for alerts matching given labels.</td><td><a href="#alertmanager">Alertmanager</a></td></tr><tr><td><b>SLI</b></td><td>Service level indicator: the measured number, such as the success ratio.</td><td><a href="#goodalerts">Good alerts and SLOs</a></td></tr><tr><td><b>SLO</b></td><td>Service level objective: the target for the SLI, such as 99.9% over 30 days.</td><td><a href="#goodalerts">Good alerts and SLOs</a></td></tr><tr><td><b>stale marker</b></td><td>A special sample saying “this series has ended”.</td><td><a href="#stale">Staleness and gaps</a></td></tr><tr><td><b>static config</b></td><td>A fixed, hand-written list of targets.</td><td><a href="#sd">Service discovery</a></td></tr><tr><td><b>summary</b></td><td>A metric whose client library computes quantiles locally.</td><td><a href="#summary">Summaries vs histograms</a></td></tr><tr id="kw-T"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">T</td></tr><tr><td><b>target</b></td><td>One endpoint Prometheus scrapes, such as <code>checkout-1:8080/metrics</code>.</td><td><a href="#whatprom">What Prometheus is</a></td></tr><tr><td><b>time series</b></td><td>A list of samples for one thing over time.</td><td><a href="#whatmetric">What a metric is</a></td></tr><tr><td><b>topk</b></td><td>The k series with the highest values.</td><td><a href="#aggregation">Aggregation</a></td></tr><tr><td><b>_total</b></td><td>The conventional ending for counter names.</td><td><a href="#counter">Counters</a></td></tr><tr><td><b>trace</b></td><td>The path of one request through several services, with timings.</td><td><a href="#whymon">Why monitor at all</a></td></tr><tr><td><b>TSDB</b></td><td>Time-series database: Prometheus’s built-in storage.</td><td><a href="#whatprom">What Prometheus is</a></td></tr><tr id="kw-U"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">U</td></tr><tr><td><b>unbounded label</b></td><td>A label whose values never stop growing, such as user_id.</td><td><a href="#cardinality">Cardinality</a></td></tr><tr><td><b>up</b></td><td>A metric Prometheus creates per target: 1 if the last scrape worked, 0 if not.</td><td><a href="#firstlook">Your first metrics</a></td></tr><tr><td><b>USE</b></td><td>Utilization, Saturation, Errors: the key metrics for a resource.</td><td><a href="#methods">What to measure</a></td></tr><tr id="kw-V"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">V</td></tr><tr><td><b>variable</b></td><td>A dropdown on a dashboard that fills a label value into every query.</td><td><a href="#grafana">Dashboards with Grafana</a></td></tr><tr><td><b>vector matching</b></td><td>Pairing series from two sides of an operator by their labels.</td><td><a href="#binops">Ratios and vector matching</a></td></tr><tr id="kw-W"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">W</td></tr><tr><td><b>WAL</b></td><td>Write-ahead log: every sample is appended here first, so the head can be rebuilt after a crash.</td><td><a href="#tsdb">The TSDB</a></td></tr><tr><td><b>without (…)</b></td><td>Drop these labels; keep all others.</td><td><a href="#aggregation">Aggregation</a></td></tr></table></div>
+  <aside class="trk"><h4 data-id="all terms">Follow the checkout</h4><div class="in"><p>Try telling the story of the 10:07 incident using only words from this index: counter, scrape, label, rate, ratio, recording rule, alerting rule, pending, firing, Alertmanager, receiver.</p></div></aside>
+</section>
+
+<section class="s" id="srev" data-t="Revision and glossary">
+  <div class="sh"><span class="off">40</span><h2>Quick revision and glossary</h2></div>
+  <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten.</div>
+  <p class="lead">Test yourself, then look up any term.</p>
+  <div class="demo selftest" id="selftest"></div>
+  <details class="q"><summary>Write the PromQL for the checkout service’s error ratio over 5 minutes.</summary><div class="in">sum(rate(http_requests_total{job="checkout", status=~"5.."}[5m])) / sum(rate(http_requests_total{job="checkout"}[5m]))</div></details>
+  <details class="q"><summary>Why does an alert with for: 5m not page on a one-minute spike?</summary><div class="in">The condition must stay true continuously for 5 minutes; a one-minute spike only makes the alert pending, and it returns to inactive when the condition clears.</div></details>
+  <details class="q"><summary>What are the two main risks of running a single Prometheus, and the usual fixes?</summary><div class="in">It is a single point of failure for alerting (fix: an HA pair plus a clustered Alertmanager) and keeps limited history on one disk (fix: remote write to a long-term store such as Thanos or Mimir).</div></details>
+  <h3>Glossary</h3>
+  <div class="tw"><table class="gloss"><tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>scrape</td><td>Prometheus fetching a target’s metrics over HTTP.</td></tr>
+    <tr><td>target</td><td>One endpoint Prometheus scrapes.</td></tr>
+    <tr><td>time series</td><td>A metric name plus one label set, with its timestamped samples.</td></tr>
+    <tr><td>label</td><td>A key–value pair identifying a series.</td></tr>
+    <tr><td>counter</td><td>A value that only increases, resetting to zero on restart.</td></tr>
+    <tr><td>gauge</td><td>A value that goes up and down.</td></tr>
+    <tr><td>histogram</td><td>Cumulative bucket counters plus a sum and a count.</td></tr>
+    <tr><td>cardinality</td><td>How many distinct series exist.</td></tr>
+    <tr><td>exporter</td><td>A program exposing another system’s metrics in Prometheus format.</td></tr>
+    <tr><td>relabeling</td><td>Rewriting or filtering labels before or after a scrape.</td></tr>
+    <tr><td>head block</td><td>The in-memory part of the TSDB holding recent samples.</td></tr>
+    <tr><td>retention</td><td>How long Prometheus keeps data.</td></tr>
+    <tr><td>PromQL</td><td>Prometheus’s query language.</td></tr>
+    <tr><td>range vector</td><td>All samples of each series within a time window.</td></tr>
+    <tr><td>recording rule</td><td>A query stored as a new series on a schedule.</td></tr>
+    <tr><td>alerting rule</td><td>A condition that fires an alert when true for its for duration.</td></tr>
+    <tr><td>Alertmanager</td><td>The service that groups, routes and sends alert notifications.</td></tr>
+    <tr><td>inhibition</td><td>Suppressing alerts while a related, more important alert fires.</td></tr>
+    <tr><td>SLO</td><td>A target for a service level indicator over a period.</td></tr>
+    <tr><td>federation</td><td>One Prometheus scraping selected series from others.</td></tr>
+    <tr><td>remote write</td><td>Streaming samples from Prometheus to another storage system.</td></tr>
+  </table></div>
+</section>
+
+<section class="s" id="slab" data-t="Proof checklist">
+  <div class="sh"><span class="off">41</span><h2>Proof checklist</h2></div>
+  <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a laptop with Docker. These experiments show you how.</div>
+  <p class="lead">8 experiments with Prometheus, node_exporter and Alertmanager in Docker. Each settles a tagged statement from the lessons.</p>
+  <p id="labProg" aria-live="polite"></p>
+  <div class="tw" style="max-width:none"><table class="lab">
+    <tr><th>Passed</th><th>#</th><th>Question</th><th>Experiment</th><th>Passes when</th></tr>
+    <tr id="c1"><td><input type="checkbox" data-lab="c1" aria-label="Passed: scrape defaults"></td><td>1</td><td><b>Scrape defaults</b></td><td>Run <code>prom/prometheus</code> with a config that omits scrape_interval; open Status → Configuration.</td><td><code>scrape_interval: 1m</code>, <code>scrape_timeout: 10s</code>, <code>evaluation_interval: 1m</code>.</td></tr>
+    <tr id="c2"><td><input type="checkbox" data-lab="c2" aria-label="Passed: retention"></td><td>2</td><td><b>Retention</b></td><td>Open Status → Runtime &amp; Build Information (or the flags page).</td><td><code>storage.tsdb.retention.time</code> shows 15d when not set.</td></tr>
+    <tr id="c3"><td><input type="checkbox" data-lab="c3" aria-label="Passed: up metric"></td><td>3</td><td><b>up for a dead target</b></td><td>Add a target that does not exist; query <code>up</code>.</td><td>The fake target shows 0; Prometheus itself shows 1.</td></tr>
+    <tr id="c4"><td><input type="checkbox" data-lab="c4" aria-label="Passed: cardinality page"></td><td>4</td><td><b>Cardinality</b></td><td>Open <code>/tsdb-status</code> (Status → TSDB Status).</td><td>A table of metrics with the most series, and label pairs with the most series.</td></tr>
+    <tr id="c5"><td><input type="checkbox" data-lab="c5" aria-label="Passed: histogram_quantile"></td><td>5</td><td><b>histogram_quantile</b></td><td>Query <code>histogram_quantile(0.95, sum by (le) (rate(prometheus_http_request_duration_seconds_bucket[5m])))</code>, and the bucket rates it uses.</td><td>The result falls inside the bucket where the cumulative rate crosses 95% of the total.</td></tr>
+    <tr id="c6"><td><input type="checkbox" data-lab="c6" aria-label="Passed: alert states"></td><td>6</td><td><b>Alert states</b></td><td>Add a rule <code>vector(1) &gt; 0</code> with <code>for: 2m</code>; watch the Alerts page.</td><td>Pending for about 2 minutes, then firing.</td></tr>
+    <tr id="c7"><td><input type="checkbox" data-lab="c7" aria-label="Passed: Alertmanager timers"></td><td>7</td><td><b>Alertmanager defaults</b></td><td>Run <code>prom/alertmanager</code> with a route that omits the timers; open its Status page.</td><td>group_wait 30s, group_interval 5m, repeat_interval 4h.</td></tr>
+    <tr id="c8"><td><input type="checkbox" data-lab="c8" aria-label="Passed: counter reset"></td><td>8</td><td><b>rate() handles resets</b></td><td>Restart node_exporter; graph <code>node_cpu_seconds_total</code> and <code>rate(node_cpu_seconds_total[1m])</code>.</td><td>The raw counter drops to near zero; the rate shows no negative dip.</td></tr>
+  </table></div>
+  <p>The list and its order are a proposal. <span class="tag s">Simplified</span></p>
+</section>
+
+<footer>Covers Prometheus 3.x and Alertmanager. Defaults (scrape and evaluation intervals, retention, lookback, Alertmanager timers, ports) are quoted from the Prometheus documentation from memory and were not run for this page; the checklist is how you confirm them. QuickCart, its numbers and its incident are invented.</footer>
+
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cell=(o,v,c)=>`<div class="cell ${c||''}"><b>${o}</b><span>${esc(v)}</span></div>`;
+
+/* theme */
+const root=document.documentElement, tb=$('#themeBtn');
+const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+const label=()=>tb.textContent=isDark()?'Light theme':'Dark theme';
+try{const t=localStorage.getItem('course-theme');if(t)root.dataset.theme=t}catch(e){}
+label();
+tb.onclick=()=>{const t=isDark()?'light':'dark';root.dataset.theme=t;try{localStorage.setItem('course-theme',t)}catch(e){}label()};
+new MutationObserver(label).observe(root,{attributes:true,attributeFilter:['data-theme']});
+
+/* contents */
+const toc=$('#toc'), links={};
+document.querySelectorAll('main>.part, main>section.s').forEach(n=>{
+  if(n.classList.contains('part')){toc.appendChild(el('h3','',esc(n.dataset.part)));return}
+  const a=el('a','',`<span>${n.querySelector('.off').textContent}</span>${esc(n.dataset.t)}`);a.href='#'+n.id;toc.appendChild(a);links[n.id]=a;
+});
+const mb=$('#menuBtn');
+mb.onclick=()=>{const o=toc.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+toc.addEventListener('click',e=>{if(e.target.closest('a')){toc.classList.remove('open');mb.setAttribute('aria-expanded',false)}});
+if('IntersectionObserver' in window){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){Object.values(links).forEach(a=>a.classList.remove('cur'));const a=links[e.target.id];a.classList.add('cur');if(!toc.classList.contains('open'))a.scrollIntoView({block:'nearest'})}}),{rootMargin:'-15% 0px -75% 0px'});
+  document.querySelectorAll('section.s').forEach(s=>io.observe(s));
+}
+const bar=$('#bar');
+addEventListener('scroll',()=>{const h=document.documentElement;bar.style.width=(100*h.scrollTop/Math.max(1,h.scrollHeight-h.clientHeight))+'%'},{passive:true});
+
+
+/* reader tools ------------------------------------------------------------
+   Four tools that need no markup per lesson: search, lesson progress,
+   glossary tooltips (fed by table.gloss) and a self-test (fed by details.q). */
+const lessons=[...document.querySelectorAll('main>section.s')];
+const load=k=>{try{return JSON.parse(localStorage.getItem(k)||'{}')||{}}catch(e){return {}}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+
+/* search: a box at the top of the contents. Matches lesson titles, h3 sub-headings and lesson text. */
+(function(){
+  const box=el('div','srch','<input type="search" placeholder="Search lessons" aria-label="Search lessons"><div class="res" hidden></div>');
+  toc.prepend(box);
+  const inp=box.firstChild,res=box.lastChild,idx=[];let hid=0;
+  const words=n=>{const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT);let o='',x;while((x=w.nextNode()))o+=' '+x.nodeValue;return o};
+  lessons.forEach(s=>{const n=s.querySelector('.off').textContent,title=s.querySelector('h2').textContent;
+    let cur={id:s.id,t:title,n,x:''};idx.push(cur);
+    [...s.children].forEach(c=>{if(c.classList.contains('sh'))return;
+      if(c.tagName==='H3'){if(!c.id)c.id='h'+(hid++);cur={id:c.id,t:c.textContent,n,x:'',p:title};idx.push(cur);return}
+      cur.x+=words(c)})});
+  idx.forEach(e=>{e.x=e.x.replace(/\s+/g,' ');e.low=(e.t+' '+e.x).toLowerCase()});
+  inp.addEventListener('input',()=>{const q=inp.value.trim().toLowerCase();res.innerHTML='';if(q.length<2){res.hidden=true;return}
+    const w=q.split(/\s+/),hits=idx.filter(e=>w.every(x=>e.low.includes(x))).slice(0,8);
+    if(!hits.length)res.appendChild(el('p','','Nothing found. Try a shorter word.'));
+    hits.forEach(e=>{const at=e.x.toLowerCase().indexOf(w[0]);const snip=at<0?(e.p||''):(at>30?'…':'')+e.x.substr(Math.max(0,at-30),90).trim()+'…';
+      const a=el('a','',`<span>${e.n}</span><div>${esc(e.t)}<small>${esc(snip)}</small></div>`);a.href='#'+e.id;res.appendChild(a)});
+    res.hidden=false});
+  inp.addEventListener('keydown',e=>{if(e.key==='Escape'){inp.value='';res.hidden=true}});
+  res.addEventListener('click',e=>{if(e.target.closest('a'))res.hidden=true});
+})();
+
+/* lesson progress: a "Mark as done" button under every lesson title, a tick in the contents, and a count. */
+(function(){
+  const done=load('course-done'),list=lessons.filter(s=>s.id!=='slab');
+  const prog=el('p');prog.id='doneProg';toc.querySelector('.srch').after(prog);
+  const draw=()=>{let n=0;list.forEach(s=>{const on=!!done[s.id];if(on)n++;
+      const b=s.querySelector('.btn.done');b.classList.toggle('ok',on);b.textContent=on?'✓ Done. Undo?':'Mark as done';b.setAttribute('aria-pressed',on);
+      const a=links[s.id],sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=on?'✓':sp.dataset.n;a.classList.toggle('ok',on)});
+    prog.textContent=n+' of '+list.length+' lessons done'};
+  list.forEach(s=>{const b=el('button','btn done');b.type='button';b.onclick=()=>{done[s.id]=!done[s.id];save('course-done',done);draw()};s.querySelector('.sh').after(b)});
+  draw();
+})();
+
+/* glossary tooltips: underline the first mention of each table.gloss term in every lesson. */
+(function(){
+  const terms=[...document.querySelectorAll('table.gloss tr')].map(r=>r.cells).filter(c=>c.length>1&&c[0].tagName==='TD')
+    .map(c=>({name:c[0].textContent.trim(),tip:c[1].textContent.trim()})).filter(t=>t.name.length>2&&!/[()\/]/.test(t.name));
+  if(!terms.length)return;
+  terms.sort((a,b)=>b.name.length-a.name.length);
+  terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
+  /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk,.words';
+  lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
+    nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
+      for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;
+        const mid=node.splitText(m.index+m[1].length);mid.splitText(m[2].length);
+        const ab=el('abbr','gl');ab.tabIndex=0;ab.dataset.tip=t.tip;ab.textContent=mid.nodeValue;mid.replaceWith(ab);used[t.name]=true;return}})});
+})();
+
+/* self-test: a scored run through every details.q on the page, with a retry of the missed ones. */
+(function(){
+  const host=$('#selftest');if(!host)return;
+  const cards=[...document.querySelectorAll('section.s details.q')].map(d=>{const s=d.closest('section.s');
+    return{q:d.querySelector('summary').textContent,a:d.querySelector('.in').innerHTML,id:s.id,n:s.querySelector('.off').textContent,t:s.dataset.t}});
+  if(!cards.length){host.hidden=true;return}
+  let deck,i,missed;
+  const home=msg=>{host.innerHTML='<h4>Self-test</h4><div class="out" aria-live="polite">'+msg+'</div><div class="ctrls"><button class="btn on" data-a="start">Start ('+cards.length+' questions)</button></div>'};
+  const show=()=>{const c=deck[i];host.innerHTML='<h4>Self-test</h4><p class="from">Question '+(i+1)+' of '+deck.length+', from lesson <a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a></p><p class="q">'+esc(c.q)+'</p><div class="a" hidden>'+c.a+'</div>'
+    +'<div class="ctrls"><button class="btn on" data-a="show">Show answer</button><button class="btn" data-a="yes" hidden>Got it</button><button class="btn warn" data-a="no" hidden>Not yet</button><button class="btn" data-a="stop">Stop</button></div>'};
+  const end=()=>{const got=deck.length-missed.length;let h='<h4>Self-test</h4><div class="out" aria-live="polite">Score: '+got+' of '+deck.length+'.</div>';
+    if(missed.length)h+='<p>Worth another look:</p><ul>'+missed.map(c=>'<li><a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a>: '+esc(c.q)+'</li>').join('')+'</ul>';
+    h+='<div class="ctrls">'+(missed.length?'<button class="btn on" data-a="retry">Retry the ones I missed</button>':'')+'<button class="btn" data-a="start">Start again</button></div>';host.innerHTML=h};
+  const begin=list=>{deck=list.slice();i=0;missed=[];show()};
+  host.addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const a=b.dataset.a;
+    if(a==='start')begin(cards);else if(a==='retry')begin(missed);else if(a==='stop')home('Stopped. Start again any time.');
+    else if(a==='show'){host.querySelector('.a').hidden=false;b.hidden=true;host.querySelectorAll('[data-a=yes],[data-a=no]').forEach(x=>x.hidden=false)}
+    else{if(a==='no')missed.push(deck[i]);i++;if(i<deck.length)show();else end()}});
+  home('Answer in your head, show the answer, then mark yourself.');
+})();
+
+/* mermaid: rendered here so colours follow the page theme */
+(function(){
+  const LIGHT={background:'#ffffff',primaryColor:'#e2e9f2',primaryTextColor:'#16233a',primaryBorderColor:'#16233a',lineColor:'#52617a',secondaryColor:'#e3edff',tertiaryColor:'#f3f6fa',textColor:'#16233a',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#16233a',actorBkg:'#e2e9f2',actorBorder:'#16233a',actorTextColor:'#16233a',actorLineColor:'#8a99b3',signalColor:'#52617a',signalTextColor:'#16233a',labelBoxBkgColor:'#e2e9f2',labelBoxBorderColor:'#16233a',labelTextColor:'#16233a',loopTextColor:'#16233a',edgeLabelBackground:'#ffffff',clusterBkg:'#f3f6fa',clusterBorder:'#8a99b3',titleColor:'#16233a'};
+  const DARK={background:'#17233a',primaryColor:'#24365a',primaryTextColor:'#e8eef7',primaryBorderColor:'#78a7ff',lineColor:'#a3b3cb',secondaryColor:'#263a5c',tertiaryColor:'#111c2e',textColor:'#e8eef7',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#f2b705',actorBkg:'#24365a',actorBorder:'#78a7ff',actorTextColor:'#e8eef7',actorLineColor:'#4a628c',signalColor:'#a3b3cb',signalTextColor:'#e8eef7',labelBoxBkgColor:'#24365a',labelBoxBorderColor:'#78a7ff',labelTextColor:'#e8eef7',loopTextColor:'#e8eef7',edgeLabelBackground:'#17233a',clusterBkg:'#111c2e',clusterBorder:'#4a628c',titleColor:'#e8eef7'};
+  const CTL_DARK='fill:#3b2f6b,stroke:#b196f5,color:#e8eef7', CTL_LIGHT='fill:#efe8ff,stroke:#7a4fd6,color:#16233a';
+  const items=[...document.querySelectorAll('pre.mmd')].map(pre=>{const w=el('div','svgw');w.hidden=true;pre.after(w);return{pre,w,src:pre.textContent}});
+  let run=0,last=null;
+  async function render(){
+    if(!window.mermaid)return;
+    const dark=isDark();if(dark===last)return;last=dark;const me=++run;
+    mermaid.initialize({startOnLoad:false,theme:'base',themeVariables:Object.assign({fontFamily:'"Atkinson Hyperlegible",Verdana,sans-serif',fontSize:'15px'},dark?DARK:LIGHT),sequence:{useMaxWidth:true,mirrorActors:false},flowchart:{useMaxWidth:true}});
+    for(let i=0;i<items.length;i++){const it=items[i];
+      try{const {svg}=await mermaid.render('mmd'+i+'r'+me,dark?it.src:it.src.replace(CTL_DARK,CTL_LIGHT));
+        if(me!==run)return;it.w.innerHTML=svg;it.w.hidden=false;it.pre.hidden=true}
+      catch(e){it.w.hidden=true;it.pre.hidden=false}
+    }
+  }
+  render();
+  new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{label();render()});
+})();
+
+/* proof checklist */
+(function(){const boxes=[...document.querySelectorAll('[data-lab]')],prog=$('#labProg');if(!boxes.length||!prog)return;let st={};
+  try{st=JSON.parse(localStorage.getItem('course-lab')||'{}')}catch(e){}
+  const draw=()=>{let n=0;boxes.forEach(b=>{b.checked=!!st[b.dataset.lab];b.closest('tr').classList.toggle('ok',b.checked);if(b.checked)n++});prog.textContent=n+' of '+boxes.length+' passed';const a=links.slab;if(a){const sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=n===boxes.length?'✓':sp.dataset.n}};
+  boxes.forEach(b=>b.onchange=()=>{st[b.dataset.lab]=b.checked;try{localStorage.setItem('course-lab',JSON.stringify(st))}catch(e){}draw()});draw();
+})();
+
+
+/* demo: cardinality */
+(function(){
+  const ids=['cdInst','cdMeth','cdPath','cdStat'],user=$('#cdUser'),out=$('#cdOut');if(!user)return;
+  function go(){
+    const v=ids.map(i=>Math.max(1,+$('#'+i).value||1));let n=v.reduce((a,b)=>a*b,1);const base=n;if(user.checked)n*=50000;
+    const mem=n*4096,fm=b=>b>=1e9?(b/1e9).toFixed(1)+' GB':b>=1e6?(b/1e6).toFixed(1)+' MB':(b/1e3).toFixed(0)+' KB';
+    out.textContent=v.join(' × ')+(user.checked?' × 50,000 users':'')+' = '+n.toLocaleString('en-US')+' series, roughly '+fm(mem)+' of memory.'+(user.checked?' The user_id label multiplied it by 50,000: from '+base+' series to '+n.toLocaleString('en-US')+'.':' Comfortable.');
+  }
+  ids.forEach(i=>$('#'+i).oninput=go);user.onchange=go;go();
+})();
+
+/* demo: disk sizing */
+(function(){
+  const s=$('#dsSeries'),i=$('#dsInt'),r=$('#dsRet'),b=$('#dsBps'),out=$('#dsOut');if(!s)return;
+  function go(){
+    const series=Math.max(1,+s.value||1),iv=Math.max(1,+i.value||1),ret=Math.max(1,+r.value||1),bps=Math.max(.1,+b.value||1.5);
+    const sps=series/iv,total=sps*ret*86400,bytes=total*bps;
+    out.textContent=series.toLocaleString('en-US')+' series ÷ '+iv+' s = '+Math.round(sps).toLocaleString('en-US')+' samples/s. × '+ret+' days × 86,400 s = '+(total/1e9).toFixed(2)+' billion samples. × '+bps+' bytes ≈ '+(bytes/1e9).toFixed(1)+' GB of disk, before headroom for the WAL and compaction.';
+  }
+  [s,i,r,b].forEach(e=>e.oninput=go);go();
+})();
+
+/* demo: rate() with a counter reset */
+(function(){
+  const reset=$('#rtReset'),log=$('#rtLog'),out=$('#rtOut');if(!reset)return;
+  function go(){
+    const v=reset.checked?[0,37,58,80,101,3,24,46,70]:[0,37,58,80,101,121,145,166,190];
+    let inc=0,parts=[];for(let k=1;k<v.length;k++){const d=v[k]>=v[k-1]?v[k]-v[k-1]:v[k];inc+=d;parts.push(v[k]>=v[k-1]?'+'+d:'reset +'+d)}
+    log.innerHTML='<label>samples</label>'+v.map((x,k)=>cell('10:'+String(7+Math.floor(k*15/60)).padStart(2,'0')+':'+String(k*15%60).padStart(2,'0'),x,k>0&&x<v[k-1]?'lost':(k===v.length-1?'pend':''))).join('');
+    const naive=v[v.length-1]-v[0];
+    out.textContent='Increase = '+parts.join(', ')+' = '+inc+' over 120 s → rate ≈ '+(inc/120).toFixed(2)+' failures/s.'+(reset.checked?' A naive “last − first” gives only '+naive+' ('+(naive/120).toFixed(2)+'/s): the restart hid most of the failures.':'');
+  }
+  $('#rtGo').onclick=go;reset.onchange=go;go();
+})();
+
+/* demo: histogram_quantile, Prometheus's algorithm */
+(function(){
+  const q=$('#hqQ'),inc=$('#hqInc'),log=$('#hqLog'),out=$('#hqOut');if(!q)return;
+  const LE=[0.05,0.1,0.25,0.5,1,2.5,Infinity];
+  const NORMAL=[20,38,48,49,49.6,49.9,50],INCIDENT=[18,33,40,41,42,49,50];
+  function quant(phi,b){const total=b[b.length-1],rank=phi*total;let i=b.findIndex(c=>c>=rank);
+    if(LE[i]===Infinity)return {v:LE[i-1],i,note:'falls in the +Inf bucket, so Prometheus returns the highest finite bound'};
+    const start=i===0?0:LE[i-1],before=i===0?0:b[i-1];return {v:start+(LE[i]-start)*((rank-before)/(b[i]-before)),i,rank,before}}
+  function go(){
+    const b=inc.checked?INCIDENT:NORMAL,phi=+q.value,r=quant(phi,b);
+    log.innerHTML='<label>cumulative/s</label>'+b.map((c,k)=>cell('le '+(LE[k]===Infinity?'+Inf':LE[k]),c,k===r.i?'pend':'')).join('');
+    out.textContent=r.note?('p'+Math.round(phi*100)+' '+r.note+': '+r.v+' s.'):('Rank = '+phi+' × 50 = '+r.rank.toFixed(2)+'. It falls in the le="'+LE[r.i]+'" bucket (cumulative '+r.before+' → '+b[r.i]+'). Interpolating: p'+Math.round(phi*100)+' ≈ '+r.v.toFixed(3)+' s.');
+  }
+  q.onchange=go;inc.onchange=go;go();
+})();
+
+/* demo: alert pending -> firing */
+(function(){
+  const f=$('#afFor'),pat=$('#afPat'),log=$('#afLog'),out=$('#afOut');if(!f)return;
+  const T=['10:03','10:04','10:05','10:06','10:07','10:08','10:09','10:10','10:11','10:12','10:13','10:14','10:15'];
+  const P={incident:[0.002,0.003,0.002,0.003,0.081,0.085,0.09,0.088,0.083,0.086,0.084,0.08,0.079],blip:[0.002,0.003,0.002,0.003,0.081,0.003,0.002,0.003,0.002,0.003,0.002,0.003,0.002]};
+  function go(){
+    const F=+f.value,v=P[pat.value];let since=null,first=null,cells='';
+    v.forEach((x,k)=>{let st='inactive',cls='ghost';
+      if(x>0.05){if(since===null)since=k;if(k-since>=F){st='firing';cls='lost';if(first===null)first=k}else{st='pending';cls='pend'}}else since=null;
+      cells+=cell(T[k],(x*100).toFixed(1)+'% '+st,cls)});
+    log.innerHTML='<label>state</label>'+cells;
+    out.textContent=first===null?'Never fires: the condition was true for less than '+F+' minute(s), so the alert went pending and back to inactive. Nobody was paged.'
+      :'Fires at '+T[first]+(F?' after '+F+' minute(s) pending':' immediately')+'.'+(pat.value==='blip'&&F===0?' With no wait, a one-minute blip pages someone for nothing.':'');
+  }
+  $('#afGo').onclick=go;f.onchange=go;pat.onchange=go;go();
+})();
+
+})();
+</script>
+</body>
+</html>
