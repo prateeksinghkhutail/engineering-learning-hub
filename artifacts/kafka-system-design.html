@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Kafka for system design</title>
+<title>Kafka for system design, from zero</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -258,12 +258,20 @@ figure.big{max-width:none}
 .cards .flow{margin:.4rem 0}
 .card pre.code{font-size:.78rem;padding:.5rem .6rem;white-space:pre-wrap}
 .ctrls input[type=checkbox]{min-width:0;width:auto}
+/* beginner layer */
+.plain{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;font-size:1.02rem}
+.plain>b:first-child{display:block;font:700 .82rem var(--display);color:var(--ok);letter-spacing:.02em;margin-bottom:.25rem}
+.words{display:grid;gap:.3rem;margin:.4rem 0 1.1rem;max-width:72ch;font-size:.93rem}
+.words>h4{margin:0 0 .1rem;font:700 .82rem var(--display);color:var(--muted)}
+.words>div{display:grid;grid-template-columns:minmax(7.5rem,max-content) 1fr;gap:.7rem;padding:.35rem .6rem;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.words>div>b{font-family:var(--mono);font-size:.86rem}
+@media (max-width:520px){.words>div{grid-template-columns:1fr;gap:.1rem}}
 </style>
 </head>
 <body>
 <div class="top">
   <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
-  <strong>Kafka for system design</strong>
+  <strong>Kafka for system design, from zero</strong>
   <button class="btn" id="themeBtn">Dark theme</button>
   <div id="bar"></div>
 </div>
@@ -271,8 +279,8 @@ figure.big{max-width:none}
 <nav id="toc" aria-label="Contents"></nav>
 <main>
 <div class="hero">
-  <h1>Write it once. Let every service read it at its own pace.</h1>
-  <p>35 lessons on using Kafka in system design: why a log beats a queue, how producers, partitions and consumer groups decide speed and order, what each durability setting really protects, how exactly-once is built, and the patterns interviews ask for. One order’s events are followed through every lesson, and five simulators let you break things safely.</p>
+  <h1>Write each event once. Let every service read it at its own pace.</h1>
+  <p>A course that starts from zero. Part 0 explains messages, events, Kafka’s five core words and your first topic. Then it goes deep: producers, partitions, consumer groups, durability settings, exactly-once and the patterns interviews ask for. One order is followed through every lesson, with five simulators to break things safely.</p>
   <div class="canvas herolog scroll">
     <div class="log"><label>shop.orders-2</label><div class="cell done"><b>48208</b><span>7013 created</span></div><div class="cell done"><b>48209</b><span>6990 shipped</span></div><div class="cell pend new"><b>48210</b><span>7001 created</span></div><div class="cell ghost"><b>next</b><span>…</span></div></div>
     <div class="flow" style="margin-top:.8rem"><span class="n p">inventory-svc<small>next: 48211</small></span><span class="n p">email-svc<small>next: 48208, catching up</small></span><span class="n p">analytics<small>next: 48150, lagging</small></span><span class="n p">shipping-svc<small>next: 48211</small></span></div>
@@ -289,7 +297,9 @@ figure.big{max-width:none}
 
 <section class="s" id="s0" data-t="Running example and tags">
   <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
-  <p class="lead">Asha’s order 7001 from the MySQL and Redis courses becomes three events on Kafka. Look for the yellow “Follow order 7001” box at the end of each lesson.</p>
+  
+  <div class="plain"><b>In plain words</b>This course follows one purchase, Asha’s order 7001, as it travels through Kafka. Do not worry if the names below (topic, partition, consumer group) are new: Part 0, right after this lesson, explains each one from zero. Come back here to look up a name or a number.</div>
+  <p class="lead">Asha buys a keyboard from an online shop; her order 7001 becomes three events on Kafka. Look for the yellow “Follow order 7001” box at the end of each lesson.</p>
   <pre class="code">topic:   shop.orders
 key:     "7001"
 value:   {"type":"OrderCreated","order_id":7001,"user_id":123,"product_id":501,"total":49.99}
@@ -306,7 +316,7 @@ headers: source=checkout-api, trace_id=4bf92f35</pre>
     <tr><td>Notifications topic</td><td><code>shop.notifications</code>, groups <code>email-senders</code>, <code>push-senders</code>, <code>sms-senders</code></td></tr>
   </table></div>
   <p>The partition is computed with Kafka’s own partitioner: murmur2 of the bytes <code>7001</code>, made positive, mod 12 = 2. The hash matches Kafka’s published test vectors. Offsets, hosts, timings and IDs are invented.</p>
-  <div class="tip"><b>Two Kafka courses.</b> This one is about <i>designing with</i> Kafka: choosing settings, keys, guarantees and patterns. For the machinery underneath (log segments, KRaft, replica fetching, step by step), read <a href="../viewer.html?topic=kafka" target="_top">Kafka from the log up</a>.</div>
+  <div class="tip"><b>How this course is built.</b> Part 0 starts from zero. Parts 1 to 7 explain how Kafka works and which settings matter, and Parts 8 and 9 turn that into the designs and comparisons that interviews ask for.</div>
   <h3>Five tags tell you how far to trust a statement</h3>
   <div class="tw"><table>
     <tr><th>Tag</th><th>Meaning</th></tr>
@@ -319,10 +329,157 @@ headers: source=checkout-api, trace_id=4bf92f35</pre>
   <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>.</p>
 </section>
 
+<div class="part" data-part="Start here"><h2>Part 0: Start here</h2><p>No messaging knowledge needed</p></div>
+
+<section class="s" id="whymsg" data-t="Why services send messages">
+  <div class="sh"><span class="off">01</span><h2>Why services send messages</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A shop’s checkout has to tell the warehouse, the email system and the analytics team about each order. Phoning each of them and waiting for an answer means one busy line holds up the customer. Dropping a note in each team’s inbox lets the checkout finish at once; each team reads its notes when it is ready.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>service</b><span>A separate program that does one job, such as checkout or email, talking to others over the network.</span></div>
+    <div><b>synchronous</b><span>The caller waits for the answer before continuing.</span></div>
+    <div><b>asynchronous</b><span>The caller hands over the work and continues without waiting.</span></div>
+    <div><b>message</b><span>A piece of data sent from one service for others to read later.</span></div>
+  </div>
+  <p class="lead">When one service calls several others directly, it is only as fast and as reliable as the slowest of them; sending a message and moving on removes that dependency.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Direct calls</h4><div class="flow v"><span class="n g">checkout</span><i data-t="waits for each"></i><span class="n">inventory</span><span class="n r">email: slow today</span><span class="n">analytics</span></div><p style="font-size:.9rem;margin:.4rem 0 0">Asha waits 4 seconds because email is slow. If analytics is down, checkout fails.</p></div>
+    <div><h4>Messages</h4><div class="flow v"><span class="n g">checkout</span><i data-t="writes one message, done"></i><span class="n y">message system</span><i data-t="each reads when ready"></i><span class="n">inventory, email, analytics</span></div><p style="font-size:.9rem;margin:.4rem 0 0">Checkout finishes in milliseconds. A slow or broken reader only delays itself.</p></div>
+  </div></div><figcaption>Same four services. On the right they no longer depend on each other being up and fast at the same moment.</figcaption></figure>
+  <ul>
+    <li><b>Decoupling:</b> the sender does not need to know who reads, how many readers there are, or whether they are up.</li>
+    <li><b>Buffering:</b> a burst of orders piles up as messages and is worked through, instead of overloading every service at once.</li>
+    <li><b>The cost:</b> the sender no longer gets an immediate answer from the readers.</li>
+  </ul>
+  <details class="q"><summary>Why does calling three services directly make checkout slower and less reliable than sending one message?</summary><div class="in">Checkout must wait for all three and fails if any one of them fails. With a message, checkout only waits for the message to be stored; each service reads it later at its own pace.</div></details>
+  <aside class="trk"><h4 data-id="order 7001">Follow order 7001</h4><div class="in"><p>Our story: an online shop. Asha buys a keyboard and her purchase becomes order 7001. In this course that order turns into messages that several services read. We follow them through every lesson.</p></div></aside>
+</section>
+
+<section class="s" id="events" data-t="Events: what happened">
+  <div class="sh"><span class="off">02</span><h2>Events: writing down what happened</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A command says “send this email”: it is addressed to one service. An event says “order 7001 was paid”: it is addressed to nobody in particular. The email service decides to send an email, the warehouse decides to pack the box, and tomorrow a new fraud service can start listening without anyone changing checkout.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>event</b><span>A record of something that happened, written in the past tense.</span></div>
+    <div><b>producer</b><span>A program that writes events.</span></div>
+    <div><b>consumer</b><span>A program that reads events.</span></div>
+    <div><b>payload</b><span>The content of the event, often JSON.</span></div>
+  </div>
+  <p class="lead">An event is a message that records a fact that already happened, like “order 7001 was created”, so that any service interested in that fact can react to it.</p>
+  <pre class="code">{
+  "type":       "OrderCreated",
+  "order_id":   7001,
+  "user_id":    123,
+  "product_id": 501,
+  "total":      49.99,
+  "at":         "2026-10-04T10:00:00Z"
+}</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">orders-service<small>producer</small></span><i data-t="writes OrderCreated"></i><span class="n y">event stream</span><i data-t="reads"></i><span class="n b">inventory, email, analytics, shipping<small>consumers</small></span>
+  </div></div><figcaption>One producer, many consumers. The producer does not know who the consumers are.</figcaption></figure>
+  <ul>
+    <li><b>Events are facts,</b> so they are never edited; a correction is a new event.</li>
+    <li><b>Order 7001 produces three events</b> over its life: OrderCreated, PaymentReceived, OrderShipped.</li>
+  </ul>
+  <details class="q"><summary>What is the difference between the command “SendConfirmationEmail” and the event “OrderCreated”?</summary><div class="in">The command tells one specific service to do one thing. The event states a fact; any number of services can react to it in their own way, and new ones can be added without changing the sender.</div></details>
+  <aside class="trk"><h4 data-id="OrderCreated 7001">Follow order 7001</h4><div class="in"><p>The JSON above is Asha’s first event. Lesson 00 shows how it is sent to Kafka.</p></div></aside>
+</section>
+
+<section class="s" id="fivewords" data-t="Kafka in five words">
+  <div class="sh"><span class="off">03</span><h2>Kafka in five words</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Picture a set of notebooks. A topic is a subject, like “orders”. Because one notebook would fill too fast, the subject gets several notebooks (partitions). Every line in a notebook has a line number (offset). The notebooks sit on shelves in different rooms (brokers). Readers work in teams (consumer groups) that split the notebooks between them.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>topic</b><span>A named stream of events, such as <code>shop.orders</code>.</span></div>
+    <div><b>partition</b><span>One of the parallel, ordered logs a topic is split into.</span></div>
+    <div><b>offset</b><span>An event’s line number inside its partition: 0, 1, 2, …</span></div>
+    <div><b>broker</b><span>A Kafka server that stores partitions and answers producers and consumers.</span></div>
+    <div><b>consumer group</b><span>A team of consumers that share a topic’s partitions between them.</span></div>
+  </div>
+  <p class="lead">Kafka stores events in named topics; each topic is split into partitions; each event gets a numbered position called an offset; servers called brokers hold the data; and consumers read in groups.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>shop.orders P0</label><div class="cell"><b>0</b><span>event</span></div><div class="cell"><b>1</b><span>event</span></div><div class="cell"><b>2</b><span>event</span></div></div>
+    <div class="log"><label>shop.orders P1</label><div class="cell"><b>0</b><span>event</span></div><div class="cell"><b>1</b><span>event</span></div></div>
+    <div class="log"><label>shop.orders P2</label><div class="cell"><b>0</b><span>event</span></div><div class="cell"><b>1</b><span>event</span></div><div class="cell pend"><b>2</b><span>order 7001</span></div></div>
+  </div><figcaption>One topic, three partitions, each numbering its own events from 0. New events are only ever added at the right-hand end.</figcaption></figure>
+  <ul>
+    <li><b>Reading does not delete.</b> Each consumer group just remembers the offset it has reached.</li>
+    <li><b>Order is kept inside a partition,</b> not across partitions. Part 5 explains how to use that.</li>
+  </ul>
+  <details class="q"><summary>Two events sit at offset 2. Can they be different events?</summary><div class="in">Yes, if they are in different partitions. Each partition numbers its own events from 0, so an offset only means something together with its partition.</div></details>
+  <aside class="trk"><h4 data-id="shop.orders">Follow order 7001</h4><div class="in"><p>The shop’s real topic has 12 partitions, not 3. Asha’s order lands in partition 2, at offset 48210. Lesson 00 shows the full setup.</p></div></aside>
+</section>
+
+<section class="s" id="firsttopic" data-t="Your first topic">
+  <div class="sh"><span class="off">04</span><h2>Your first topic, hands on</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Kafka ships with small command-line tools. One creates topics, one lets you type events, one prints events as they arrive. Trying them once makes every later lesson concrete.</div>
+  <p class="lead">With one Kafka server on your laptop you can create a topic, write events with a producer, and read them back with a consumer in a few commands.</p>
+  <pre class="code">$ docker run -d --name kafka -p 9092:9092 apache/kafka:4.1.0
+$ docker exec -it kafka bash
+$ cd /opt/kafka/bin
+
+<i># 1. create a topic with 3 partitions</i>
+$ ./kafka-topics.sh --bootstrap-server localhost:9092 --create --topic shop.orders --partitions 3
+Created topic shop.orders.
+
+<i># 2. write events (type a line, press Enter; Ctrl+C to stop)</i>
+$ ./kafka-console-producer.sh --bootstrap-server localhost:9092 --topic shop.orders
+&gt; {"type":"OrderCreated","order_id":7001}
+&gt; {"type":"OrderCreated","order_id":7002}
+
+<i># 3. read everything from the start, as consumer group "email-svc"</i>
+$ ./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic shop.orders \
+    --from-beginning --group email-svc
+{"type":"OrderCreated","order_id":7001}
+{"type":"OrderCreated","order_id":7002}
+
+<i># 4. ask where the group got to</i>
+$ ./kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group email-svc
+GROUP      TOPIC        PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+email-svc  shop.orders  0          2               2               0
+<i># trimmed: both keyless lines happened to land in partition 0</i></pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">console producer</span><i data-t="writes"></i><span class="n y">topic shop.orders<small>on the broker</small></span><i data-t="reads, remembers offset"></i><span class="n b">console consumer<small>group email-svc</small></span>
+  </div></div><figcaption>What you just did. Run the consumer again with the same group and it prints nothing new: the group remembers where it stopped.</figcaption></figure>
+  <ul>
+    <li><b>bootstrap-server</b> is any broker’s address; the tools learn the rest of the cluster from it.</li>
+    <li><b>Run a second consumer with a different group</b> and it reads both events again: groups are independent.</li>
+    <li><b>Keyless lines</b> like these may land in any partition. Real producers usually set a key (Part 3). <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>You restart the console consumer with the same --group and without --from-beginning. What does it print?</summary><div class="in">Only events written after it last stopped. The group’s position (its committed offset) is stored in Kafka, so it resumes where it left off.</div></details>
+  <aside class="trk"><h4 data-id="shop.orders">Follow order 7001</h4><div class="in"><p>The production version of these commands appears throughout the course, with 12 partitions, 3 brokers and real consumer groups.</p></div></aside>
+</section>
+
+<section class="s" id="copies" data-t="Many brokers, many copies">
+  <div class="sh"><span class="off">05</span><h2>Many brokers, many copies</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If all the notebooks sat in one room and the room flooded, everything would be gone. So each notebook is photocopied into two other rooms. One copy is the “original” that new lines are written to; the others copy each new line as soon as it appears. If the original’s room floods, a copy takes over. This lesson only introduces the words; Part 6 explains them properly.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>cluster</b><span>Several brokers working together as one Kafka.</span></div>
+    <div><b>replica</b><span>One copy of a partition, on one broker.</span></div>
+    <div><b>leader</b><span>The replica that producers write to and consumers read from.</span></div>
+    <div><b>follower</b><span>A replica that copies the leader and can take over if it fails.</span></div>
+    <div><b>controller</b><span>The part of Kafka that tracks which brokers are alive and which replica leads each partition.</span></div>
+  </div>
+  <p class="lead">In production Kafka runs as a cluster of brokers, and every partition is copied to several of them, so losing one server loses no data.</p>
+  <figure><div class="canvas"><div class="cluster"><em>Kafka cluster</em><div class="row nowrap">
+    <div class="bk"><b>kafka-1</b><span class="chip F">P2 copy</span></div>
+    <div class="bk"><b>kafka-2</b><span class="chip F">P2 copy</span></div>
+    <div class="bk"><b>kafka-3</b><span class="chip L">P2 leader</span></div>
+  </div></div></div><figcaption>Partition 2 of shop.orders, stored three times. Producers and consumers talk to the leader on kafka-3.</figcaption></figure>
+  <details class="q"><summary>A partition has three replicas and the broker holding the leader dies. What happens to the data?</summary><div class="in">A follower on another broker that has kept up becomes the new leader, and producers and consumers switch to it. The data is still on the surviving copies.</div></details>
+  <aside class="trk"><h4 data-id="shop.orders-2">Follow order 7001</h4><div class="in"><p>Asha’s order event is stored on all three brokers within milliseconds of being written.</p></div></aside>
+</section>
+
+
 <div class="part" data-part="Why Kafka"><h2>Part 1: Why Kafka</h2><p>A log, not a queue</p></div>
 
 <section class="s" id="log" data-t="A log, not a queue">
-  <div class="sh"><span class="off">01</span><h2>A distributed log, not a queue</h2></div>
+  <div class="sh"><span class="off">06</span><h2>A distributed log, not a queue</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A queue is like a to-do pile: once someone takes a task, it is gone. Kafka is more like a newspaper archive: every edition stays on the shelf, and any number of readers can each read every edition, at their own pace, even years later. That one difference explains most of what makes Kafka useful.</div>
+  <div class="words"><h4>New words</h4><div><b>log</b><span>An append-only list of records: new ones go at the end, old ones are never changed.</span></div><div><b>retention</b><span>How long Kafka keeps events before deleting them, such as 7 days.</span></div><div><b>replay</b><span>Reading old events again, for example after fixing a bug.</span></div></div>
   <p class="lead">A queue hands each message to one worker and deletes it; Kafka appends every event to a durable log that any number of readers can read, re-read and replay at their own pace.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>A queue</h4><div class="flow v"><span class="n">message</span><i data-t="delivered"></i><span class="n b">one worker</span><i data-t="acked"></i><span class="n r">gone</span></div><p style="font-size:.9rem;margin:.4rem 0 0">A second system that wants the same data needs its own copy, sent by the producer.</p></div>
@@ -382,7 +539,10 @@ shipping-svc   shop.orders  2          48211           48211           0</pre></
 </section>
 
 <section class="s" id="choose" data-t="When to choose Kafka">
-  <div class="sh"><span class="off">02</span><h2>When to choose Kafka, and when not to</h2></div>
+  <div class="sh"><span class="off">07</span><h2>When to choose Kafka, and when not to</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Kafka is powerful but takes real work to run. It is worth it when many services need the same events, volumes are high, or you need to replay history. For a simple job queue, a simpler tool does better.</div>
+  <div class="words"><h4>New words</h4><div><b>throughput</b><span>How much work gets done per second, such as events per second.</span></div></div>
   <p class="lead">Kafka earns its operational cost when you have high volume, several independent consumers or a need to replay; for a simple job queue it is a semi-truck sent for groceries.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   A{"Need async communication?"} -->|"No"| S["Use synchronous calls"]
@@ -416,7 +576,10 @@ shipping-svc   shop.orders  2          48211           48211           0</pre></
 </section>
 
 <section class="s" id="fast" data-t="Why Kafka is fast">
-  <div class="sh"><span class="off">03</span><h2>Why Kafka is fast</h2></div>
+  <div class="sh"><span class="off">08</span><h2>Why Kafka is fast</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Kafka handles millions of events a second on ordinary machines. The secret is not clever algorithms but doing the simplest possible things with disks and networks, and doing them in bulk.</div>
+  <div class="words"><h4>New words</h4><div><b>sequential write</b><span>Writing to the end of a file, the fastest thing a disk can do.</span></div><div><b>page cache</b><span>Memory the operating system uses to keep recently used file data.</span></div><div><b>batch</b><span>Many records sent or stored together as one unit.</span></div></div>
   <p class="lead">Kafka gets its throughput from boring physics: it only appends to files, lets the OS cache them, sends file bytes straight to the network, and moves everything in batches.</p>
   <div class="cards">
     <div class="card"><h4>Sequential writes</h4><p>Appending to the end of a file is the fastest thing a disk does. No random seeks, no in-place updates.</p></div>
@@ -435,7 +598,10 @@ shipping-svc   shop.orders  2          48211           48211           0</pre></
 <div class="part" data-part="Architecture tour"><h2>Part 2: Architecture tour</h2><p>The pieces and the path of one event</p></div>
 
 <section class="s" id="parts" data-t="Components and data flow">
-  <div class="sh"><span class="off">04</span><h2>The components and the path of one event</h2></div>
+  <div class="sh"><span class="off">09</span><h2>The components and the path of one event</h2></div>
+  
+  <div class="plain"><b>In plain words</b>This lesson walks one event from the program that writes it to the programs that read it, naming each part of Kafka on the way.</div>
+  <div class="words"><h4>New words</h4><div><b>KRaft</b><span>Kafka’s built-in way of storing cluster information, which replaced a separate system called ZooKeeper.</span></div></div>
   <p class="lead">Producers write to the leader of one partition, followers pull copies, and consumers read from the leader; every other component exists to keep that path working.</p>
   <figure class="big"><div class="board"><pre class="mmd">flowchart TB
   subgraph PR["Producers"]
@@ -502,7 +668,10 @@ Topic: shop.orders  PartitionCount: 12  ReplicationFactor: 3  Configs: min.insyn
 </section>
 
 <section class="s" id="records" data-t="Records and keys">
-  <div class="sh"><span class="off">05</span><h2>Records and keys</h2></div>
+  <div class="sh"><span class="off">10</span><h2>Records and keys</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Every event in Kafka is a record with a key, a value, a timestamp and optional headers. The key looks like a small detail but decides which partition the record goes to, and therefore which records stay in order together.</div>
+  <div class="words"><h4>New words</h4><div><b>record</b><span>Kafka’s name for one event: key, value, timestamp, headers.</span></div><div><b>key</b><span>An optional value, such as an order ID, used to choose the partition.</span></div><div><b>header</b><span>Extra labelled metadata on a record, such as a trace ID.</span></div></div>
   <p class="lead">A record is a key, a value, a timestamp and headers; the key is the one field that changes behaviour, because it decides the partition and therefore the order.</p>
   <figure><div class="canvas"><div class="row">
     <div class="bk"><b>key</b><small>optional bytes</small><span class="chip Y">"7001"</span></div>
@@ -528,7 +697,10 @@ RecordMetadata md = producer.send(rec).get();
 </section>
 
 <section class="s" id="smap" data-t="Where it lives, who calls whom">
-  <div class="sh"><span class="off">06</span><h2>Where it lives and who calls whom</h2></div>
+  <div class="sh"><span class="off">11</span><h2>Where it lives and who calls whom</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows, but rarely say where each piece of state physically lives, or which program opens each connection. This lesson answers both for producers, brokers, controllers and consumers.</div>
+  <div class="words"><h4>New words</h4><div><b>port</b><span>A number identifying a network service on a machine. Brokers use 9092 here, controllers 9093.</span></div><div><b>segment</b><span>One of the files a partition’s log is split into on disk.</span></div><div><b>group coordinator</b><span>The broker that tracks a consumer group’s members and saved positions.</span></div></div>
   <p class="lead">Architecture diagrams show boxes. This lesson says which process, file and port holds each piece of state, and who opens each connection.</p>
   <h3>Where each thing lives</h3>
   <figure><div class="canvas"><div class="zones">
@@ -573,7 +745,10 @@ RecordMetadata md = producer.send(rec).get();
 <div class="part" data-part="Producers"><h2>Part 3: Producers</h2><p>Throughput, keys and safety</p></div>
 
 <section class="s" id="pipeline" data-t="The producer pipeline">
-  <div class="sh"><span class="off">07</span><h2>Inside <code>send()</code></h2></div>
+  <div class="sh"><span class="off">12</span><h2>Inside <code>send()</code></h2></div>
+  
+  <div class="plain"><b>In plain words</b>When your code “sends” an event, nothing goes over the network yet. The event is turned into bytes, assigned to a partition and added to a batch, and a background thread sends whole batches. That is how Kafka producers move huge volumes.</div>
+  <div class="words"><h4>New words</h4><div><b>serializer</b><span>Turns your object into bytes.</span></div><div><b>partitioner</b><span>Decides which partition an event goes to.</span></div></div>
   <p class="lead">Calling <code>send()</code> does not hit the network: the record is serialized, given a partition and added to a batch, and a background thread ships batches to brokers.</p>
   <figure><div class="canvas scroll"><div class="flow">
     <span class="n g">Application<small>send(record)</small></span><i></i><span class="n">Serializer<small>key, value → bytes</small></span><i></i><span class="n">Partitioner<small>which partition?</small></span><i></i><span class="n p">Record accumulator<small>one batch per partition</small></span><i></i><span class="n p">Sender thread<small>one request per broker</small></span><i></i><span class="n y">Broker</span>
@@ -591,7 +766,10 @@ RecordMetadata md = producer.send(rec).get();
 </section>
 
 <section class="s" id="partitioner" data-t="Keys and partitions">
-  <div class="sh"><span class="off">08</span><h2>The partitioner: keys decide everything</h2></div>
+  <div class="sh"><span class="off">13</span><h2>The partitioner: keys decide everything</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Every event must go to exactly one partition. If it has a key, Kafka hashes the key, so the same key always lands in the same partition. If it has no key, Kafka just spreads events around. The demo shows what good and bad keys do to the load.</div>
+  <div class="words"><h4>New words</h4><div><b>hash</b><span>A function that turns a value into a number that looks random but is always the same for the same input.</span></div><div><b>murmur2</b><span>The particular hash function Kafka’s default partitioner uses.</span></div><div><b>mod</b><span>The remainder after division: 14 mod 12 = 2.</span></div></div>
   <p class="lead">With a key, the partition is murmur2(key) mod the partition count; without a key, the producer fills one partition’s batch at a time and then moves on.</p>
   <pre class="code">key present:  partition = toPositive(murmur2(keyBytes)) % numPartitions
 key null:     stick to one partition until its batch is sent, then switch (sticky)</pre>
@@ -614,7 +792,10 @@ murmur2("7002") → toPositive → mod 12 = 0          <i>(Bob's order lands els
 </section>
 
 <section class="s" id="acks" data-t="acks">
-  <div class="sh"><span class="off">09</span><h2>acks: when is a write “done”?</h2></div>
+  <div class="sh"><span class="off">14</span><h2>acks: when is a write “done”?</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When should Kafka tell the producer “saved”? After nothing, after the leader saved it, or after every up-to-date copy saved it. Each step is a little slower and a lot safer.</div>
+  <div class="words"><h4>New words</h4><div><b>acknowledgement (ack)</b><span>The broker’s reply telling the producer a write succeeded.</span></div><div><b>in-sync replica</b><span>A copy that is keeping up with the leader. Part 6 covers these in depth.</span></div></div>
   <p class="lead">The <code>acks</code> setting chooses when the leader replies: never, after its own write, or after every in-sync replica has the record.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant P as producer
@@ -640,7 +821,7 @@ murmur2("7002") → toPositive → mod 12 = 0          <i>(Bob's order lands els
   </table></div>
   <ul>
     <li><b>acks=all is the default</b> since Kafka 3.0. <a class="tag d" href="#c3">Default · check 3</a> <span class="tag a">Added</span></li>
-    <li><b>“All” means all <i>in-sync</i> replicas</b>, which can shrink to one. Lesson 23 pairs it with <code>min.insync.replicas</code> to stop that.</li>
+    <li><b>“All” means all <i>in-sync</i> replicas</b>, which can shrink to one. Lesson 28 pairs it with <code>min.insync.replicas</code> to stop that.</li>
   </ul>
   <details class="q"><summary>With acks=1, describe exactly how an acknowledged record can be lost.</summary><div class="in">The leader writes it and replies, then crashes before any follower fetched it. A follower becomes leader without the record, and the old leader truncates it when it rejoins.</div></details>
   <aside class="trk"><h4 data-id="orders-service">Follow order 7001</h4><div class="in"><p>Orders are money, so the producer waits for every in-sync replica. <span class="tag x">Example value</span></p>
@@ -650,7 +831,10 @@ delivery.timeout.ms=120000</pre></div></aside>
 </section>
 
 <section class="s" id="batching" data-t="Batching and compression">
-  <div class="sh"><span class="off">10</span><h2>Batching and compression</h2></div>
+  <div class="sh"><span class="off">15</span><h2>Batching and compression</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Sending one event per network request wastes most of each request on overhead. Waiting a few milliseconds to send many together, and compressing them, moves far more data with the same effort.</div>
+  <div class="words"><h4>New words</h4><div><b>linger</b><span>How long the producer waits to fill a batch before sending.</span></div><div><b>compression</b><span>Shrinking data before sending, at the cost of some CPU.</span></div></div>
   <p class="lead">Waiting a few milliseconds to fill bigger batches, and compressing them, trades a little latency for a lot of throughput.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>linger.ms = 0</h4><div class="log"><div class="cell"><b>req</b><span>1 rec</span></div><div class="cell"><b>req</b><span>2 rec</span></div><div class="cell"><b>req</b><span>1 rec</span></div><div class="cell"><b>req</b><span>3 rec</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">Many tiny requests, little compression.</p></div>
@@ -677,7 +861,10 @@ compression.type=lz4</pre>
 </section>
 
 <section class="s" id="idem" data-t="Idempotent producer">
-  <div class="sh"><span class="off">11</span><h2>The idempotent producer</h2></div>
+  <div class="sh"><span class="off">16</span><h2>The idempotent producer</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Networks drop replies. If the producer never hears “saved”, it sends again, and without protection Kafka would store the event twice. The idempotent producer numbers every batch so the broker can spot and drop the repeat.</div>
+  <div class="words"><h4>New words</h4><div><b>idempotent</b><span>Doing it twice has the same effect as doing it once.</span></div><div><b>retry</b><span>Sending again after a failure or a missing reply.</span></div><div><b>sequence number</b><span>A counter on each batch, so repeats can be recognised.</span></div></div>
   <p class="lead">When an acknowledgement is lost the producer must retry, and the broker uses a producer ID plus a per-partition sequence number to drop the duplicate.</p>
   <div class="demo">
     <h4>Try it: the ack gets lost, the producer retries</h4>
@@ -698,7 +885,7 @@ compression.type=lz4</pre>
   <ul>
     <li><b>On by default since Kafka 3.0.</b> <a class="tag d" href="#c3">Default · check 3</a> <span class="tag a">Added</span></li>
     <li><b>Keeps order with up to 5 requests in flight,</b> because the broker rejects out-of-sequence batches. <span class="tag g">Guaranteed</span></li>
-    <li><b>Scope:</b> one producer session, one partition. A restarted app gets a new producer ID, so app-level retries need lesson 25 or 26.</li>
+    <li><b>Scope:</b> one producer session, one partition. A restarted app gets a new producer ID, so app-level retries need lesson 30 or 26.</li>
   </ul>
   <details class="q"><summary>What does the idempotent producer protect against, and what does it not?</summary><div class="in">It removes duplicates caused by the producer’s own retries within one session. It does not stop duplicates if your application calls send() twice, or if a restarted producer resends, because that is a new producer ID.</div></details>
   <aside class="trk"><h4 data-id="PID 9012">Follow order 7001</h4><div class="in"><p>A network blip during the sale: the retry is dropped as a duplicate. <span class="tag x">Example value</span></p>
@@ -710,7 +897,10 @@ compression.type=lz4</pre>
 <div class="part" data-part="Consumers"><h2>Part 4: Consumers</h2><p>Groups, offsets, rebalances, lag</p></div>
 
 <section class="s" id="groups" data-t="Consumer groups">
-  <div class="sh"><span class="off">12</span><h2>Consumer groups</h2></div>
+  <div class="sh"><span class="off">17</span><h2>Consumer groups</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A consumer group is a team that shares the work of reading a topic. Kafka gives each partition to exactly one team member, so the work is split and each partition is still read in order. A different team gets its own full copy of the stream.</div>
+  <div class="words"><h4>New words</h4><div><b>assignment</b><span>Which partitions each consumer in a group is reading.</span></div></div>
   <p class="lead">Inside one group each partition goes to exactly one consumer, which gives parallelism without breaking order; separate groups each get the whole stream.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   subgraph T["Topic: orders (4 partitions)"]
@@ -746,7 +936,10 @@ email-svc-3-77b2…     /10.0.5.23   4            shop.orders(8,9,10,11)</pre></
 </section>
 
 <section class="s" id="assign" data-t="Assignment strategies">
-  <div class="sh"><span class="off">13</span><h2>Who gets which partition</h2></div>
+  <div class="sh"><span class="off">18</span><h2>Who gets which partition</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When consumers join or leave, Kafka must decide again who reads which partition. Different strategies trade simplicity against how much gets shuffled around each time.</div>
+  <div class="words"><h4>New words</h4><div><b>assignor</b><span>The rule that splits partitions between a group’s consumers.</span></div></div>
   <p class="lead">An assignor decides how partitions are spread over consumers, and the good ones also try not to move partitions that do not need to move.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Range</h4><span class="chip">C1: 0, 1, 2</span><span class="chip">C2: 3, 4, 5</span><p style="font-size:.9rem;margin:.4rem 0 0">Contiguous blocks per topic.</p></div>
@@ -768,7 +961,10 @@ email-svc-3-77b2…     /10.0.5.23   4            shop.orders(8,9,10,11)</pre></
 </section>
 
 <section class="s" id="offsets" data-t="Offsets and commits">
-  <div class="sh"><span class="off">14</span><h2>Offsets and commits</h2></div>
+  <div class="sh"><span class="off">19</span><h2>Offsets and commits</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A consumer group saves a bookmark per partition, called the committed offset, so after a restart it carries on where it stopped. Whether you save the bookmark before or after doing the work decides whether a crash loses work or repeats it.</div>
+  <div class="words"><h4>New words</h4><div><b>commit</b><span>Save the group’s current position in Kafka.</span></div><div><b>committed offset</b><span>The saved position: the next event the group will read.</span></div></div>
   <p class="lead">A group saves its place by committing an offset per partition, and when to commit, before or after processing, decides whether a crash loses messages or repeats them.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>partition 0</label><div class="cell done"><b>0</b><span>processed</span></div><div class="cell done"><b>1</b><span>processed</span></div><div class="cell done"><b>2</b><span>processed</span></div><div class="cell done"><b>3</b><span>processed</span></div><div class="cell pend"><b>4</b><span>next</span></div><div class="cell"><b>5</b><span></span></div><div class="cell"><b>6</b><span></span></div><div class="cell"><b>7</b><span></span></div></div>
@@ -779,7 +975,7 @@ email-svc-3-77b2…     /10.0.5.23   4            shop.orders(8,9,10,11)</pre></
     <tr><td>Auto commit (default)</td><td>Every 5 s, during <code>poll()</code></td><td>Crash can repeat up to 5 s of work, or skip records handed to another thread</td></tr>
     <tr><td>Sync commit after processing</td><td><code>commitSync()</code></td><td>Slower; safe at-least-once</td></tr>
     <tr><td>Async commit</td><td><code>commitAsync()</code></td><td>A failed commit is not retried, so more repeats</td></tr>
-    <tr><td>Commit inside a transaction</td><td><code>sendOffsetsToTransaction()</code></td><td>Exactly-once for Kafka-to-Kafka work (lesson 26)</td></tr>
+    <tr><td>Commit inside a transaction</td><td><code>sendOffsetsToTransaction()</code></td><td>Exactly-once for Kafka-to-Kafka work (lesson 31)</td></tr>
   </table></div>
   <ul>
     <li><b>Offsets live in <code>__consumer_offsets</code>,</b> a compacted, replicated topic with 50 partitions. <span class="tag d">Default</span></li>
@@ -794,7 +990,10 @@ consumer.commitSync();                     <i>// commits 48211 for shop.orders-2
 </section>
 
 <section class="s" id="rebalance" data-t="Rebalancing">
-  <div class="sh"><span class="off">15</span><h2>Rebalancing</h2></div>
+  <div class="sh"><span class="off">20</span><h2>Rebalancing</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Whenever a consumer joins, leaves or crashes, the group pauses to share the partitions out again. Most rebalance problems come from consumers that are alive but too slow, so Kafka thinks they are dead.</div>
+  <div class="words"><h4>New words</h4><div><b>rebalance</b><span>Re-dividing a group’s partitions among its members.</span></div><div><b>heartbeat</b><span>A regular “I am alive” message from a consumer.</span></div><div><b>session timeout</b><span>How long without heartbeats before a consumer is presumed dead.</span></div></div>
   <p class="lead">When a group’s membership changes, its partitions are redistributed, and with the classic protocol everyone in the group pauses while that happens.</p>
   <figure><div class="canvas"><div class="flow v">
     <span class="n b">Rebalance trigger<small>join, leave, crash, missed heartbeats, new partitions</small></span><i></i>
@@ -821,7 +1020,10 @@ consumer.commitSync();                     <i>// commits 48211 for shop.orders-2
 </section>
 
 <section class="s" id="lag" data-t="Lag and fan-out groups">
-  <div class="sh"><span class="off">16</span><h2>Lag, and one group per job</h2></div>
+  <div class="sh"><span class="off">21</span><h2>Lag, and one group per job</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Lag is how far behind a consumer group is: how many events have been written that it has not processed yet. Giving each kind of job its own group means one slow job only falls behind by itself.</div>
+  <div class="words"><h4>New words</h4><div><b>lag</b><span>Events written but not yet processed by a group.</span></div><div><b>fan-out</b><span>One event being delivered to many independent readers.</span></div></div>
   <p class="lead">Lag is how far a group is behind the end of the log, and giving each downstream job its own group means one slow job never holds up the others.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   T["shop.notifications topic"]:::lead
@@ -865,7 +1067,10 @@ email-senders  shop.notifications  4          902201          903118          91
 <div class="part" data-part="Partitioning"><h2>Part 5: Partitioning</h2><p>How many, keyed by what</p></div>
 
 <section class="s" id="howmany" data-t="How many partitions">
-  <div class="sh"><span class="off">17</span><h2>How many partitions?</h2></div>
+  <div class="sh"><span class="off">22</span><h2>How many partitions?</h2></div>
+  
+  <div class="plain"><b>In plain words</b>The number of partitions limits how many consumers in a group can work at once, and it is awkward to change later. So you size it from the throughput you need, with room to grow.</div>
+  <div class="words"><h4>New words</h4><div><b>parallelism</b><span>How many things can run at the same time.</span></div><div><b>headroom</b><span>Spare capacity kept for growth and bursts.</span></div></div>
   <p class="lead">The partition count caps a group’s parallelism and is hard to change later, so size it from your target throughput with headroom, not from a guess.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n">target 100,000 msg/s</span><i data-t="÷"></i><span class="n">~10,000 msg/s per partition<small>measured, not assumed</small></span><i data-t="="></i><span class="n">10</span><i data-t="× 2 headroom"></i><span class="n y">20 partitions</span>
@@ -890,7 +1095,10 @@ email-senders  shop.notifications  4          902201          903118          91
 </section>
 
 <section class="s" id="hot" data-t="Keys and hot partitions">
-  <div class="sh"><span class="off">18</span><h2>Choosing keys, and fixing hot partitions</h2></div>
+  <div class="sh"><span class="off">23</span><h2>Choosing keys, and fixing hot partitions</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If one key is far busier than the rest, its partition is overloaded while others sit idle. Choosing the key well, or splitting a very busy key, keeps the load even.</div>
+  <div class="words"><h4>New words</h4><div><b>hot partition</b><span>A partition receiving far more traffic than the others.</span></div><div><b>salting</b><span>Adding a random suffix to a key to spread it over several partitions.</span></div></div>
   <p class="lead">A good key has many values, spreads evenly and groups exactly the events that must stay in order; one very busy key makes one very busy partition.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Bad keys</h4><span class="chip X">country_code with few values</span><span class="chip X">boolean flags</span><span class="chip X">timestamp as key</span></div>
@@ -910,7 +1118,9 @@ keys "7001".."7010" (orders) → partitions 2, 0, 8, 10, 10, 7, 7, 8, 10, 6</pre
 </section>
 
 <section class="s" id="grow" data-t="Changing the partition count">
-  <div class="sh"><span class="off">19</span><h2>Changing the partition count</h2></div>
+  <div class="sh"><span class="off">24</span><h2>Changing the partition count</h2></div>
+  
+  <div class="plain"><b>In plain words</b>You can add partitions to a topic, but the hash rule then sends many keys to different partitions than before. Events for the same key can end up split across two partitions and read out of order.</div>
   <p class="lead">You can add partitions to a topic at any time, but the key → partition mapping changes for most keys, so ordering per key breaks across the change.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>12 partitions</h4><div class="log"><div class="cell pend"><b>P2</b><span>7001 created</span></div><div class="cell pend"><b>P2</b><span>7001 paid</span></div></div></div>
@@ -922,7 +1132,7 @@ keys "7001".."7010" (orders) → partitions 2, 0, 8, 10, 10, 7, 7, 8, 10, 6</pre
     <li><b>Safer path for keyed topics:</b> create a new topic with the right count, dual-write or migrate, switch consumers.</li>
   </ul>
   <details class="q"><summary>Why does adding partitions to a keyed topic break per-key ordering, even though old data is untouched?</summary><div class="in">hash(key) mod N changes with N, so a key’s new events go to a different partition than its old ones. Consumers of the two partitions can process them out of order.</div></details>
-  <aside class="trk"><h4 data-id="key 7001">Follow order 7001</h4><div class="in"><p>Both numbers are computed with Kafka’s murmur2. Try “Grow 12 → 15” in lesson 08 to see what share of keys move.</p>
+  <aside class="trk"><h4 data-id="key 7001">Follow order 7001</h4><div class="in"><p>Both numbers are computed with Kafka’s murmur2. Try “Grow 12 → 15” in lesson 13 to see what share of keys move.</p>
   <pre class="code">murmur2("7001") → positive → mod 12 = 2
 murmur2("7001") → positive → mod 15 = 11</pre></div></aside>
 </section>
@@ -930,7 +1140,10 @@ murmur2("7001") → positive → mod 15 = 11</pre></div></aside>
 <div class="part" data-part="Replication and durability"><h2>Part 6: Replication and durability</h2><p>Surviving a dead broker</p></div>
 
 <section class="s" id="isr" data-t="Replicas and the ISR">
-  <div class="sh"><span class="off">20</span><h2>Replicas and the in-sync set</h2></div>
+  <div class="sh"><span class="off">25</span><h2>Replicas and the in-sync set</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Each partition is stored on several brokers. The copies that are keeping up with the leader are called in-sync; only they are trusted to take over without losing data.</div>
+  <div class="words"><h4>New words</h4><div><b>replication factor</b><span>How many copies of each partition exist.</span></div><div><b>ISR</b><span>In-sync replicas: the copies that are up to date enough to become leader.</span></div></div>
   <p class="lead">Each partition is copied to several brokers; the in-sync replicas (ISR) are the copies that are keeping up, and only they count as safe copies.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   P["orders-service"] -->|"write"| L
@@ -961,7 +1174,10 @@ murmur2("7001") → positive → mod 15 = 11</pre></div></aside>
 </section>
 
 <section class="s" id="election" data-t="Leader election">
-  <div class="sh"><span class="off">21</span><h2>Leader election, clean and unclean</h2></div>
+  <div class="sh"><span class="off">26</span><h2>Leader election, clean and unclean</h2></div>
+  
+  <div class="plain"><b>In plain words</b>When the broker holding a partition’s leader dies, Kafka promotes an up-to-date copy. If no up-to-date copy is left, you must choose: wait for one to come back, or promote an out-of-date copy and accept losing some events.</div>
+  <div class="words"><h4>New words</h4><div><b>leader election</b><span>Choosing which replica becomes the new leader.</span></div><div><b>unclean election</b><span>Promoting a replica that is missing some events.</span></div></div>
   <p class="lead">When a leader dies, the controller promotes an in-sync replica; if none is left, you choose between waiting (unavailable) and electing a stale copy (data loss).</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   A["Leader fails"] --> B["Controller detects the failure"]:::ctl
@@ -984,7 +1200,10 @@ murmur2("7001") → positive → mod 15 = 11</pre></div></aside>
 </section>
 
 <section class="s" id="hw" data-t="The high watermark">
-  <div class="sh"><span class="off">22</span><h2>The high watermark</h2></div>
+  <div class="sh"><span class="off">27</span><h2>The high watermark</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Consumers are only shown events that every up-to-date copy already has. The high watermark is the line that marks that point, so no consumer ever reads an event that a failover could make disappear.</div>
+  <div class="words"><h4>New words</h4><div><b>high watermark</b><span>The first offset not yet on every in-sync replica; consumers read below it.</span></div><div><b>committed (event)</b><span>Stored on every in-sync replica, so it cannot be lost by a single failure.</span></div></div>
   <p class="lead">Consumers may only read records that every in-sync replica has, and the high watermark marks that line, so no consumer ever sees a record a failover could erase.</p>
   <figure><div class="canvas scroll">
     <div class="log"><label>leader (to 9)</label><div class="cell done"><b>0</b><span></span></div><div class="cell done"><b>1</b><span></span></div><div class="cell done"><b>2</b><span></span></div><div class="cell done"><b>3</b><span></span></div><div class="cell done"><b>4</b><span></span></div><div class="cell done"><b>5</b><span></span></div><div class="cell done"><b>6</b><span></span></div><div class="cell pend"><b>7</b><span></span></div><div class="cell pend"><b>8</b><span></span></div><div class="cell pend"><b>9</b><span></span></div></div>
@@ -1004,7 +1223,10 @@ murmur2("7001") → positive → mod 15 = 11</pre></div></aside>
 </section>
 
 <section class="s" id="minisr" data-t="min.insync.replicas">
-  <div class="sh"><span class="off">23</span><h2>min.insync.replicas: refusing unsafe writes</h2></div>
+  <div class="sh"><span class="off">28</span><h2>min.insync.replicas: refusing unsafe writes</h2></div>
+  
+  <div class="plain"><b>In plain words</b>acks=all means “wait for every in-sync copy”, but the in-sync set can shrink to just one. min.insync.replicas says how many copies there must be before Kafka accepts a write at all; below that, it refuses rather than pretend the write is safe.</div>
+  <div class="words"><h4>New words</h4><div><b>min.insync.replicas</b><span>The fewest in-sync copies needed for an acks=all write to succeed.</span></div></div>
   <p class="lead">With acks=all, <code>min.insync.replicas</code> sets how many copies must exist before a write is accepted; below that Kafka refuses writes rather than pretend they are safe.</p>
   <div class="demo">
     <h4>Try it: break brokers, then write and crash the leader</h4>
@@ -1036,7 +1258,10 @@ PaymentReceived 7001 written at offset 48214</pre></div></aside>
 <div class="part" data-part="Delivery guarantees"><h2>Part 7: Delivery guarantees</h2><p>Lost, duplicated, or exactly once</p></div>
 
 <section class="s" id="semantics" data-t="Three delivery semantics">
-  <div class="sh"><span class="off">24</span><h2>At-most-once, at-least-once, exactly-once</h2></div>
+  <div class="sh"><span class="off">29</span><h2>At-most-once, at-least-once, exactly-once</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A consumer does two things per event: the work (say, send an email) and saving its position. A crash between the two means either the work is lost or it is repeated, depending on the order. That choice is called the delivery guarantee.</div>
+  <div class="words"><h4>New words</h4><div><b>at-most-once</b><span>Never repeated, but may be lost.</span></div><div><b>at-least-once</b><span>Never lost, but may be repeated.</span></div><div><b>exactly-once</b><span>Neither lost nor repeated.</span></div></div>
   <p class="lead">Where the consumer commits relative to processing decides what a crash does: commit first and you may lose work, process first and you may repeat it.</p>
   <figure><div class="canvas"><div class="cards" style="margin:0">
     <div class="card"><h4>At-most-once</h4><span class="chip X">may be lost</span><span class="chip Y">no duplicates</span></div>
@@ -1061,7 +1286,10 @@ PaymentReceived 7001 written at offset 48214</pre></div></aside>
 </section>
 
 <section class="s" id="dedup" data-t="Idempotent consumers">
-  <div class="sh"><span class="off">25</span><h2>Idempotent consumers and de-duplication</h2></div>
+  <div class="sh"><span class="off">30</span><h2>Idempotent consumers and de-duplication</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If doing the work twice gives the same result as doing it once, repeats are harmless. When that is not naturally true, the consumer can remember the IDs of events it has already handled and skip repeats.</div>
+  <div class="words"><h4>New words</h4><div><b>deduplication</b><span>Detecting and skipping repeats.</span></div><div><b>event ID</b><span>A unique identifier for each event, used to recognise repeats.</span></div></div>
   <p class="lead">If processing a message twice has the same effect as once, duplicates stop mattering; when it does not, remember which message IDs you have handled.</p>
   <figure><div class="canvas"><div class="two">
     <div><h4>Naturally idempotent</h4><pre class="code" style="margin:0">UPDATE orders SET status = 'paid'
@@ -1087,7 +1315,10 @@ COMMIT;</pre>
 </section>
 
 <section class="s" id="eos" data-t="Transactions and exactly-once">
-  <div class="sh"><span class="off">26</span><h2>Transactions: exactly-once inside Kafka</h2></div>
+  <div class="sh"><span class="off">31</span><h2>Transactions: exactly-once inside Kafka</h2></div>
+  
+  <div class="plain"><b>In plain words</b>For programs that read from Kafka and write back to Kafka, transactions make three things happen together or not at all: the output events, and the saved input position. That is exactly-once, as long as you stay inside Kafka.</div>
+  <div class="words"><h4>New words</h4><div><b>transaction</b><span>A group of writes that become visible together, or not at all.</span></div><div><b>read_committed</b><span>A consumer setting that hides events from unfinished or cancelled transactions.</span></div></div>
   <p class="lead">A Kafka transaction makes “read from one topic, write to another, commit my input offset” all-or-nothing, which is exactly-once for pipelines that stay inside Kafka.</p>
   <figure><div class="board"><pre class="mmd">sequenceDiagram
   participant E as order-enricher
@@ -1110,7 +1341,7 @@ isolation.level=read_committed       <i># the default is read_uncommitted</i></p
   <ul>
     <li><b>Zombie fencing:</b> a restarted instance with the same <code>transactional.id</code> bumps an epoch; the old instance’s writes are rejected. <span class="tag a">Added</span></li>
     <li><b>Consumers see uncommitted writes by default.</b> Downstream readers must set <code>read_committed</code>, or aborted records reach them. <a class="tag d" href="#c10">Default · check 10</a> <span class="tag a">Added</span></li>
-    <li><b>Only covers Kafka.</b> Sending an email or writing to MySQL inside the loop is outside the transaction; use lesson 25 for those.</li>
+    <li><b>Only covers Kafka.</b> Sending an email or writing to MySQL inside the loop is outside the transaction; use lesson 30 for those.</li>
     <li><b>Costs latency:</b> consumers see results only at commit, so commit interval adds delay.</li>
   </ul>
   <details class="q"><summary>Can Kafka transactions guarantee that an email is sent exactly once? Why or why not?</summary><div class="in">No. Transactions only make Kafka writes and offset commits atomic. An email is an external side effect, so it needs idempotent handling, such as recording a sent-email ID.</div></details>
@@ -1122,7 +1353,9 @@ isolation.level=read_committed       <i># the default is read_uncommitted</i></p
 <div class="part" data-part="Patterns"><h2>Part 8: Patterns</h2><p>The designs interviews ask for</p></div>
 
 <section class="s" id="fanout" data-t="Fan-out">
-  <div class="sh"><span class="off">27</span><h2>Fan-out: one event, many reactions</h2></div>
+  <div class="sh"><span class="off">32</span><h2>Fan-out: one event, many reactions</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Instead of the order service calling four other services, it publishes one event and each service listens for it. Adding a fifth service later needs no change to the order service at all.</div>
   <p class="lead">Instead of the order service calling four services, it publishes one event and each service subscribes with its own consumer group.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   E["OrderCreated 7001"]:::lead --> T["shop.orders topic"]
@@ -1145,11 +1378,14 @@ isolation.level=read_committed       <i># the default is read_uncommitted</i></p
   </div>
   <div class="tip"><b>The catch:</b> the checkout no longer knows when shipping finished. Anything the user must see immediately still needs a synchronous answer or a status the UI can poll.</div>
   <details class="q"><summary>What do you have to change in the producer to add a new downstream consumer in a fan-out design?</summary><div class="in">Nothing. The new service creates its own consumer group and starts reading the topic, from the beginning of retention if it wants history.</div></details>
-  <aside class="trk"><h4 data-id="OrderCreated 7001">Follow order 7001</h4><div class="in"><p>One write by orders-service, four independent reads. Lesson 01 showed their positions.</p></div></aside>
+  <aside class="trk"><h4 data-id="OrderCreated 7001">Follow order 7001</h4><div class="in"><p>One write by orders-service, four independent reads. Lesson 06 showed their positions.</p></div></aside>
 </section>
 
 <section class="s" id="es" data-t="Event sourcing and compaction">
-  <div class="sh"><span class="off">28</span><h2>Event sourcing, and compacted topics</h2></div>
+  <div class="sh"><span class="off">33</span><h2>Event sourcing, and compacted topics</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Most systems store only the latest state: “order 7001 is shipped”. Event sourcing stores every change instead, and works out the current state by replaying them. Kafka is a natural place to keep those changes in order.</div>
+  <div class="words"><h4>New words</h4><div><b>event sourcing</b><span>Storing every change as an event and deriving current state from them.</span></div><div><b>compaction</b><span>Keeping only the latest event for each key.</span></div></div>
   <p class="lead">In event sourcing the events are the source of truth and current state is computed by replaying them; Kafka holds the ordered event log, and compacted topics hold the latest state per key.</p>
   <figure><div class="board"><pre class="mmd">flowchart LR
   subgraph EV["Order events topic (key 7001)"]
@@ -1182,7 +1418,10 @@ isolation.level=read_committed       <i># the default is read_uncommitted</i></p
 </section>
 
 <section class="s" id="cqrs" data-t="CQRS">
-  <div class="sh"><span class="off">29</span><h2>CQRS: separate write and read models</h2></div>
+  <div class="sh"><span class="off">34</span><h2>CQRS: separate write and read models</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Writing data and reading data often want different shapes. CQRS keeps one model for writes, publishes events, and builds separate read-optimised copies from those events, such as a search index or a cache.</div>
+  <div class="words"><h4>New words</h4><div><b>CQRS</b><span>Command Query Responsibility Segregation: separate models for writes and reads.</span></div><div><b>read model</b><span>A copy of the data shaped for one kind of query.</span></div><div><b>eventually consistent</b><span>Up to date after a short delay, not instantly.</span></div></div>
   <p class="lead">Commands update one model built for correctness, which publishes events; each read model consumes them and stores the data shaped for its queries.</p>
   <figure><div class="board"><pre class="mmd">flowchart TB
   subgraph WS["Write side"]
@@ -1216,7 +1455,10 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
 </section>
 
 <section class="s" id="cdc" data-t="Change data capture">
-  <div class="sh"><span class="off">30</span><h2>Change data capture</h2></div>
+  <div class="sh"><span class="off">35</span><h2>Change data capture</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Often the source of truth is an existing database. Change data capture reads the database’s own change log and turns every insert, update and delete into a Kafka event, without touching the application.</div>
+  <div class="words"><h4>New words</h4><div><b>CDC</b><span>Change data capture: streaming a database’s changes as events.</span></div><div><b>Debezium</b><span>A popular open-source CDC tool that writes database changes to Kafka.</span></div><div><b>dual write</b><span>Writing to two systems separately from your code, which can leave them disagreeing.</span></div></div>
   <p class="lead">When the database is the source of truth, a CDC connector reads its transaction log and turns every insert, update and delete into a Kafka event, with no change to the application.</p>
   <figure><div class="board"><pre class="mmd">flowchart LR
   DB[("MySQL shop&lt;br/&gt;binlog")] --> DZ["CDC connector&lt;br/&gt;Debezium"]:::ctl
@@ -1233,7 +1475,7 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
     <li><b>The outbox pattern</b> is the alternative: the app writes business events to an outbox table in the same transaction, and CDC ships that table. <span class="tag a">Added</span></li>
   </ul>
   <details class="q"><summary>Why is “write to MySQL, then publish to Kafka” in application code risky, and how does CDC avoid it?</summary><div class="in">The process can crash between the two writes, leaving the database changed with no event (or an event for a write that rolled back). CDC reads committed changes from the database’s own log, so every committed change produces an event.</div></details>
-  <aside class="trk"><h4 data-id="mysql.shop.orders">Follow order 7001</h4><div class="in"><p>The same insert from the MySQL course, as Debezium publishes it. The binlog position and GTID match that course. Trimmed. <span class="tag x">Example value</span></p>
+  <aside class="trk"><h4 data-id="mysql.shop.orders">Follow order 7001</h4><div class="in"><p>Asha’s order row being inserted into the shop’s MySQL database, as Debezium publishes it to Kafka. The <code>source</code> block says exactly where in MySQL’s change log it came from. Trimmed. <span class="tag x">Example value</span></p>
   <pre class="code">{ "before": null,
   "after":  { "id": 7001, "user_id": 123, "product_id": 501, "status": "paid", "total": "49.99" },
   "source": { "connector": "mysql", "db": "shop", "table": "orders",
@@ -1242,7 +1484,10 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
 </section>
 
 <section class="s" id="saga" data-t="Sagas">
-  <div class="sh"><span class="off">31</span><h2>Sagas: transactions across services</h2></div>
+  <div class="sh"><span class="off">36</span><h2>Sagas: transactions across services</h2></div>
+  
+  <div class="plain"><b>In plain words</b>A purchase may touch inventory, payments and shipping, each with its own database, so one database transaction cannot cover it. A saga runs the steps one after another through events, and if a later step fails, runs undo steps for the earlier ones.</div>
+  <div class="words"><h4>New words</h4><div><b>saga</b><span>A chain of local steps, each with an undo step for failures.</span></div><div><b>compensating step</b><span>A new action that cancels the effect of an earlier one.</span></div></div>
   <p class="lead">A saga replaces one distributed transaction with a chain of local transactions linked by events, and undoes finished steps with compensating events when a later step fails.</p>
   <figure><div class="board"><pre class="mmd">flowchart TD
   subgraph OS["Order saga"]
@@ -1271,7 +1516,10 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
 </section>
 
 <section class="s" id="dlq" data-t="Dead letter queues">
-  <div class="sh"><span class="off">32</span><h2>Dead letter queues and retry topics</h2></div>
+  <div class="sh"><span class="off">37</span><h2>Dead letter queues and retry topics</h2></div>
+  
+  <div class="plain"><b>In plain words</b>If one event can never be processed (say its data is corrupt), retrying forever would block every event behind it. After a few tries it is moved aside to a separate topic for a person to look at.</div>
+  <div class="words"><h4>New words</h4><div><b>dead letter queue</b><span>A topic for events that repeatedly failed processing.</span></div><div><b>poison message</b><span>An event that fails every time it is processed.</span></div></div>
   <p class="lead">A message that keeps failing must not block its partition forever, so after a few retries it is moved to a dead letter topic for people to inspect.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n y">shop.orders</span><i data-t="fails"></i><span class="n">retry 3 times<small>with backoff</small></span><i data-t="still failing"></i><span class="n r">shop.orders.dlq</span><i data-t="alert"></i><span class="n g">on-call investigates, replays</span>
@@ -1292,7 +1540,9 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
 <div class="part" data-part="Choose and revise"><h2>Part 9: Choose and revise</h2><p>Compare, test yourself, prove it</p></div>
 
 <section class="s" id="vs" data-t="Kafka vs the others">
-  <div class="sh"><span class="off">33</span><h2>Kafka vs RabbitMQ, SQS, Kinesis and Pulsar</h2></div>
+  <div class="sh"><span class="off">38</span><h2>Kafka vs RabbitMQ, SQS, Kinesis and Pulsar</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Kafka is not the only messaging system. Each alternative made different trade-offs; the right choice depends on the one capability your design needs most.</div>
   <p class="lead">Each alternative made a different trade; choose by the capability your design needs, not by a feature count.</p>
   <h3>Kafka vs RabbitMQ</h3>
   <div class="tw"><table>
@@ -1331,11 +1581,13 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
     <tr><td>Maturity, ecosystem</td><td>Largest</td><td>Growing</td></tr>
   </table></div>
   <details class="q"><summary>You need content-based routing of a few thousand messages a second to different worker pools, and no replay. Kafka or RabbitMQ?</summary><div class="in">RabbitMQ. Its exchanges route by content or headers natively, the volume is modest, and Kafka’s replay and retention would go unused.</div></details>
-  <aside class="trk"><h4 data-id="shop">Follow order 7001</h4><div class="in"><p>The shop’s split. Kafka carries order events to many readers; image resizing uses SQS; Redis streams handle the tiny email queue from the Redis course.</p></div></aside>
+  <aside class="trk"><h4 data-id="shop">Follow order 7001</h4><div class="in"><p>The shop’s split. Kafka carries order events to many readers; image resizing uses SQS; a small Redis list handles a tiny internal email queue.</p></div></aside>
 </section>
 
 <section class="s" id="srev" data-t="Revision and glossary">
-  <div class="sh"><span class="off">34</span><h2>Quick revision and glossary</h2></div>
+  <div class="sh"><span class="off">39</span><h2>Quick revision and glossary</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten in the glossary.</div>
   <p class="lead">Test yourself, then look up any term.</p>
   <div class="demo selftest" id="selftest"></div>
   <details class="q"><summary>What three settings make a write survive one broker failure without data loss and keep accepting writes?</summary><div class="in">replication.factor 3, min.insync.replicas 2, and acks=all on the producer (plus unclean leader election disabled, the default).</div></details>
@@ -1368,7 +1620,9 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
 </section>
 
 <section class="s" id="slab" data-t="Proof checklist">
-  <div class="sh"><span class="off">35</span><h2>Proof checklist</h2></div>
+  <div class="sh"><span class="off">40</span><h2>Proof checklist</h2></div>
+  
+  <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a local Kafka. These experiments show you how.</div>
   <p class="lead">12 experiments on a local Kafka 4.x (Docker: <code>docker run -p 9092:9092 apache/kafka:4.1.0</code>; rows 6–9 need a 3-broker setup). Each settles a tagged statement from the lessons.</p>
   <p id="labProg" aria-live="polite"></p>
   <div class="tw" style="max-width:none"><table class="lab">
@@ -1384,12 +1638,12 @@ reporting      fact_orders (7001, …)    INSERT   +900 ms</pre></div></aside>
     <tr id="c9"><td><input type="checkbox" data-lab="c9" aria-label="Passed: unclean election"></td><td>9</td><td><b>Unclean election off</b></td><td>Describe broker configs for <code>unclean.leader.election.enable</code>; stop all ISR members of a partition but leave a stale replica up.</td><td><code>false</code>, and the partition shows <code>Leader: none</code> until an ISR member returns.</td></tr>
     <tr id="c10"><td><input type="checkbox" data-lab="c10" aria-label="Passed: read_committed"></td><td>10</td><td><b>Transaction visibility</b></td><td>Write in a transaction but do not commit; consume once with default settings and once with <code>--isolation-level read_committed</code>.</td><td>The default consumer sees the record; read_committed does not until commit.</td></tr>
     <tr id="c11"><td><input type="checkbox" data-lab="c11" aria-label="Passed: compaction"></td><td>11</td><td><b>Compaction</b></td><td>Topic with <code>cleanup.policy=compact</code>, <code>segment.ms=1000</code>, <code>min.cleanable.dirty.ratio=0.01</code>; write keys a,b,a,a; wait; consume from the start.</td><td>Only the last <code>a</code> and the <code>b</code> remain (the active segment may lag).</td></tr>
-    <tr id="c12"><td><input type="checkbox" data-lab="c12" aria-label="Passed: poll interval"></td><td>12</td><td><b>Slow poll loop</b></td><td>Consumer with <code>max.poll.interval.ms=10000</code> that sleeps 15 s per record; watch the logs.</td><td>It leaves the group and rejoins repeatedly: the rebalance storm from lesson 15.</td></tr>
+    <tr id="c12"><td><input type="checkbox" data-lab="c12" aria-label="Passed: poll interval"></td><td>12</td><td><b>Slow poll loop</b></td><td>Consumer with <code>max.poll.interval.ms=10000</code> that sleeps 15 s per record; watch the logs.</td><td>It leaves the group and rejoins repeatedly: the rebalance storm from lesson 20.</td></tr>
   </table></div>
   <p>The list and its order are a proposal. Rows 5 and 7 share a topic. <span class="tag s">Simplified</span></p>
 </section>
 
-<footer>Covers Apache Kafka 4.x in KRaft mode, with notes where 3.x differs. Defaults are quoted from the Kafka documentation and KIPs from memory and were not run for this page; the checklist is how you confirm them. Built from your notes “Kafka Deep Dive for System Design Interviews” as a starting point; anything tagged Added goes beyond them. Its companion, “Kafka from the log up”, covers the internals.</footer>
+<footer>Covers Apache Kafka 4.x in KRaft mode, with notes where 3.x differs. Defaults are quoted from the Kafka documentation and KIPs from memory and were not run for this page; the checklist is how you confirm them. Built from your notes “Kafka Deep Dive for System Design Interviews” as a starting point; anything tagged Added goes beyond them.</footer>
 
 </main>
 </div>
@@ -1476,7 +1730,7 @@ const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
   terms.sort((a,b)=>b.name.length-a.name.length);
   terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
   /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
-  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk';
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk,.words';
   lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
     nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
       for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;

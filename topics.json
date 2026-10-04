@@ -20,12 +20,12 @@
   },
   {
     "id": "kafka-system-design",
-    "title": "Kafka for system design",
+    "title": "Kafka for system design, from zero",
     "category": "Data Engineering",
-    "description": "35 lessons on designing with Kafka: keys and partitions, acks and ISR, consumer groups and lag, delivery guarantees, and patterns like fan-out, CDC, CQRS and sagas",
+    "description": "40 lessons that start from “why services send messages” and go deep: keys and partitions, acks and ISR, consumer groups, delivery guarantees, and patterns like fan-out, CDC, CQRS and sagas",
     "path": "artifacts/kafka-system-design.html",
     "highlights": [
-      "Log vs queue: when Kafka fits",
+      "Start here: messages, events, your first topic",
       "Keys, partitions and hot spots",
       "acks, ISR and min.insync.replicas",
       "At-least-once vs exactly-once",
