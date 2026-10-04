@@ -1,0 +1,1524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snowflake for data analytics, from zero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f7;--surface:#ffffff;--surface2:#e2e9f2;--ink:#16233a;--muted:#52617a;--line:#c7d2e0;
+  --leader:#f2b705;--leader-ink:#16233a;--follower:#2f6fde;--follower-bg:#e3edff;
+  --ctrl:#7a4fd6;--ctrl-bg:#efe8ff;--ok:#17885c;--ok-bg:#dff5ea;--bad:#cf3f36;--bad-bg:#fde6e3;
+  --link:#2459c4;--board:#111c2e;--board-ink:#e8eef7;--board-line:#2c3e5e;
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",Verdana,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1826;--surface:#17233a;--surface2:#1f2e4a;--ink:#e8eef7;--muted:#a3b3cb;--line:#2e4165;
+  --follower:#78a7ff;--follower-bg:#1c2f55;--ctrl:#b196f5;--ctrl-bg:#2a2350;--ok:#4cc793;--ok-bg:#143a2e;
+  --bad:#ff8479;--bad-bg:#45201f;--link:#8fb6ff;--board:#0b1220;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 70px);scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--body);-webkit-text-size-adjust:100%}
+a{color:var(--link)}
+:focus-visible{outline:3px solid var(--leader);outline-offset:2px;border-radius:4px}
+code,kbd{font-family:var(--mono);font-size:.86em;background:var(--surface2);padding:.1em .35em;border-radius:4px}
+h1,h2,h3{font-family:var(--display);line-height:1.1;margin:0}
+p{margin:.7em 0;max-width:68ch}
+ul,ol{max-width:68ch;padding-left:1.2em;margin:.6em 0}
+li{margin:.3em 0}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:.6rem;
+  padding:.55rem 1rem;background:var(--surface);border-bottom:1px solid var(--line)}
+.top strong{font-family:var(--display);font-size:1.05rem;margin-right:auto}
+.btn{font:700 .9rem var(--body);color:var(--ink);background:var(--surface2);border:1px solid var(--line);
+  padding:.45rem .8rem;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn{white-space:nowrap}
+.top strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.btn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.warn{background:var(--bad-bg);border-color:var(--bad);color:var(--ink)}
+#bar{position:absolute;left:0;bottom:-3px;height:3px;width:0;background:var(--leader)}
+#menuBtn{display:none}
+
+.shell{display:grid;grid-template-columns:270px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav#toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 52px);align-self:start;max-height:calc(100vh - 60px);
+  overflow:auto;padding:1.2rem 1rem 2rem;font-size:.9rem}
+nav#toc h3{font-size:.95rem;margin:1.1rem 0 .3rem;color:var(--muted)}
+nav#toc a{display:flex;gap:.5rem;padding:.22rem .4rem;border-radius:6px;color:var(--ink);text-decoration:none}
+nav#toc a span{font-family:var(--mono);font-size:.78rem;color:var(--muted);min-width:1.4rem;padding-top:.15rem}
+nav#toc a:hover{background:var(--surface2)}
+nav#toc a.cur{background:var(--leader);color:var(--leader-ink)}
+nav#toc a.cur span{color:var(--leader-ink)}
+main{padding:0 1.25rem 5rem;min-width:0}
+@media (max-width:980px){
+  .shell{display:block}
+  #menuBtn{display:inline-block}
+  nav#toc{display:none;position:fixed;inset:calc(env(safe-area-inset-top,0px) + 50px) 0 0 0;max-height:none;background:var(--bg);z-index:15}
+  nav#toc.open{display:block}
+}
+
+/* hero */
+.hero{padding:3.2rem 0 2.2rem;border-bottom:1px solid var(--line)}
+.hero h1{font-size:clamp(2.5rem,7vw,4.6rem);font-weight:800;letter-spacing:-.03em;max-width:14ch}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:52ch}
+.herolog{margin-top:1.8rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.88rem;color:var(--muted);margin-top:1.2rem}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+
+/* part divider + sections */
+.part{margin:3.5rem 0 0;padding:1rem 1.2rem;background:var(--ink);color:var(--bg);border-radius:14px}
+.part h2{font-size:1.5rem;font-weight:700}
+.part p{margin:.2rem 0 0;opacity:.8;font-size:.95rem}
+section.s{padding:2.6rem 0 1rem;border-bottom:1px dashed var(--line)}
+.sh{display:flex;align-items:center;gap:.9rem;margin-bottom:.4rem}
+.sh .off{font:600 .95rem var(--mono);background:var(--leader);color:var(--leader-ink);min-width:2.6rem;height:2.6rem;
+  display:grid;place-items:center;border-radius:8px;border:2px solid var(--ink)}
+.sh h2{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:700;letter-spacing:-.02em}
+.lead{font-size:1.15rem;margin:.6rem 0 1rem}
+h3{font-size:1.2rem;margin:1.6rem 0 .3rem}
+
+/* what / why / how */
+.wwh{display:grid;gap:.5rem;margin:1rem 0;max-width:72ch}
+.wwh div{display:grid;grid-template-columns:4.2rem 1fr;gap:.8rem;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:.6rem .8rem}
+.wwh b{font-family:var(--display);color:var(--follower)}
+
+/* figures */
+figure{margin:1.2rem 0;max-width:820px}
+.canvas{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.1rem;overflow-x:auto}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.45rem;max-width:68ch}
+.cluster{border:2px dashed var(--muted);border-radius:14px;padding:1.6rem .8rem .8rem;position:relative;min-width:max-content}
+.cluster>em{position:absolute;top:-.8rem;left:.9rem;background:var(--surface);padding:0 .5rem;font:700 .9rem var(--display);font-style:normal}
+.row{display:flex;gap:.7rem;flex-wrap:wrap;align-items:stretch}
+.row.nowrap{flex-wrap:nowrap}
+.bk{flex:1 1 150px;min-width:150px;background:var(--surface2);border:2px solid var(--ink);border-radius:10px;padding:.6rem}
+.bk>b{display:block;font-family:var(--display);margin-bottom:.35rem}
+.bk small{color:var(--muted);display:block;font-size:.8rem}
+.bk.dead{opacity:.45;border-style:dashed;border-color:var(--bad)}
+.bk.ctl{border-color:var(--ctrl);background:var(--ctrl-bg)}
+button.bk{font:inherit;color:inherit;text-align:left;cursor:pointer}
+.chip{display:block;font:600 .8rem var(--mono);padding:.3rem .5rem;border-radius:6px;margin-top:.3rem;
+  background:var(--surface);border:1px solid var(--line)}
+.chip.L{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.L::before{content:"L  "}
+.chip.Y{background:var(--leader);color:var(--leader-ink);border-color:var(--leader)}
+.chip.F{background:var(--follower-bg);border-color:var(--follower)}
+.chip.F::before{content:"F  "}
+.chip.C{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.chip.X{background:var(--bad-bg);border-color:var(--bad)}
+.chip.inl{display:inline-block;margin:0}
+.log{display:flex;align-items:flex-end;gap:3px;margin:.35rem 0;min-width:max-content}
+.log>label,.log>em{font:600 .82rem var(--mono);font-style:normal;min-width:5.6rem;padding-bottom:.45rem;color:var(--muted)}
+.cell{border:1.5px solid var(--ink);background:var(--surface);border-radius:5px;min-width:4.6rem;text-align:center;
+  font:400 .78rem var(--mono);overflow:hidden}
+.cell b{display:block;background:var(--ink);color:var(--surface);font-weight:600;padding:.05rem 0}
+.cell span{display:block;padding:.28rem .35rem}
+.cell.new{animation:pop .45s ease-out}
+.cell.done span{background:var(--ok-bg)}
+.cell.pend span{background:var(--leader);color:var(--leader-ink)}
+.cell.ghost{border-style:dashed;opacity:.55}
+.cell.gone{opacity:.3;text-decoration:line-through}
+@keyframes pop{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+.flow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.flow.v{flex-direction:column;align-items:flex-start}
+.flow .n{background:var(--surface2);border:1.5px solid var(--ink);border-radius:8px;padding:.4rem .7rem;font-weight:700;font-size:.92rem}
+.flow .n small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.flow .n.y{background:var(--leader);color:var(--leader-ink)}
+.flow .n.y small{color:var(--leader-ink)}
+.flow .n.b{background:var(--follower-bg);border-color:var(--follower)}
+.flow .n.p{background:var(--ctrl-bg);border-color:var(--ctrl)}
+.flow .n.r{background:var(--bad-bg);border-color:var(--bad)}
+.flow .n.g{background:var(--ok-bg);border-color:var(--ok)}
+.flow>i{font-style:normal;color:var(--muted);font-weight:700}
+.flow>i::before{content:"→"}
+.flow.v>i{padding-left:1.2rem}
+.flow.v>i::before{content:"↓"}
+.flow>i[data-t]::after{content:" " attr(data-t);font:400 .78rem var(--body)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.8rem}
+.two>div{background:var(--surface2);border-radius:10px;padding:.8rem}
+.two h4{margin:0 0 .5rem;font:700 .95rem var(--display)}
+
+/* mermaid board follows the theme; code blocks stay dark */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;overflow-x:auto}
+.board pre.mmd{margin:0;font:400 .8rem/1.5 var(--mono);color:var(--muted);white-space:pre-wrap}
+.board .svgw{text-align:center;min-width:min(100%,520px)}
+.board svg{max-width:100%;height:auto}
+pre.code{background:var(--board);color:var(--board-ink);border:1px solid var(--board-line);border-radius:12px;padding:.9rem 1rem;
+  font:400 .84rem/1.55 var(--mono);overflow-x:auto;max-width:820px}
+pre.code i{color:#9fb3d1;font-style:normal}
+pre.code b{color:var(--leader);font-weight:600}
+
+/* callouts */
+.tip,.fail,.remember{border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;border-left:6px solid}
+.tip{background:var(--follower-bg);border-color:var(--follower)}
+.fail{background:var(--bad-bg);border-color:var(--bad)}
+.remember{background:var(--leader);color:var(--leader-ink);border-color:var(--ink);font-weight:700}
+.tip>b,.fail>b{font-family:var(--display)}
+details.deep,details.q{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:1rem 0;max-width:72ch}
+details summary{cursor:pointer;padding:.65rem .9rem;font-weight:700}
+details .in{padding:0 .9rem .7rem}
+details.q{border-color:var(--ok)}
+details.q summary::before{content:"Quick check: ";color:var(--ok)}
+
+/* steps */
+ol.steps{list-style:none;padding:0;counter-reset:s;max-width:72ch}
+ol.steps li{counter-increment:s;position:relative;padding:.1rem 0 .7rem 2.6rem;margin:0;border-left:2px solid var(--line);margin-left:.9rem}
+ol.steps li::before{content:counter(s);position:absolute;left:-.95rem;top:0;width:1.8rem;height:1.8rem;border-radius:50%;
+  background:var(--ink);color:var(--bg);display:grid;place-items:center;font:600 .82rem var(--mono)}
+ol.steps li:last-child{border-color:transparent}
+ol.steps b{font-family:var(--display)}
+
+/* demos */
+.demo{background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:1rem;margin:1.2rem 0;max-width:820px}
+.demo>h4{margin:0 0 .6rem;font:700 1.05rem var(--display)}
+.ctrls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.8rem}
+.ctrls input,.ctrls select{font:400 .95rem var(--mono);padding:.42rem .6rem;border-radius:8px;border:1.5px solid var(--ink);
+  background:var(--bg);color:var(--ink);min-width:0}
+.ctrls label{font-size:.88rem;color:var(--muted)}
+.out{font:400 .88rem var(--mono);background:var(--surface2);border-radius:8px;padding:.55rem .7rem;margin:.6rem 0;min-height:2.4rem}
+.scroll{overflow-x:auto}
+
+/* tables + cards */
+.tw{overflow-x:auto;max-width:820px}
+table{border-collapse:collapse;width:100%;background:var(--surface);font-size:.94rem}
+th,td{border:1px solid var(--line);padding:.5rem .7rem;text-align:left;vertical-align:top}
+th{background:var(--ink);color:var(--bg);font-family:var(--display)}
+.yes{color:var(--ok);font-weight:700}.no{color:var(--bad);font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.8rem;max-width:900px;margin:1rem 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:.8rem .9rem}
+.card h4{margin:0 0 .3rem;font:700 1rem var(--display)}
+.card p{margin:.3rem 0;font-size:.94rem}
+.myth .w{background:var(--bad-bg);border-radius:8px;padding:.5rem .6rem;margin:0 0 .4rem}
+.myth .c{background:var(--ok-bg);border-radius:8px;padding:.5rem .6rem;margin:0}
+.myth .w::before{content:"✗ ";color:var(--bad);font-weight:700}
+.myth .c::before{content:"✓ ";color:var(--ok);font-weight:700}
+.final{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.tag{display:inline-block;font:700 .72rem var(--body);padding:.08rem .5rem;border-radius:999px;border:1.5px solid;text-decoration:none;vertical-align:.08em;white-space:nowrap;margin-left:.15rem}
+.tag.g{color:var(--ok);background:var(--ok-bg)}
+.tag.d{color:var(--follower);background:var(--follower-bg)}
+.tag.s{color:var(--ctrl);background:var(--ctrl-bg)}
+.tag.x{color:var(--muted);background:var(--surface2);border-style:dashed}
+a.tag:hover{filter:brightness(.92)}
+.remember .tag,.chip.Y .tag{background:var(--surface)}
+.trk{border:2px solid var(--ink);border-radius:12px;margin:1.6rem 0 .8rem;max-width:820px;background:var(--surface);overflow:hidden}
+.trk h4{margin:0;padding:.35rem .8rem;background:var(--leader);color:var(--leader-ink);font:700 .95rem var(--display);border-bottom:2px solid var(--ink)}
+.trk h4::after{content:attr(data-id);float:right;font:600 .8rem var(--mono)}
+.trk .in{padding:.2rem .8rem .7rem}
+.trk pre.code{margin:.4rem 0 0;border-radius:8px}
+.zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.7rem}
+.zone{border:2px solid var(--ink);border-radius:10px;padding:.6rem;background:var(--surface2)}
+.zone>b{font-family:var(--display);display:block}
+.zone>small{color:var(--muted);font:400 .78rem var(--mono);display:block;margin-bottom:.3rem}
+.zone h5{margin:.5rem 0 0;font:700 .78rem var(--body);color:var(--muted)}
+table.lab td:first-child{text-align:center}
+table.lab input{width:1.2rem;height:1.2rem;accent-color:var(--ok)}
+table.lab code{white-space:normal;word-break:break-word}
+table.lab tr.ok td{background:var(--ok-bg)}
+#labProg{font-weight:700}
+footer{color:var(--muted);font-size:.88rem;padding:2rem 0}
+
+/* reader tools: search, lesson progress, glossary tooltips, self-test */
+.srch{margin:0 0 .5rem}
+.srch input{width:100%;font:400 .9rem var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:.45rem .6rem}
+.srch .res{margin-top:.3rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:.25rem;max-height:55vh;overflow:auto}
+.srch .res small{display:block;color:var(--muted);font-size:.78rem}
+.srch .res p{margin:.3rem .45rem;color:var(--muted);font-size:.85rem}
+#doneProg{font-size:.82rem;color:var(--muted);margin:0 0 .2rem}
+.btn.done{font-size:.8rem;padding:.25rem .6rem;margin:.1rem 0 .3rem}
+.btn.done.ok{background:var(--ok-bg);border-color:var(--ok)}
+nav#toc a.ok span{color:var(--ok);font-weight:700}
+nav#toc a.cur.ok span{color:var(--leader-ink)}
+abbr.gl{text-decoration:none;border-bottom:2px dotted var(--follower);cursor:help;position:relative}
+abbr.gl:hover::after,abbr.gl:focus::after{content:attr(data-tip);position:absolute;left:0;top:1.6em;z-index:12;width:max-content;max-width:min(20rem,70vw);
+  background:var(--ink);color:var(--bg);font:400 .82rem/1.4 var(--body);padding:.5rem .7rem;border-radius:8px;white-space:normal}
+.selftest .q{font:700 1.1rem var(--display);margin:.2rem 0 .6rem}
+.selftest .a{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:8px;padding:.6rem .8rem;margin:0 0 .7rem}
+.selftest .from{font-size:.82rem;color:var(--muted);margin:0}
+.selftest ul{margin:.3rem 0 .7rem}
+.chip.L::before{content:"P  "}
+.chip.F::before{content:"R  "}
+.tag.a{color:var(--leader-ink);background:var(--leader);border-color:var(--ink)}
+figure.big{max-width:none}
+.bk.hit{outline:3px solid var(--leader);outline-offset:1px}
+.cell.lost{border-color:var(--bad)}
+.cell.lost span{background:var(--bad-bg);color:var(--ink)}
+.cards .flow{margin:.4rem 0}
+.card pre.code{font-size:.78rem;padding:.5rem .6rem;white-space:pre-wrap}
+.ctrls input[type=checkbox]{min-width:0;width:auto}
+/* beginner layer */
+.plain{background:var(--ok-bg);border-left:6px solid var(--ok);border-radius:10px;padding:.7rem .9rem;margin:1rem 0;max-width:72ch;font-size:1.02rem}
+.plain>b:first-child{display:block;font:700 .82rem var(--display);color:var(--ok);letter-spacing:.02em;margin-bottom:.25rem}
+.words{display:grid;gap:.3rem;margin:.4rem 0 1.1rem;max-width:72ch;font-size:.93rem}
+.words>h4{margin:0 0 .1rem;font:700 .82rem var(--display);color:var(--muted)}
+.words>div{display:grid;grid-template-columns:minmax(7.5rem,max-content) 1fr;gap:.7rem;padding:.35rem .6rem;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.words>div>b{font-family:var(--mono);font-size:.86rem}
+@media (max-width:520px){.words>div{grid-template-columns:1fr;gap:.1rem}}
+</style>
+</head>
+<body>
+<div class="top">
+  <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="toc">Contents</button>
+  <strong>Snowflake for data analytics, from zero</strong>
+  <button class="btn" id="themeBtn">Dark theme</button>
+  <div id="bar"></div>
+</div>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+<div class="hero">
+  <h1>Store everything once. Rent as much computing as each question needs.</h1>
+  <p>A course on Snowflake for data analytics that starts from zero. Part 0 explains what analytics is, why columns beat rows, and runs your first query. Then it goes deep: storage and micro-partitions, virtual warehouses and cost, loading data, caching and performance, Time Travel and cloning, security, and how Snowflake compares. One dashboard question is followed through every lesson, with four simulators.</p>
+  <div class="canvas herolog scroll">
+    <div class="flow" style="margin-bottom:1rem"><span class="n g">JSON files<small>s3://shopco-landing</small></span><i data-t="Snowpipe"></i><span class="n b">storage<small>micro-partitions</small></span><i data-t="read only what is needed"></i><span class="n y">virtual warehouse<small>ANALYTICS_WH, size S</small></span><i data-t="answer"></i><span class="n g">dashboard<small>revenue by country</small></span></div>
+    <div class="log"><label>storage</label><div class="cell gone"><b>Oct 01</b><span>skipped</span></div><div class="cell gone"><b>Oct 02</b><span>skipped</span></div><div class="cell gone"><b>Oct 03</b><span>skipped</span></div><div class="cell pend new"><b>Oct 04</b><span>scanned</span></div><div class="cell ghost"><b>today</b><span>loading…</span></div></div>
+    <div style="font:400 .82rem var(--mono);color:var(--muted)">Data sits in storage once. Compute is switched on to answer a question, reads only the pieces it needs, and switches off again.</div>
+  </div>
+  <div class="legend">
+    <span><span class="chip Y inl">compute</span> a running warehouse, or the step doing the work. Also our order row</span>
+    <span><span class="chip F inl">storage</span> data at rest in cloud storage</span>
+    <span><span class="chip C inl">services</span> Snowflake’s brain: metadata, optimizer, security</span>
+    <span><span class="chip X inl">skipped / lost</span> pruned, failed or expired</span>
+    <span><span class="flow" style="display:inline-flex"><span class="n g" style="padding:.1rem .5rem">outside</span></span> your apps, files and tools</span>
+  </div>
+</div>
+
+<section class="s" id="s0" data-t="Running example and tags">
+  <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
+  <div class="plain"><b>In plain words</b>This course follows one question that an online shop asks every morning: “how much did we sell yesterday, in each country?”, and one order row that feeds into the answer. Do not worry if words like warehouse, stage or micro-partition below are new. Part 0, right after this lesson, starts from zero.</div>
+  <p class="lead">ShopCo’s analytics team answers “revenue by country for yesterday” on a dashboard every morning; we follow that question, and one order that feeds it, through every lesson.</p>
+  <pre class="code"><i>-- the dashboard's question</i>
+SELECT country, SUM(amount) AS revenue
+  FROM shopco.analytics.orders
+ WHERE order_date = '2026-10-04'
+ GROUP BY country
+ ORDER BY revenue DESC;
+
+<i>-- one row that feeds it</i>
+order_id 90217 | customer_id 5512 | country 'DE' | order_date 2026-10-04 | amount 129.50</pre>
+  <div class="tw"><table>
+    <tr><th>Piece</th><th>In this guide</th></tr>
+    <tr><td>Company</td><td>ShopCo, an online shop selling in 30 countries</td></tr>
+    <tr><td>Snowflake account</td><td><code>shopco</code> on AWS, region eu-central-1</td></tr>
+    <tr><td>Raw data</td><td>JSON files landing in <code>s3://shopco-landing/orders/</code></td></tr>
+    <tr><td>Database and tables</td><td><code>SHOPCO.RAW.ORDERS_RAW</code> (raw JSON), <code>SHOPCO.ANALYTICS.ORDERS</code> (clean, 20 columns)</td></tr>
+    <tr><td>Table size</td><td>about 100 million rows, one year of orders</td></tr>
+    <tr><td>Virtual warehouse</td><td><code>ANALYTICS_WH</code>, size Small, auto-suspend 60 s</td></tr>
+    <tr><td>People and roles</td><td>Priya, analyst, role <code>ANALYST</code>; Marco, data engineer, role <code>LOADER</code></td></tr>
+    <tr><td>Dashboard</td><td>A BI tool refreshing at 07:00 each morning</td></tr>
+  </table></div>
+  <p>Every name, size, row count, timing and price is invented for the example, unless a lesson says it is computed or quoted from Snowflake’s documentation. Credit prices vary by contract and region.</p>
+  <h3>Five tags tell you how far to trust a statement</h3>
+  <div class="tw"><table>
+    <tr><th>Tag</th><th>Meaning</th></tr>
+    <tr><td><span class="tag g">Guaranteed</span></td><td>Holds on every Snowflake account. Part of the design.</td></tr>
+    <tr><td><span class="tag d">Default</span></td><td>The stock setting. Yours may be configured differently.</td></tr>
+    <tr><td><span class="tag s">Simplified</span></td><td>True in spirit. A detail was left out, or it is a rule of thumb.</td></tr>
+    <tr><td><span class="tag x">Example value</span></td><td>A number or name invented for the running example.</td></tr>
+    <tr><td><span class="tag a">Edition</span></td><td>Needs Enterprise edition or higher.</td></tr>
+  </table></div>
+  <p>A tag that says “check 3” links to row 3 of the <a href="#slab">proof checklist</a>, which you can run on a free Snowflake trial account.</p>
+</section>
+
+<div class="part" data-part="Start here"><h2>Part 0: Start here</h2><p>No analytics knowledge needed</p></div>
+
+<section class="s" id="olap" data-t="What analytics is">
+  <div class="sh"><span class="off">01</span><h2>What “analytics” is, and why it needs its own database</h2></div>
+  <div class="plain"><b>In plain words</b>The shop’s website asks its database small questions all day: “show order 90217”, “save this new order”. The analytics team asks big questions a few times a day: “add up every order from last year, by country”. A database built for the first kind is slow at the second, and running big questions on it would slow the website down. So analytics gets its own database, a data warehouse.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>OLTP</b><span>Online transaction processing: many small reads and writes, like an app’s main database.</span></div>
+    <div><b>OLAP</b><span>Online analytical processing: few, big queries that scan and summarise lots of data.</span></div>
+    <div><b>data warehouse</b><span>A database built for OLAP, holding copies of data from many sources.</span></div>
+    <div><b>aggregate</b><span>A summary over many rows: SUM, COUNT, AVG.</span></div>
+  </div>
+  <p class="lead">Analytics means asking big questions over lots of rows, and a data warehouse is a database designed for exactly that, separate from the databases that run the app.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>The app’s database (OLTP)</h4><span class="chip">“show order 90217”</span><span class="chip">“save a new order”</span><span class="chip">thousands per second, each touching 1 row</span></div>
+    <div><h4>The data warehouse (OLAP)</h4><span class="chip Y">“revenue by country, last year”</span><span class="chip Y">“top 10 products per month”</span><span class="chip Y">a few per minute, each touching millions of rows</span></div>
+  </div></div><figcaption>Two very different workloads. Each database is built for one of them.</figcaption></figure>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">app databases<small>orders, users, payments</small></span><i data-t="copy data regularly"></i><span class="n y">data warehouse<small>Snowflake</small></span><i data-t="SQL"></i><span class="n g">dashboards, reports, data science</span>
+  </div></div><figcaption>The usual picture: data is copied out of the app’s systems into the warehouse, where analysts query it without disturbing the app.</figcaption></figure>
+  <details class="q"><summary>Why not run the analytics team’s “revenue by country for the whole year” query directly on the shop’s main database?</summary><div class="in">It would scan millions of rows on a database tuned for small lookups, which is slow, and it would compete with the website for resources, slowing down customers. A warehouse is built for such scans and keeps that load away from the app.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 was saved by the shop’s app database at 09:41 on 4 October. A copy reaches Snowflake a minute later, and the next morning it is one of the rows summed into Germany’s revenue.</p></div></aside>
+</section>
+
+<section class="s" id="columns" data-t="Rows vs columns">
+  <div class="sh"><span class="off">02</span><h2>Why analytics stores data by column</h2></div>
+  <div class="plain"><b>In plain words</b>Most app databases store each row together: all of order 90217’s fields side by side. That is perfect for “show me this order”. But “sum the amount column” then has to read every field of every row. Storing each column together instead lets the warehouse read just the two columns the question needs, and similar values next to each other also compress very well.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>row store</b><span>Stores all fields of a row together.</span></div>
+    <div><b>column store</b><span>Stores all values of one column together.</span></div>
+    <div><b>compression</b><span>Storing data in fewer bytes; works best when similar values sit together.</span></div>
+  </div>
+  <p class="lead">A column store keeps each column’s values together, so a query that needs 2 of 20 columns reads roughly a tenth of the data, and compresses it well too.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>row store</label><div class="cell pend"><b>row 1</b><span>id,cust,DE,date,amt…</span></div><div class="cell pend"><b>row 2</b><span>id,cust,FR,date,amt…</span></div><div class="cell pend"><b>row 3</b><span>id,cust,DE,date,amt…</span></div></div>
+    <div class="log"><label>column store</label><div class="cell"><b>order_id</b><span>…</span></div><div class="cell"><b>customer</b><span>…</span></div><div class="cell pend"><b>country</b><span>DE,FR,DE…</span></div><div class="cell"><b>date</b><span>…</span></div><div class="cell pend"><b>amount</b><span>129.50,…</span></div></div>
+  </div><figcaption>Yellow is what “revenue by country” has to read. The row store reads everything; the column store reads two columns.</figcaption></figure>
+  <div class="demo">
+    <h4>Try it: bytes read for one query</h4>
+    <div class="ctrls"><label for="cbRows">rows</label><select id="cbRows"><option value="1e6">1 million</option><option value="1e8" selected>100 million</option><option value="1e9">1 billion</option></select><label for="cbCols">columns the query uses</label><input id="cbCols" type="range" min="1" max="20" value="2" style="width:9rem"><span id="cbColsV" style="font:600 .9rem var(--mono)">2</span></div>
+    <div id="cbBars"></div>
+    <div class="out" id="cbOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">20 columns of about 8 bytes each; compression assumed at 5× for the column store. Real ratios vary widely. <a class="tag s" href="#c1">Simplified · check 1</a></p>
+  </div>
+  <details class="q"><summary>A table has 20 columns. A query sums one column for all rows. Roughly how much less does a column store read than a row store, before compression?</summary><div class="in">About 20 times less: it reads 1 column out of 20 instead of every column of every row.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>The dashboard query uses 3 of the 20 columns: <code>country</code>, <code>amount</code> and <code>order_date</code>. Snowflake reads only those three for the rows it needs.</p></div></aside>
+</section>
+
+<section class="s" id="whatsnow" data-t="What Snowflake is">
+  <div class="sh"><span class="off">03</span><h2>What Snowflake is</h2></div>
+  <div class="plain"><b>In plain words</b>Snowflake is a data warehouse you rent rather than run. You do not install it or manage servers. You sign up, load data, and write SQL. Behind the scenes it keeps your data in the cloud provider’s storage and switches computers on and off to answer your queries, and you pay for the storage you use and the minutes those computers run.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>cloud</b><span>Computers and storage rented from a provider like AWS, Azure or Google Cloud.</span></div>
+    <div><b>SaaS</b><span>Software as a service: you use it over the internet; the vendor runs it.</span></div>
+    <div><b>virtual warehouse</b><span>Snowflake’s name for a cluster of computers that runs your queries. Despite the name, it holds no data.</span></div>
+    <div><b>credit</b><span>The unit Snowflake bills computing in.</span></div>
+  </div>
+  <p class="lead">Snowflake is a cloud data warehouse sold as a service: data lives in cloud storage, queries run on compute clusters called virtual warehouses, and you use plain SQL.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">you<small>SQL from a browser, BI tool or code</small></span><i data-t="HTTPS"></i><span class="n p">Snowflake service<small>runs in AWS, Azure or Google Cloud</small></span><i data-t="starts"></i><span class="n y">virtual warehouse<small>compute, billed while on</small></span><i data-t="reads"></i><span class="n b">your data<small>in cloud storage</small></span>
+  </div></div><figcaption>The whole idea in one line. Part 1 opens each box.</figcaption></figure>
+  <ul>
+    <li><b>No servers to manage.</b> No installing, patching or tuning disks. <span class="tag g">Guaranteed</span></li>
+    <li><b>Standard SQL</b> plus extensions for JSON and analytics.</li>
+    <li><b>Runs on all three big clouds;</b> you pick a cloud and region when the account is created.</li>
+  </ul>
+  <details class="q"><summary>Does a Snowflake “virtual warehouse” store your data?</summary><div class="in">No. A virtual warehouse is only compute: the machines that run queries. Data lives separately in cloud storage, which is why warehouses can be started, stopped and resized freely.</div></details>
+  <aside class="trk"><h4 data-id="shopco">Follow the dashboard</h4><div class="in"><p>ShopCo’s account URL is <code>shopco.eu-central-1.snowflakecomputing.com</code>. Priya opens it in a browser to write queries. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="firstq" data-t="Your first query">
+  <div class="sh"><span class="off">04</span><h2>Your first query</h2></div>
+  <div class="plain"><b>In plain words</b>Every Snowflake account comes with a shared sample database, so you can query real-sized data in your first minute. You choose a warehouse to run on, point at a table, and write SQL. Trying it once makes every later lesson concrete.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Snowsight</b><span>Snowflake’s web interface, where you write and run SQL in worksheets.</span></div>
+    <div><b>database.schema.table</b><span>Snowflake’s three-level naming: a database holds schemas, a schema holds tables.</span></div>
+    <div><b>GROUP BY</b><span>SQL that makes one result row per distinct value, used with SUM or COUNT.</span></div>
+  </div>
+  <p class="lead">In a Snowsight worksheet you pick a warehouse and run SQL against the free <code>SNOWFLAKE_SAMPLE_DATA</code> database to see an analytics query end to end.</p>
+  <pre class="code">USE WAREHOUSE COMPUTE_WH;                       <i>-- trial accounts start with this one</i>
+
+SELECT o_orderpriority      AS priority,
+       COUNT(*)              AS orders,
+       ROUND(SUM(o_totalprice) / 1e6, 1) AS revenue_millions
+  FROM snowflake_sample_data.tpch_sf1.orders    <i>-- 1.5 million orders, shared sample</i>
+ GROUP BY priority
+ ORDER BY priority;</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">worksheet<small>your SQL</small></span><i data-t="1"></i><span class="n p">services layer<small>checks it, makes a plan</small></span><i data-t="2"></i><span class="n y">COMPUTE_WH<small>resumes, scans</small></span><i data-t="3"></i><span class="n g">5 rows of results</span>
+  </div></div><figcaption>What happened when you pressed Run. If the warehouse was off, it started itself first. Part 4 follows this path in detail.</figcaption></figure>
+  <ul>
+    <li><b>The sample database is shared with every account</b> and costs no storage. <a class="tag g" href="#c2">Guaranteed · check 2</a></li>
+    <li><b>TPC-H</b> is a standard benchmark schema; <code>tpch_sf1</code> is the smallest copy, with 1.5 million orders.</li>
+    <li><b>The result panel</b> also shows how long the query took and a link to its query profile.</li>
+  </ul>
+  <details class="q"><summary>What does GROUP BY priority do in the query above?</summary><div class="in">It produces one result row per distinct priority value, with COUNT(*) and SUM computed over just the orders with that priority.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>The dashboard query in lesson 00 has exactly this shape: filter by date, GROUP BY country, SUM the amount.</p></div></aside>
+</section>
+
+<section class="s" id="paymodel" data-t="What you pay for">
+  <div class="sh"><span class="off">05</span><h2>What you pay for</h2></div>
+  <div class="plain"><b>In plain words</b>Think of a gym that charges for your locker by size, and for the treadmill by the minute you use it. Snowflake charges for storage by how much data you keep, and for compute by how many seconds your warehouses run, multiplied by their size. A warehouse that is switched off costs nothing.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>compute</b><span>The processing power that runs queries: your virtual warehouses.</span></div>
+    <div><b>storage</b><span>The space your data takes, after compression.</span></div>
+    <div><b>auto-suspend</b><span>A warehouse setting that switches it off after it has been idle for a while.</span></div>
+  </div>
+  <p class="lead">Snowflake bills storage per terabyte per month and compute in credits per second of running warehouse, so idle compute should be switched off.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Storage</h4><span class="chip F">per TB per month, after compression</span><span class="chip">cheap compared with compute</span></div>
+    <div><h4>Compute</h4><span class="chip Y">credits per hour, by warehouse size</span><span class="chip">billed per second while running</span><span class="chip Y">0 when suspended</span></div>
+  </div></div><figcaption>Two meters. Most bills are dominated by the compute meter, which is why Part 2 is about it.</figcaption></figure>
+  <ul>
+    <li><b>Most of a typical bill is compute.</b> Storage is usually the smaller part. <span class="tag s">Simplified</span></li>
+    <li><b>Price per credit depends on edition, cloud, region and contract.</b> This course uses $3 per credit for examples. <span class="tag x">Example value</span></li>
+    <li><b>Part 2 explains warehouse sizes, credits and auto-suspend in full.</b></li>
+  </ul>
+  <details class="q"><summary>A warehouse is suspended all weekend. How much compute does it cost for those two days?</summary><div class="in">Nothing. Compute is only billed while a warehouse is running. The data it would query still costs storage.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS_WH">Follow the dashboard</h4><div class="in"><p>ShopCo’s warehouse runs about 20 minutes a day in total, mostly for the morning dashboard refresh and analysts’ queries, and is suspended the rest of the time.</p></div></aside>
+</section>
+
+<div class="part" data-part="Architecture"><h2>Part 1: Architecture</h2><p>Three layers, and why they are separate</p></div>
+
+<section class="s" id="layers" data-t="Three layers">
+  <div class="sh"><span class="off">06</span><h2>The three layers</h2></div>
+  <div class="plain"><b>In plain words</b>Think of a library. The shelves hold the books (storage). Reading rooms with desks are where people work (compute); you can open more rooms when it gets busy and close them at night. The front desk keeps the catalogue, checks library cards and tells you where books are (services). Snowflake is built the same way, and each part grows independently.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>storage layer</b><span>Where table data lives, in the cloud provider’s object storage.</span></div>
+    <div><b>compute layer</b><span>The virtual warehouses that run queries.</span></div>
+    <div><b>cloud services layer</b><span>Snowflake’s always-on brain: login, security, metadata, query planning.</span></div>
+    <div><b>object storage</b><span>Cheap, durable cloud file storage such as Amazon S3.</span></div>
+  </div>
+  <p class="lead">Snowflake has three layers: storage in cloud object storage, compute in virtual warehouses, and a cloud services layer that coordinates everything.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  U["Users and tools&lt;br/&gt;Snowsight, BI tool, code"] --> CS
+  subgraph CS["Cloud services layer"]
+    AUTH["Authentication and access control"]:::ctl
+    META["Metadata and statistics"]:::ctl
+    OPT["Query parser and optimizer"]:::ctl
+    RC["Result cache"]:::ctl
+  end
+  subgraph CL["Compute layer"]
+    W1["ANALYTICS_WH (Small)"]:::lead
+    W2["LOAD_WH (X-Small)"]:::lead
+  end
+  subgraph ST["Storage layer (S3)"]
+    T["Tables as compressed&lt;br/&gt;columnar micro-partitions"]
+  end
+  CS -->|"sends plan"| W1
+  CS -->|"sends plan"| W2
+  W1 -->|"reads"| T
+  W2 -->|"writes"| T
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Every query enters at the top, is planned by the services layer, runs on a warehouse, and reads shared storage at the bottom.</figcaption></figure>
+  <ul>
+    <li><b>Storage:</b> one copy of the data, in the cloud provider’s object storage, managed by Snowflake. You never see the files. <span class="tag g">Guaranteed</span></li>
+    <li><b>Compute:</b> any number of warehouses, each a separate cluster, all reading the same storage.</li>
+    <li><b>Services:</b> always on, shared by the whole account; it decides what each query must read.</li>
+  </ul>
+  <details class="q"><summary>Which layer decides which parts of a table a query needs to read, and which layer actually reads them?</summary><div class="in">The cloud services layer plans the query using its metadata and decides what to read. A virtual warehouse in the compute layer does the reading and computing.</div></details>
+  <aside class="trk"><h4 data-id="shopco">Follow the dashboard</h4><div class="in"><p>ShopCo runs two warehouses: <code>LOAD_WH</code> writes new orders in; <code>ANALYTICS_WH</code> answers the dashboard. Both see the same <code>ORDERS</code> table. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="separate" data-t="Storage separate from compute">
+  <div class="sh"><span class="off">07</span><h2>Why separating storage and compute matters</h2></div>
+  <div class="plain"><b>In plain words</b>In many older warehouses, data lives on the same machines that run queries. Need more speed? Buy more machines and move data around. One team’s huge report slows everyone else. Snowflake keeps data in one place and lets each team rent its own reading room: the loaders, the analysts and the data scientists never queue behind each other.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>shared-nothing</b><span>An older design where each machine stores and processes its own slice of data.</span></div>
+    <div><b>workload isolation</b><span>Different jobs running on separate compute so they cannot slow each other.</span></div>
+    <div><b>concurrency</b><span>How many queries run at the same time.</span></div>
+  </div>
+  <p class="lead">Because every warehouse reads the same storage, you can give each workload its own compute, size it independently, and pay for each only while it runs.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Coupled</h4><div class="flow v"><span class="n">one cluster stores and computes</span><span class="n r">big report slows the dashboard</span><span class="n r">more power means moving data</span></div></div>
+    <div><h4>Separated</h4><div class="flow v"><span class="n b">one copy of data</span><span class="n y">LOAD_WH · ANALYTICS_WH · DS_WH</span><span class="n g">each sized and billed on its own</span></div></div>
+  </div></div><figcaption>The defining idea of Snowflake. Most of its features follow from it.</figcaption></figure>
+  <ul>
+    <li><b>No contention between teams</b> that use different warehouses. <span class="tag g">Guaranteed</span></li>
+    <li><b>Scale compute in seconds</b> without moving any data.</li>
+    <li><b>Storage grows on its own,</b> without buying compute you do not need.</li>
+  </ul>
+  <details class="q"><summary>The data science team runs a 40-minute model-training query. How do you stop it slowing down the morning dashboard?</summary><div class="in">Give data science its own warehouse. Both read the same storage, but the dashboard’s warehouse is a separate cluster that the training query never touches.</div></details>
+  <aside class="trk"><h4 data-id="shopco">Follow the dashboard</h4><div class="in"><p>Marco’s nightly reload runs on <code>LOAD_WH</code> at the same time as Priya’s queries on <code>ANALYTICS_WH</code>. Neither notices the other.</p></div></aside>
+</section>
+
+<section class="s" id="micro" data-t="Micro-partitions">
+  <div class="sh"><span class="off">08</span><h2>Micro-partitions</h2></div>
+  <div class="plain"><b>In plain words</b>Snowflake does not store a table as one big file. It cuts it into many small files, each holding a slice of the rows, stored column by column and compressed. For every file it also writes a little label: the smallest and largest value of each column inside. Those labels are what make the next lesson possible.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>micro-partition</b><span>One of the small, immutable files a table is split into, holding 50 to 500 MB of uncompressed data.</span></div>
+    <div><b>immutable</b><span>Never changed after it is written; an update writes a new micro-partition instead.</span></div>
+    <div><b>metadata</b><span>Data about the data, such as each micro-partition’s min and max per column.</span></div>
+  </div>
+  <p class="lead">Every table is stored as many small, immutable, columnar files called micro-partitions, and Snowflake keeps the minimum and maximum of every column for each one.</p>
+  <figure><div class="canvas scroll">
+    <div class="row nowrap">
+      <div class="bk"><b>MP 0001</b><small>order_date</small><span class="chip">min 2026-10-01</span><span class="chip">max 2026-10-01</span></div>
+      <div class="bk"><b>MP 0002</b><small>order_date</small><span class="chip">min 2026-10-02</span><span class="chip">max 2026-10-02</span></div>
+      <div class="bk"><b>MP 0003</b><small>order_date</small><span class="chip">min 2026-10-03</span><span class="chip">max 2026-10-03</span></div>
+      <div class="bk"><b>MP 0004</b><small>order_date</small><span class="chip Y">min 2026-10-04</span><span class="chip Y">max 2026-10-04</span></div>
+    </div>
+  </div><figcaption>Four micro-partitions of ORDERS and their labels for one column. In reality there is a label for every column, and many partitions per day. <span class="tag s">Simplified</span></figcaption></figure>
+  <ul>
+    <li><b>50 to 500 MB uncompressed each,</b> much smaller once compressed. <span class="tag g">Guaranteed</span></li>
+    <li><b>Created automatically</b> as data is loaded, in the order it arrives. You do not define them.</li>
+    <li><b>Never edited:</b> an UPDATE writes new micro-partitions and retires the old ones, which is also how Time Travel works (Part 5).</li>
+  </ul>
+  <details class="q"><summary>What two things does Snowflake record about each column of every micro-partition, and why?</summary><div class="in">The minimum and maximum value (plus counts such as nulls and distinct values). They let the optimizer skip micro-partitions that cannot contain matching rows, without opening them.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 sits in one of the micro-partitions loaded on 4 October; that partition’s <code>order_date</code> label reads min 2026-10-04, max 2026-10-04. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="pruning" data-t="Pruning">
+  <div class="sh"><span class="off">09</span><h2>Pruning: skipping data without reading it</h2></div>
+  <div class="plain"><b>In plain words</b>Before reading anything, Snowflake checks each micro-partition’s label. If the dashboard wants 4 October and a label says “1 October to 1 October”, that file is skipped without being opened. When the table is stored roughly in date order, a one-day question opens one day’s files out of a whole year.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>pruning</b><span>Skipping micro-partitions whose min/max show they cannot match the filter.</span></div>
+    <div><b>scan</b><span>Actually reading data from storage.</span></div>
+  </div>
+  <p class="lead">Pruning uses the min and max labels to skip micro-partitions that cannot match a query’s filter, so how well the data is ordered decides how much a query reads.</p>
+  <div class="demo">
+    <h4>Try it: one year of orders, 365 micro-partitions</h4>
+    <div class="ctrls"><label for="prOrder">Data was loaded</label><select id="prOrder"><option value="date">in date order (daily loads)</option><option value="random">in random order (bulk backfill)</option></select><label for="prDays">Query asks for the last</label><select id="prDays"><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option><option value="365">365 days</option></select><button class="btn on" id="prGo">Run query</button></div>
+    <div class="scroll"><div id="prGrid" style="display:grid;grid-template-columns:repeat(37,10px);gap:2px;min-width:max-content"></div></div>
+    <div class="out" id="prOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Each square is one micro-partition. Yellow is scanned; faded is pruned. One partition per day of rows, labels computed from the rows each holds. <span class="tag s">Simplified</span></p>
+  </div>
+  <ul>
+    <li><b>Filters on well-ordered columns prune well.</b> Dates usually are, because data arrives over time.</li>
+    <li><b>Functions can hide a column from pruning:</b> prefer <code>order_date = '2026-10-04'</code> over wrapping the column in an expression when you can.</li>
+    <li><b>The query profile shows it:</b> “Partitions scanned” versus “Partitions total”. <a class="tag g" href="#c3">Guaranteed · check 3</a></li>
+  </ul>
+  <details class="q"><summary>A table was backfilled with a year of orders in random order. Why does a “yesterday only” query read almost everything?</summary><div class="in">Each micro-partition then holds rows from all over the year, so its min and max span nearly the whole year and none can be ruled out. Pruning only helps when each partition covers a narrow range of the filtered column.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>The query profile for the dashboard query on a table loaded day by day. <span class="tag x">Example value</span></p>
+  <pre class="code">Partitions scanned   41
+Partitions total     15,120
+Bytes scanned        212 MB
+<i>-- 99.7% of the table was never opened</i></pre></div></aside>
+</section>
+
+<section class="s" id="clustering" data-t="Clustering keys">
+  <div class="sh"><span class="off">10</span><h2>Clustering and clustering keys</h2></div>
+  <div class="plain"><b>In plain words</b>Pruning works when rows with similar values sit in the same micro-partitions. Data loaded day by day is naturally sorted by date. If your queries filter on something else, or the order gets scrambled by updates, you can ask Snowflake to keep the table sorted by chosen columns in the background, for a fee.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>clustering</b><span>How well rows with similar values are grouped into the same micro-partitions.</span></div>
+    <div><b>clustering key</b><span>Columns you ask Snowflake to keep the table ordered by.</span></div>
+    <div><b>clustering depth</b><span>How many micro-partitions overlap for a given value; lower is better.</span></div>
+  </div>
+  <p class="lead">Natural load order usually clusters tables by time; for very large tables queried by other columns, a clustering key makes Snowflake re-sort data in the background so pruning keeps working.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Well clustered on country</h4><div class="log"><div class="cell pend"><b>MP1</b><span>DE–DE</span></div><div class="cell"><b>MP2</b><span>ES–FR</span></div><div class="cell"><b>MP3</b><span>FR–IT</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">“country = DE” reads one partition.</p></div>
+    <div><h4>Poorly clustered</h4><div class="log"><div class="cell pend"><b>MP1</b><span>AT–US</span></div><div class="cell pend"><b>MP2</b><span>BE–SE</span></div><div class="cell pend"><b>MP3</b><span>AT–US</span></div></div><p style="font-size:.9rem;margin:.4rem 0 0">Every range contains DE: nothing is pruned.</p></div>
+  </div></div><figcaption>The same rows, grouped two ways. Clustering is about which rows share a file.</figcaption></figure>
+  <pre class="code">ALTER TABLE shopco.analytics.orders CLUSTER BY (order_date, country);
+SELECT SYSTEM$CLUSTERING_INFORMATION('shopco.analytics.orders', '(order_date)');</pre>
+  <ul>
+    <li><b>Most tables need no clustering key.</b> It pays off for multi-terabyte tables with selective filters. <span class="tag s">Simplified</span></li>
+    <li><b>Automatic Clustering is a background service</b> billed in credits; it re-sorts only what has become disordered.</li>
+    <li><b>Put low-cardinality, commonly filtered columns first,</b> usually a date. Clustering on a unique ID wastes money.</li>
+  </ul>
+  <details class="q"><summary>Why is a unique order ID usually a poor clustering key?</summary><div class="in">Queries rarely filter on ranges of order IDs, and keeping billions of distinct values sorted is expensive. Clustering pays off on columns that queries filter by and that group many rows, such as dates.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>ShopCo’s table is loaded daily, so it is already well ordered by date. They added no clustering key, and the dashboard still prunes 99% of partitions.</p></div></aside>
+</section>
+
+
+<div class="part" data-part="Warehouses and cost"><h2>Part 2: Virtual warehouses and cost</h2><p>Compute you switch on and off</p></div>
+
+<section class="s" id="wh" data-t="Virtual warehouses">
+  <div class="sh"><span class="off">11</span><h2>Virtual warehouses</h2></div>
+  <div class="plain"><b>In plain words</b>A virtual warehouse is a group of computers Snowflake lends you to run queries. You pick a T-shirt size; each size up has twice the machines and costs twice as much per hour. It starts when a query arrives, stops itself after a quiet spell, and you pay only for the seconds it ran.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>warehouse size</b><span>X-Small, Small, Medium, Large… each double the previous in compute and credits per hour.</span></div>
+    <div><b>auto-resume</b><span>Start the warehouse automatically when a query arrives.</span></div>
+    <div><b>suspended</b><span>Switched off; costs nothing and holds no cache.</span></div>
+  </div>
+  <p class="lead">A virtual warehouse is a cluster of compute nodes in one of several sizes, billed per second while running, which can suspend and resume itself.</p>
+  <div class="tw"><table>
+    <tr><th>Size</th><th>X-Small</th><th>Small</th><th>Medium</th><th>Large</th><th>X-Large</th><th>2X-Large</th><th>3X-Large</th><th>4X-Large</th></tr>
+    <tr><td>Credits per hour</td><td>1</td><td>2</td><td>4</td><td>8</td><td>16</td><td>32</td><td>64</td><td>128</td></tr>
+  </table></div>
+  <pre class="code">CREATE WAREHOUSE analytics_wh
+  WAREHOUSE_SIZE = 'SMALL'
+  AUTO_SUSPEND   = 60        <i>-- seconds idle before switching off</i>
+  AUTO_RESUME    = TRUE;     <i>-- start when a query arrives</i></pre>
+  <ul>
+    <li><b>Each size doubles compute and price.</b> These are the published rates for standard warehouses. <a class="tag g" href="#c4">Guaranteed · check 4</a></li>
+    <li><b>Billed per second, with a 60-second minimum</b> each time the warehouse starts or resumes. <span class="tag g">Guaranteed</span></li>
+    <li><b>The SQL default for AUTO_SUSPEND is 600 seconds;</b> many teams lower it to 60. <a class="tag d" href="#c4">Default · check 4</a></li>
+    <li><b>Resuming takes a second or two;</b> queued queries wait for it.</li>
+  </ul>
+  <details class="q"><summary>A Medium warehouse runs a 30-second query after being suspended, then suspends again 60 seconds later. How many credits did that cost?</summary><div class="in">It ran for 90 seconds (30 s query + 60 s idle before auto-suspend). Medium is 4 credits per hour, so 4 × 90 / 3600 = 0.1 credits.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS_WH">Follow the dashboard</h4><div class="in"><p>At 07:00 the BI tool sends the dashboard query; ANALYTICS_WH resumes, runs it in 3 seconds, and suspends at 07:01:03. <span class="tag x">Example value</span></p>
+  <pre class="code">SHOW WAREHOUSES LIKE 'ANALYTICS_WH';
+name          state      size   auto_suspend  auto_resume
+ANALYTICS_WH  SUSPENDED  Small  60            true</pre></div></aside>
+</section>
+
+<section class="s" id="scale" data-t="Scale up vs scale out">
+  <div class="sh"><span class="off">12</span><h2>Scaling up versus scaling out</h2></div>
+  <div class="plain"><b>In plain words</b>Two different problems, two different fixes. If one big query is slow, use a bigger warehouse: more machines work on that query (scale up). If many people’s queries are queueing, add more copies of the warehouse so they run side by side (scale out).</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>scale up</b><span>Resize to a bigger warehouse so each query has more compute.</span></div>
+    <div><b>scale out</b><span>Run extra clusters of the same warehouse to serve more queries at once.</span></div>
+    <div><b>multi-cluster warehouse</b><span>A warehouse that adds and removes clusters automatically as the queue grows and shrinks.</span></div>
+    <div><b>queuing</b><span>Queries waiting because the warehouse is busy.</span></div>
+  </div>
+  <p class="lead">Resize a warehouse up when individual queries are slow; let a multi-cluster warehouse scale out when many concurrent queries are queuing.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Scale up: one big query</h4><div class="flow v"><span class="n">Small: 8 min</span><i data-t="resize to Large"></i><span class="n y">Large: about 2 min</span></div><p style="font-size:.9rem;margin:.4rem 0 0">4× the price per hour for about ¼ of the time: often the same cost, much faster. <span class="tag s">Simplified</span></p></div>
+    <div><h4>Scale out: Monday 9 am</h4><div class="flow v"><span class="n">200 analysts, 1 cluster: queue</span><i data-t="multi-cluster, max 4"></i><span class="n y">4 clusters side by side, no queue</span></div><p style="font-size:.9rem;margin:.4rem 0 0">Extra clusters shut down when the rush ends.</p></div>
+  </div></div><figcaption>Bigger helps one heavy query. More clusters help many light ones.</figcaption></figure>
+  <pre class="code">ALTER WAREHOUSE analytics_wh SET WAREHOUSE_SIZE = 'LARGE';        <i>-- scale up</i>
+
+ALTER WAREHOUSE analytics_wh SET
+  MIN_CLUSTER_COUNT = 1  MAX_CLUSTER_COUNT = 4                     <i>-- scale out</i>
+  SCALING_POLICY = 'STANDARD';</pre>
+  <ul>
+    <li><b>Multi-cluster warehouses need Enterprise edition.</b> <span class="tag a">Edition</span></li>
+    <li><b>Scaling policy:</b> Standard (the default) adds clusters quickly to avoid queuing; Economy waits longer to save credits.</li>
+    <li><b>Bigger is not always faster:</b> a query that is already quick, or one that reads little data, gains nothing from a larger size.</li>
+  </ul>
+  <details class="q"><summary>At 9 am many analysts complain their small queries wait in a queue, but each runs fast once started. Scale up or scale out?</summary><div class="in">Scale out: the problem is concurrency, not the speed of each query. A multi-cluster warehouse adds clusters to run the queued queries side by side.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS_WH">Follow the dashboard</h4><div class="in"><p>The dashboard query is small and fast, so ANALYTICS_WH stays Small. On month-end, when finance runs heavy reports, it is temporarily resized to Large.</p></div></aside>
+</section>
+
+<section class="s" id="cost" data-t="Credits and cost">
+  <div class="sh"><span class="off">13</span><h2>Credits, and where the money goes</h2></div>
+  <div class="plain"><b>In plain words</b>The bill is mostly “how big was each warehouse, times how long was it on”. A warehouse left running all night with nobody using it is the classic surprise. Short auto-suspend, right-sized warehouses and separate warehouses per team are most of cost control.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>credit price</b><span>Dollars per credit; depends on edition, cloud, region and contract.</span></div>
+    <div><b>serverless feature</b><span>Work Snowflake runs on its own compute, such as Snowpipe or Automatic Clustering, billed separately.</span></div>
+  </div>
+  <p class="lead">Compute cost is credits per hour for the size, times seconds running, times the price per credit; auto-suspend decides how much idle time you pay for.</p>
+  <div class="demo">
+    <h4>Try it: what does the morning dashboard cost?</h4>
+    <div class="ctrls"><label for="ccSize">Size</label><select id="ccSize"><option value="1">X-Small</option><option value="2" selected>Small</option><option value="4">Medium</option><option value="8">Large</option><option value="16">X-Large</option></select><label for="ccRun">query seconds</label><input id="ccRun" type="number" value="3" min="1" style="width:5rem"><label for="ccRuns">runs per day</label><input id="ccRuns" type="number" value="40" min="1" style="width:5rem"></div>
+    <div class="ctrls"><label for="ccSus">auto-suspend</label><select id="ccSus"><option value="60" selected>60 s</option><option value="300">5 min</option><option value="600">10 min (SQL default)</option><option value="never">never</option></select><label for="ccPrice">$ per credit</label><input id="ccPrice" type="number" value="3" step="0.5" min="0.5" style="width:5rem"></div>
+    <div class="out" id="ccOut" aria-live="polite"></div>
+    <p style="font-size:.88rem;margin:.2rem 0 0">Assumes runs are spread out, so each one resumes the warehouse: billed time per run = max(60 s, query + auto-suspend). <span class="tag s">Simplified</span></p>
+  </div>
+  <ul>
+    <li><b>Cloud services usage is free up to 10% of daily warehouse usage;</b> above that it is billed. <span class="tag g">Guaranteed</span></li>
+    <li><b>Storage is billed per TB per month after compression,</b> including Time Travel and Fail-safe copies.</li>
+    <li><b>Serverless features</b> (Snowpipe, Automatic Clustering, search optimization) add their own credits.</li>
+  </ul>
+  <details class="q"><summary>Why can a 3-second query cost far more than 3 seconds of compute?</summary><div class="in">A resumed warehouse is billed at least 60 seconds, and keeps running until auto-suspend triggers. With a 10-minute auto-suspend, one 3-second query can bill over 10 minutes.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS_WH">Follow the dashboard</h4><div class="in"><p>ShopCo checks its spend per warehouse from the shared <code>SNOWFLAKE</code> database. <span class="tag x">Example value</span></p>
+  <pre class="code">SELECT warehouse_name, SUM(credits_used) AS credits
+  FROM snowflake.account_usage.warehouse_metering_history
+ WHERE start_time &gt;= DATEADD(day, -30, CURRENT_TIMESTAMP())
+ GROUP BY 1 ORDER BY 2 DESC;
+ANALYTICS_WH   21.4
+LOAD_WH         9.8</pre></div></aside>
+</section>
+
+<section class="s" id="monitors" data-t="Resource monitors">
+  <div class="sh"><span class="off">14</span><h2>Keeping spend under control</h2></div>
+  <div class="plain"><b>In plain words</b>Because compute is pay-as-you-go, a forgotten warehouse or a runaway query can burn money quietly. A resource monitor is a budget alarm: it counts credits and can email you, or even switch warehouses off, when a limit is reached.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>resource monitor</b><span>A credit budget with actions at chosen percentages.</span></div>
+    <div><b>statement timeout</b><span>A limit on how long one query may run before it is cancelled.</span></div>
+  </div>
+  <p class="lead">Resource monitors cap credits per period and can notify or suspend warehouses, and per-warehouse timeouts stop runaway queries.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">0%</span><i data-t="usage grows"></i><span class="n y">75%: email</span><i></i><span class="n y">90%: email</span><i></i><span class="n r">100%: suspend warehouses</span>
+  </div></div><figcaption>A monthly budget with three triggers. Suspending at 100% lets running queries finish; SUSPEND_IMMEDIATE cancels them.</figcaption></figure>
+  <pre class="code">CREATE RESOURCE MONITOR analytics_monthly
+  WITH CREDIT_QUOTA = 50  FREQUENCY = MONTHLY  START_TIMESTAMP = IMMEDIATELY
+  TRIGGERS ON 75 PERCENT DO NOTIFY
+           ON 90 PERCENT DO NOTIFY
+           ON 100 PERCENT DO SUSPEND;
+ALTER WAREHOUSE analytics_wh SET RESOURCE_MONITOR = analytics_monthly;
+ALTER WAREHOUSE analytics_wh SET STATEMENT_TIMEOUT_IN_SECONDS = 1800;</pre>
+  <ul>
+    <li><b>Monitors cover warehouses only,</b> not serverless features or storage. <span class="tag g">Guaranteed</span></li>
+    <li><b>One warehouse per team plus a monitor per warehouse</b> makes every team’s cost visible.</li>
+  </ul>
+  <details class="q"><summary>What is the difference between a resource monitor’s SUSPEND and SUSPEND_IMMEDIATE actions?</summary><div class="in">SUSPEND lets currently running queries finish and then suspends the warehouse; SUSPEND_IMMEDIATE cancels running queries at once.</div></details>
+  <aside class="trk"><h4 data-id="analytics_monthly">Follow the dashboard</h4><div class="in"><p>ShopCo’s analytics budget is 50 credits a month; the dashboard uses under half. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<div class="part" data-part="Loading data"><h2>Part 3: Loading data</h2><p>From files to tables</p></div>
+
+<section class="s" id="stages" data-t="Stages and file formats">
+  <div class="sh"><span class="off">15</span><h2>Stages and file formats</h2></div>
+  <div class="plain"><b>In plain words</b>Before Snowflake can load files, it needs to know where they are and how to read them. A stage is a saved pointer to a folder of files, usually in your own S3 bucket. A file format says “these are JSON” or “these are CSV with a header row”.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>stage</b><span>A named location of files for loading or unloading.</span></div>
+    <div><b>external stage</b><span>Points at your own cloud storage, such as an S3 bucket.</span></div>
+    <div><b>internal stage</b><span>Storage inside Snowflake that you upload files into.</span></div>
+    <div><b>storage integration</b><span>A trust set-up that lets Snowflake read your bucket without storing keys.</span></div>
+  </div>
+  <p class="lead">A stage names a location of files and a file format describes how to parse them; together they tell Snowflake where data comes from.</p>
+  <pre class="code">CREATE FILE FORMAT shopco.raw.json_ff TYPE = JSON;
+
+CREATE STAGE shopco.raw.orders_stage
+  URL = 's3://shopco-landing/orders/'
+  STORAGE_INTEGRATION = shopco_s3
+  FILE_FORMAT = shopco.raw.json_ff;
+
+LIST @shopco.raw.orders_stage PATTERN = '.*2026/10/04.*';</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">s3://shopco-landing/orders/<small>your bucket</small></span><i data-t="named by"></i><span class="n p">@orders_stage<small>+ JSON file format</small></span><i data-t="used by"></i><span class="n y">COPY INTO / Snowpipe</span>
+  </div></div><figcaption>The stage is a pointer, not a copy. The files stay in ShopCo’s bucket.</figcaption></figure>
+  <ul>
+    <li><b>Formats:</b> CSV, JSON, Parquet, Avro, ORC, XML. Parquet and compressed CSV load fastest. <span class="tag s">Simplified</span></li>
+    <li><b>Aim for files of roughly 100–250 MB compressed</b> so loading spreads across the warehouse. <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>Does creating an external stage copy files into Snowflake?</summary><div class="in">No. A stage is just a named pointer to a location. Files are only read when a COPY INTO or Snowpipe load runs.</div></details>
+  <aside class="trk"><h4 data-id="0941-17.json">Follow the dashboard</h4><div class="in"><p>The file holding order 90217, as listed through the stage. <span class="tag x">Example value</span></p>
+  <pre class="code">name                                                  size   last_modified
+s3://shopco-landing/orders/2026/10/04/0941-17.json    4812   Sun, 4 Oct 2026 09:41:18 GMT</pre></div></aside>
+</section>
+
+<section class="s" id="copy" data-t="COPY INTO">
+  <div class="sh"><span class="off">16</span><h2>Bulk loading with COPY INTO</h2></div>
+  <div class="plain"><b>In plain words</b>COPY INTO is the “load these files into this table” command. A warehouse reads the files in parallel and writes micro-partitions. Snowflake also remembers which files it has already loaded, so running the same command twice does not double the data.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>COPY INTO</b><span>The SQL command that loads staged files into a table, or unloads a table into files.</span></div>
+    <div><b>load metadata</b><span>Snowflake’s record of which files have been loaded into a table.</span></div>
+    <div><b>ON_ERROR</b><span>What to do with bad rows: stop, skip the file, or continue.</span></div>
+  </div>
+  <p class="lead">COPY INTO loads staged files in parallel on a warehouse and skips files it has already loaded, which makes reruns safe.</p>
+  <pre class="code">COPY INTO shopco.raw.orders_raw
+  FROM @shopco.raw.orders_stage/2026/10/04/
+  ON_ERROR = 'SKIP_FILE';
+
+file                         status  rows_parsed  rows_loaded
+…/2026/10/04/0941-17.json    LOADED  37           37
+…/2026/10/04/0942-03.json    LOADED  41           41</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">@orders_stage<small>1,440 files for 4 Oct</small></span><i data-t="split across nodes"></i><span class="n y">LOAD_WH<small>parses files in parallel</small></span><i data-t="writes"></i><span class="n b">ORDERS_RAW<small>new micro-partitions</small></span>
+  </div><div class="log" style="margin-top:.7rem"><label>load metadata</label><div class="cell done"><b>0941-17</b><span>loaded</span></div><div class="cell done"><b>0942-03</b><span>loaded</span></div><div class="cell gone"><b>0941-17</b><span>rerun: skipped</span></div></div></div><figcaption>Files are spread over the warehouse’s nodes, and the table remembers each file it has loaded, so a rerun skips it.</figcaption></figure>
+  <ul>
+    <li><b>Already-loaded files are skipped</b> for 64 days, based on load metadata. <a class="tag g" href="#c5">Guaranteed · check 5</a></li>
+    <li><b>Runs on a warehouse you choose,</b> so give loading its own warehouse.</li>
+    <li><b>Good for batches:</b> hourly or nightly loads of many files.</li>
+  </ul>
+  <details class="q"><summary>A nightly job accidentally runs COPY INTO twice over the same folder. Are the rows duplicated?</summary><div class="in">No. Snowflake’s load metadata records which files were already loaded into that table (for 64 days) and skips them on the second run.</div></details>
+  <aside class="trk"><h4 data-id="ORDERS_RAW">Follow the dashboard</h4><div class="in"><p>Before ShopCo moved to Snowpipe, order 90217 arrived with the 01:00 nightly COPY on LOAD_WH.</p></div></aside>
+</section>
+
+<section class="s" id="snowpipe" data-t="Snowpipe">
+  <div class="sh"><span class="off">17</span><h2>Continuous loading with Snowpipe</h2></div>
+  <div class="plain"><b>In plain words</b>Instead of loading once a night, Snowpipe loads each file within about a minute of it landing. S3 tells Snowflake “a new file arrived”, and Snowflake runs a COPY for it on its own compute. You do not run a warehouse for it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Snowpipe</b><span>A service that loads files automatically as they arrive.</span></div>
+    <div><b>event notification</b><span>A message from S3 saying a new file was created.</span></div>
+    <div><b>latency</b><span>The delay between a file landing and its rows being queryable.</span></div>
+  </div>
+  <p class="lead">Snowpipe runs a COPY statement automatically for each new file, triggered by cloud storage events, on serverless compute billed separately from warehouses.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant App as order app
+  participant S3 as ShopCo S3 bucket
+  participant Q as event queue (SQS)
+  participant P as Snowpipe
+  participant T as ORDERS_RAW
+  App->>S3: write 0941-17.json (order 90217)
+  S3->>Q: new-object event
+  Q->>P: notification
+  P->>S3: read the file
+  P->>T: COPY into micro-partitions
+  Note over T: queryable about a minute after landing
+</pre></div><figcaption>No schedules and no warehouse: each file is loaded shortly after it lands.</figcaption></figure>
+  <pre class="code">CREATE PIPE shopco.raw.orders_pipe AUTO_INGEST = TRUE AS
+  COPY INTO shopco.raw.orders_raw FROM @shopco.raw.orders_stage;</pre>
+  <ul>
+    <li><b>Latency is usually around a minute,</b> not guaranteed. <span class="tag s">Simplified</span></li>
+    <li><b>Serverless:</b> you pay for Snowpipe’s compute separately, not through a warehouse.</li>
+    <li><b>Very small files are inefficient;</b> batch them into larger files when you can.</li>
+    <li><b>Need seconds, not minutes?</b> Snowpipe Streaming writes rows directly, without files.</li>
+  </ul>
+  <details class="q"><summary>What tells Snowpipe that a new file needs loading when AUTO_INGEST is on?</summary><div class="in">An event notification from the cloud storage (for S3, an object-created event delivered through a queue) for each new file.</div></details>
+  <aside class="trk"><h4 data-id="orders_pipe">Follow the dashboard</h4><div class="in"><p>Order 90217’s file landed at 09:41:18; its rows were queryable at 09:42:20. <span class="tag x">Example value</span></p>
+  <pre class="code">SELECT SYSTEM$PIPE_STATUS('shopco.raw.orders_pipe');
+{"executionState":"RUNNING","pendingFileCount":0,"lastIngestedTimestamp":"2026-10-04T09:42:20Z"}</pre></div></aside>
+</section>
+
+<section class="s" id="variant" data-t="JSON and VARIANT">
+  <div class="sh"><span class="off">18</span><h2>JSON and the VARIANT type</h2></div>
+  <div class="plain"><b>In plain words</b>Raw data often arrives as JSON, with nesting and fields that change over time. Snowflake can store a whole JSON document in one column of type VARIANT and still query inside it with a simple path syntax, so you can load first and decide on columns later.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>VARIANT</b><span>A column type that holds any JSON-like value.</span></div>
+    <div><b>path</b><span>The way into nested data: <code>v:customer.country</code>.</span></div>
+    <div><b>cast (::)</b><span>Convert a value to a type: <code>::string</code>, <code>::number</code>.</span></div>
+    <div><b>FLATTEN</b><span>Turns each element of an array into its own row.</span></div>
+  </div>
+  <p class="lead">A VARIANT column stores semi-structured data such as JSON, and you query it with paths, casts and FLATTEN as if it were columns.</p>
+  <pre class="code"><i>-- raw row in ORDERS_RAW (one VARIANT column v)</i>
+{"order_id":90217,"customer":{"id":5512,"country":"DE"},"ts":"2026-10-04T09:41:07Z",
+ "items":[{"sku":"KB-01","qty":1,"price":89.50},{"sku":"MS-02","qty":1,"price":40.00}]}
+
+SELECT v:order_id::number           AS order_id,
+       v:customer.country::string   AS country,
+       i.value:sku::string          AS sku,
+       i.value:price::number(10,2)  AS price
+  FROM shopco.raw.orders_raw,
+       LATERAL FLATTEN(input =&gt; v:items) i
+ WHERE v:order_id = 90217;
+
+ORDER_ID  COUNTRY  SKU    PRICE
+90217     DE       KB-01  89.50
+90217     DE       MS-02  40.00</pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>One raw row (VARIANT)</h4><span class="chip">order_id 90217</span><span class="chip">customer {id, country}</span><span class="chip Y">items [ KB-01, MS-02 ]</span></div>
+    <div><h4>After FLATTEN on items</h4><div class="log"><div class="cell pend"><b>row 1</b><span>90217 · DE · KB-01</span></div></div><div class="log"><div class="cell pend"><b>row 2</b><span>90217 · DE · MS-02</span></div></div></div>
+  </div></div><figcaption>One nested document becomes ordinary rows and columns that SQL can group and sum.</figcaption></figure>
+  <ul>
+    <li><b>Load raw, transform later:</b> keep the original JSON in a raw table and build clean tables from it (ELT, Part 7).</li>
+    <li><b>Common fields are stored efficiently:</b> Snowflake extracts frequent paths into columnar form, so they prune and compress well. <span class="tag s">Simplified</span></li>
+  </ul>
+  <details class="q"><summary>What does LATERAL FLATTEN(input =&gt; v:items) do to an order with three items?</summary><div class="in">It produces three rows, one per element of the items array, each joined to its parent order row, so you can select each item’s fields.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>The two items add up to the order’s amount: 89.50 + 40.00 = 129.50, the value in ANALYTICS.ORDERS.</p></div></aside>
+</section>
+
+<div class="part" data-part="Queries and performance"><h2>Part 4: Queries and performance</h2><p>What happens when you press Run</p></div>
+
+<section class="s" id="qlife" data-t="Life of a query">
+  <div class="sh"><span class="off">19</span><h2>The life of a query</h2></div>
+  <div class="plain"><b>In plain words</b>When the dashboard sends its query, the services layer checks permissions, looks at the min/max labels to decide which files are needed, and makes a plan. Only then does the warehouse wake up, fetch those files, and add up the numbers across its machines.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>compilation</b><span>Parsing, checking and planning a query, done in the services layer.</span></div>
+    <div><b>query profile</b><span>A diagram of each step of a finished query, with time and data read.</span></div>
+  </div>
+  <p class="lead">A query is compiled and pruned in the cloud services layer, then executed in parallel on the warehouse’s nodes, which fetch only the needed columns of the needed micro-partitions.</p>
+  <figure><div class="board"><pre class="mmd">sequenceDiagram
+  participant BI as BI tool
+  participant CS as cloud services
+  participant W as ANALYTICS_WH
+  participant S as storage
+  BI->>CS: SELECT country, SUM(amount) ... WHERE order_date = '2026-10-04'
+  Note over CS: check role ANALYST, check result cache,&lt;br/&gt;prune 15,120 partitions to 41, plan
+  CS->>W: resume, run plan
+  W->>S: fetch 3 columns of 41 partitions
+  Note over W: scan, filter, aggregate in parallel
+  W-->>CS: 30 rows
+  CS-->>BI: results (also stored in result cache)
+</pre></div><figcaption>Most of the clever work happens before the warehouse does anything: by the time it starts, it knows exactly which files to read.</figcaption></figure>
+  <ul>
+    <li><b>Pruning happens at compile time</b> from metadata; no warehouse is needed for it. <span class="tag g">Guaranteed</span></li>
+    <li><b>Look at the query profile first</b> when a query is slow: it shows partitions scanned, bytes spilled and the slowest step.</li>
+  </ul>
+  <details class="q"><summary>Which part of the query’s work is done before the warehouse even starts?</summary><div class="in">Compilation in the cloud services layer: permission checks, the result-cache check, pruning with micro-partition metadata, and building the plan.</div></details>
+  <aside class="trk"><h4 data-id="query 01b7-…">Follow the dashboard</h4><div class="in"><p>The dashboard query’s timing. <span class="tag x">Example value</span></p>
+  <pre class="code">Compilation        180 ms
+Warehouse resume   1.4 s
+Execution          1.3 s
+Rows returned      30</pre></div></aside>
+</section>
+
+<section class="s" id="caches" data-t="Three caches">
+  <div class="sh"><span class="off">20</span><h2>Three caches</h2></div>
+  <div class="plain"><b>In plain words</b>Snowflake avoids repeating work three ways. If someone asks exactly the same question and the data has not changed, it hands back the saved answer for free. If a warehouse recently read some data, it keeps a copy on its own fast disks. And some questions, like counting rows, can be answered from the labels alone.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>result cache</b><span>Saved results of recent queries, reused for identical queries on unchanged data.</span></div>
+    <div><b>warehouse cache</b><span>Recently read data on a warehouse’s local SSDs, lost when it suspends.</span></div>
+    <div><b>metadata cache</b><span>Counts and min/max kept by the services layer, enough for some queries.</span></div>
+  </div>
+  <p class="lead">The result cache returns identical queries for free, the warehouse’s local disk cache speeds up re-reads while it runs, and metadata answers simple counts without compute.</p>
+  <div class="demo">
+    <h4>Try it: which cache answers?</h4>
+    <div class="ctrls">
+      <button class="btn on" data-ca="run">Run the dashboard query</button>
+      <button class="btn" data-ca="variant">Run it for Germany only</button>
+      <button class="btn" data-ca="count">SELECT COUNT(*) FROM orders</button>
+      <button class="btn warn" data-ca="load">New orders arrive</button>
+      <button class="btn warn" data-ca="suspend">Warehouse auto-suspends</button>
+      <button class="btn" data-ca="reset">Reset</button>
+    </div>
+    <div class="scroll"><div class="log" id="caLog"><label>history</label></div></div>
+    <div class="out" id="caOut" aria-live="polite"></div>
+  </div>
+  <div class="tw"><table>
+    <tr><th>Cache</th><th>Where</th><th>Lasts</th><th>Needs a warehouse?</th></tr>
+    <tr><td>Result cache</td><td>Cloud services</td><td>24 h, renewed on reuse up to 31 days</td><td class="yes">No</td></tr>
+    <tr><td>Warehouse cache</td><td>Warehouse local SSD</td><td>Until the warehouse suspends</td><td>Yes</td></tr>
+    <tr><td>Metadata</td><td>Cloud services</td><td>Always current</td><td class="yes">No, for COUNT, MIN, MAX</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Result reuse requires</b> the same query text, unchanged underlying data, and a role allowed to see it. <a class="tag g" href="#c6">Guaranteed · check 6</a></li>
+    <li><b>Auto-suspend trades cost for warmth:</b> suspending quickly saves credits but empties the warehouse cache.</li>
+  </ul>
+  <details class="q"><summary>Two analysts run the identical query five minutes apart and nothing was loaded in between. What does the second run cost?</summary><div class="in">No warehouse credits. It is answered from the result cache in the services layer, as long as both are allowed to see the data.</div></details>
+  <aside class="trk"><h4 data-id="result cache">Follow the dashboard</h4><div class="in"><p>Ten managers open the dashboard between 07:00 and 07:20; only the first view runs on the warehouse. The other nine come from the result cache.</p></div></aside>
+</section>
+
+<section class="s" id="spill" data-t="Spilling and sizing">
+  <div class="sh"><span class="off">21</span><h2>Spilling, and when to size up</h2></div>
+  <div class="plain"><b>In plain words</b>Big joins and sorts need working memory. When a warehouse runs out of memory it writes the overflow to its local disk, then to remote storage, and each step is much slower. The query profile shows this as “bytes spilled”. A bigger warehouse has more memory, so the spilling stops.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>spilling</b><span>Writing intermediate data to disk because it does not fit in memory.</span></div>
+    <div><b>local / remote spilling</b><span>Spill to the warehouse’s SSD (slow) / to cloud storage (much slower).</span></div>
+  </div>
+  <p class="lead">When a query spills to local or remote storage, it needs more memory: reduce the data it handles, or run it on a larger warehouse.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">memory</span><i data-t="full"></i><span class="n y">local SSD<small>bytes spilled to local storage</small></span><i data-t="full"></i><span class="n r">remote storage<small>bytes spilled to remote storage</small></span>
+  </div></div><figcaption>Each step down is roughly an order of magnitude slower. Remote spilling is the clearest sign a warehouse is too small for a query. <span class="tag s">Simplified</span></figcaption></figure>
+  <ul>
+    <li><b>First, read less:</b> filter early, select fewer columns, avoid exploding joins.</li>
+    <li><b>Then, size up:</b> a size up doubles memory and often halves the time, for a similar cost.</li>
+  </ul>
+  <details class="q"><summary>A query profile shows gigabytes “spilled to remote storage”. What two fixes do you try?</summary><div class="in">Reduce the data the query processes (better filters, fewer columns, fixing a join that multiplies rows), or run it on a larger warehouse with more memory.</div></details>
+  <aside class="trk"><h4 data-id="month-end report">Follow the dashboard</h4><div class="in"><p>Finance’s month-end join spilled 38 GB remotely on Small; on Large it spilled nothing and took a fifth of the time. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="sqlpatterns" data-t="Analytics SQL patterns">
+  <div class="sh"><span class="off">22</span><h2>Analytics SQL patterns</h2></div>
+  <div class="plain"><b>In plain words</b>Most dashboards are built from a handful of SQL shapes: totals per group, totals per day, running totals, “top N per group”, and keeping only the latest version of each row. Learn these and you can answer most business questions.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>window function</b><span>A calculation across related rows that keeps every row, such as a running total.</span></div>
+    <div><b>PARTITION BY</b><span>In a window function, the groups the calculation restarts for.</span></div>
+    <div><b>QUALIFY</b><span>Snowflake’s filter on window-function results.</span></div>
+  </div>
+  <p class="lead">GROUP BY, date truncation, window functions and QUALIFY cover most dashboard questions in a few lines of SQL.</p>
+  <pre class="code"><i>-- revenue per country per day</i>
+SELECT DATE_TRUNC('day', order_ts) AS day, country, SUM(amount) AS revenue
+  FROM orders GROUP BY 1, 2;
+
+<i>-- running total within the month</i>
+SELECT order_date, SUM(amount) AS revenue,
+       SUM(SUM(amount)) OVER (PARTITION BY DATE_TRUNC('month', order_date)
+                              ORDER BY order_date) AS month_to_date
+  FROM orders GROUP BY order_date;
+
+<i>-- top 3 products per country</i>
+SELECT country, sku, SUM(price) AS sales
+  FROM order_items GROUP BY 1, 2
+QUALIFY ROW_NUMBER() OVER (PARTITION BY country ORDER BY sales DESC) &lt;= 3;
+
+<i>-- keep only the latest version of each order (deduplicate)</i>
+SELECT * FROM orders_raw_flat
+QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY loaded_at DESC) = 1;</pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>GROUP BY</h4><p style="font-size:.9rem;margin:0">Many rows in, one row per group out.</p></div>
+    <div><h4>Window function</h4><p style="font-size:.9rem;margin:0">Every row stays; each gets an extra value computed over its group.</p></div>
+  </div></div><figcaption>The difference that confuses most beginners.</figcaption></figure>
+  <details class="q"><summary>What does QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY loaded_at DESC) = 1 keep?</summary><div class="in">For each order_id, only the row with the latest loaded_at, which removes older duplicate versions of the same order.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 arrived twice (the app retried a file). The dedup pattern keeps one copy before it reaches ANALYTICS.ORDERS.</p></div></aside>
+</section>
+
+<section class="s" id="accel" data-t="Speed-up features">
+  <div class="sh"><span class="off">23</span><h2>Speed-up features: materialized views, search optimization, acceleration</h2></div>
+  <div class="plain"><b>In plain words</b>For special cases Snowflake can do extra work in the background so particular queries are faster: keep a pre-computed summary up to date, build a lookup structure for finding needles in a haystack, or lend extra compute to big scans. Each costs credits, so use them where a measured problem exists.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>materialized view</b><span>A stored, automatically refreshed query result.</span></div>
+    <div><b>search optimization</b><span>A background structure that speeds up selective lookups, like finding one email in billions of rows.</span></div>
+    <div><b>query acceleration</b><span>Extra serverless compute lent to parts of large scans.</span></div>
+  </div>
+  <p class="lead">Materialized views, the search optimization service and the query acceleration service each trade background credits for faster queries in specific situations.</p>
+  <div class="tw"><table>
+    <tr><th>Feature</th><th>Helps when</th><th>Costs</th></tr>
+    <tr><td>Materialized view</td><td>The same aggregation runs over and over on a large table</td><td>Storage plus background refresh credits</td></tr>
+    <tr><td>Search optimization</td><td>Point lookups: <code>WHERE email = …</code> on a huge table</td><td>Storage plus maintenance credits</td></tr>
+    <tr><td>Query acceleration</td><td>Occasional huge scans on a warehouse that is otherwise fine</td><td>Serverless credits while used</td></tr>
+  </table></div>
+  <ul>
+    <li><b>All three need Enterprise edition.</b> <span class="tag a">Edition</span></li>
+    <li><b>Check simpler fixes first:</b> pruning, the result cache and right-sizing are free or cheap.</li>
+  </ul>
+  <details class="q"><summary>Support staff often look up one customer by email in a 5-billion-row table. Which feature fits best?</summary><div class="in">The search optimization service: it builds a structure for selective point lookups so such queries skip almost all micro-partitions.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>The dashboard needs none of these: pruning and the result cache already make it fast. ShopCo uses search optimization only on its customer table.</p></div></aside>
+</section>
+
+<section class="s" id="smap" data-t="Where it lives, who calls whom">
+  <div class="sh"><span class="off">24</span><h2>Where it lives and who calls whom</h2></div>
+  <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows but rarely say where each piece of data physically sits, or which program connects to which. Now that you have seen loading and caching, this lesson answers both for ShopCo’s whole setup: the files in S3, the warehouse machines, Snowflake’s services, and the tools on the outside.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Time Travel</b><span>Snowflake keeping old versions of data so you can query or restore them. Part 5 explains it.</span></div>
+    <div><b>storage integration</b><span>The trust set-up that lets Snowflake read ShopCo’s own S3 bucket.</span></div>
+  </div>
+  <p class="lead">Table data sits in Snowflake-managed cloud storage, metadata and cached results sit in the services layer, warehouses hold only a temporary cache, and every client connects over HTTPS.</p>
+  <h3>Where each thing lives</h3>
+  <figure><div class="canvas"><div class="zones">
+    <div class="zone"><b>ShopCo’s S3 bucket</b><small>s3://shopco-landing/orders/</small><h5>Files</h5><span class="chip">raw JSON order files, owned by ShopCo</span></div>
+    <div class="zone"><b>Cloud services</b><small>shopco.eu-central-1.snowflakecomputing.com</small><h5>Kept by Snowflake</h5><span class="chip C">table definitions, users, roles</span><span class="chip C">micro-partition min/max metadata</span><span class="chip C">result cache, 24 h</span></div>
+    <div class="zone"><b>ANALYTICS_WH</b><small>Small: a cluster of machines</small><h5>Temporary</h5><span class="chip Y">local SSD cache of recently read data</span><span class="chip">lost when suspended</span></div>
+    <div class="zone"><b>Snowflake storage</b><small>S3 in eu-central-1, managed by Snowflake</small><h5>Table data</h5><span class="chip F">ORDERS micro-partitions</span><span class="chip F">old versions for Time Travel</span></div>
+  </div></div><figcaption>The only permanent copies of your tables are in Snowflake storage. Everything on a warehouse is a cache that can be thrown away.</figcaption></figure>
+  <div class="tw"><table><tr><th>Thing</th><th>Lives in</th><th>For the dashboard</th></tr>
+    <tr><td>Raw order file</td><td>ShopCo’s S3 bucket (external stage)</td><td><code>orders/2026/10/04/0941-17.json</code></td></tr>
+    <tr><td>Order 90217 as a row</td><td>A micro-partition in Snowflake storage</td><td>one of 41 partitions for 4 October</td></tr>
+    <tr><td>Min/max labels</td><td>Cloud services metadata</td><td>used to prune 15,079 partitions</td></tr>
+    <tr><td>Yesterday’s answer</td><td>Result cache, cloud services</td><td>reused if asked again within 24 h</td></tr>
+    <tr><td>Recently read columns</td><td>ANALYTICS_WH local SSD</td><td>gone after auto-suspend</td></tr>
+    <tr><td>Who may read ORDERS</td><td>Grants to roles, in cloud services</td><td>role <code>ANALYST</code></td></tr>
+  </table></div>
+  <h3>Who calls whom</h3>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  BI["BI tool and Snowsight"] -->|"SQL over HTTPS, port 443"| CS["Cloud services"]:::ctl
+  CS -->|"start, send query plan"| WH["ANALYTICS_WH"]:::lead
+  WH -->|"read micro-partitions"| ST["Snowflake storage"]
+  S3["ShopCo S3 bucket"] -->|"new-file event"| SP["Snowpipe"]:::ctl
+  SP -->|"read new files"| S3
+  SP -->|"write micro-partitions"| ST
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Clients only ever talk to the services layer. Warehouses and Snowpipe talk to storage on their behalf.</figcaption></figure>
+  <ul>
+    <li><b>Clients need only HTTPS (443)</b> to the account URL; there is no database port to open. <span class="tag g">Guaranteed</span></li>
+    <li><b>Snowflake needs read access to your bucket,</b> granted through a storage integration (an IAM role).</li>
+  </ul>
+</section>
+
+<div class="part" data-part="Data features"><h2>Part 5: Time Travel, cloning, pipelines, sharing</h2><p>What immutable files make possible</p></div>
+
+<section class="s" id="timetravel" data-t="Time Travel">
+  <div class="sh"><span class="off">25</span><h2>Time Travel</h2></div>
+  <div class="plain"><b>In plain words</b>Because micro-partitions are never edited, an UPDATE or DELETE writes new files and keeps the old ones for a while. So you can ask “what did this table look like an hour ago?”, or bring back a table you dropped by mistake, with ordinary SQL.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Time Travel</b><span>Querying or restoring data as it was at an earlier moment.</span></div>
+    <div><b>retention period</b><span>How long old versions are kept for Time Travel.</span></div>
+    <div><b>UNDROP</b><span>Restore a dropped table, schema or database within retention.</span></div>
+  </div>
+  <p class="lead">Time Travel lets you query, clone or restore data as it was at any point within the retention period, because old micro-partitions are kept.</p>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>ORDERS</label><div class="cell done"><b>08:00</b><span>version 1</span></div><div class="cell done"><b>09:00</b><span>version 2</span></div><div class="cell lost"><b>09:30</b><span>bad DELETE</span></div><div class="cell pend"><b>now</b><span>query AT 09:29</span></div></div>
+  </div><figcaption>A mistaken DELETE at 09:30 did not destroy anything: the 09:29 version is still there to read or restore.</figcaption></figure>
+  <pre class="code">SELECT COUNT(*) FROM orders AT(OFFSET =&gt; -60*60);              <i>-- one hour ago</i>
+SELECT * FROM orders BEFORE(STATEMENT =&gt; '01b7c3a2-…');          <i>-- just before a statement</i>
+CREATE TABLE orders_restored CLONE orders AT(TIMESTAMP =&gt; '2026-10-05 09:29:00'::timestamp_ltz);
+DROP TABLE orders;  UNDROP TABLE orders;</pre>
+  <ul>
+    <li><b>Default retention is 1 day.</b> <a class="tag d" href="#c7">Default · check 7</a></li>
+    <li><b>Up to 90 days on Enterprise edition</b> for permanent tables. <span class="tag a">Edition</span></li>
+    <li><b>UNDROP</b> brings back a dropped table, schema or database within retention. <a class="tag g" href="#c8">Guaranteed · check 8</a></li>
+    <li><b>Retention costs storage:</b> changed and deleted data is kept and billed for the period.</li>
+  </ul>
+  <details class="q"><summary>Someone ran DELETE FROM orders without a WHERE clause twenty minutes ago. How do you get the rows back?</summary><div class="in">Use Time Travel: for example create a clone of the table AT a timestamp just before the delete (or insert the rows back from a SELECT … AT/BEFORE query). It works within the retention period.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>A buggy transformation zeroed every amount for 4 October at 06:10. Marco restored the 06:09 version before the 07:00 dashboard refresh. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="failsafe" data-t="Fail-safe">
+  <div class="sh"><span class="off">26</span><h2>Fail-safe</h2></div>
+  <div class="plain"><b>In plain words</b>After Time Travel’s window ends, Snowflake keeps the old data for seven more days in a vault only Snowflake staff can open. It is a last resort for disasters, not something you can query yourself.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Fail-safe</b><span>A 7-day period after Time Travel during which only Snowflake support can recover data.</span></div>
+    <div><b>transient table</b><span>A table with no Fail-safe and at most 1 day of Time Travel, cheaper to keep.</span></div>
+  </div>
+  <p class="lead">Fail-safe keeps permanent tables’ historical data for 7 days after Time Travel ends, recoverable only by Snowflake, and it adds to storage cost.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">current data</span><i data-t="change or drop"></i><span class="n b">Time Travel<small>1–90 days, you can query</small></span><i data-t="then"></i><span class="n p">Fail-safe<small>7 days, Snowflake support only</small></span><i data-t="then"></i><span class="n r">gone</span>
+  </div></div><figcaption>The full life of an old version of your data.</figcaption></figure>
+  <ul>
+    <li><b>7 days, not configurable,</b> for permanent tables. <span class="tag g">Guaranteed</span></li>
+    <li><b>Transient and temporary tables have no Fail-safe:</b> use them for staging data you can reload, to save storage.</li>
+  </ul>
+  <details class="q"><summary>Why might a team store its intermediate staging tables as TRANSIENT?</summary><div class="in">Staging data can be rebuilt from the source, so it does not need Fail-safe’s 7 days of extra copies. Transient tables skip Fail-safe and cut storage cost.</div></details>
+  <aside class="trk"><h4 data-id="RAW.ORDERS_RAW">Follow the dashboard</h4><div class="in"><p>ShopCo keeps ORDERS_RAW transient: the original files are still in S3 if anything needs reloading.</p></div></aside>
+</section>
+
+<section class="s" id="clone" data-t="Zero-copy cloning">
+  <div class="sh"><span class="off">27</span><h2>Zero-copy cloning</h2></div>
+  <div class="plain"><b>In plain words</b>Copying a 10 TB table normally takes hours and doubles your storage. A Snowflake clone just copies the list of micro-partitions, so it is instant and free at first. Only data you change afterwards gets new files.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>clone</b><span>A new table, schema or database that starts by sharing the original’s micro-partitions.</span></div>
+  </div>
+  <p class="lead">CLONE creates a full, independent copy of a table, schema or database instantly by pointing at the same micro-partitions; storage is used only for later changes.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Right after CLONE</h4><div class="flow v"><span class="n">orders → MP1, MP2, MP3</span><span class="n">orders_dev → MP1, MP2, MP3</span></div></div>
+    <div><h4>After editing the clone</h4><div class="flow v"><span class="n">orders → MP1, MP2, MP3</span><span class="n y">orders_dev → MP1, MP2, MP4 (new)</span></div></div>
+  </div></div><figcaption>Both tables share files until one changes; then only the changed part is new.</figcaption></figure>
+  <pre class="code">CREATE DATABASE shopco_dev CLONE shopco;                         <i>-- seconds, for any size</i>
+CREATE TABLE orders_backup CLONE orders AT(OFFSET =&gt; -3600);    <i>-- combine with Time Travel</i></pre>
+  <ul>
+    <li><b>Instant and initially free.</b> <a class="tag g" href="#c9">Guaranteed · check 9</a></li>
+    <li><b>Great for testing:</b> give developers a full copy of production to break.</li>
+  </ul>
+  <details class="q"><summary>Why does cloning a 10 TB database not double the storage bill on day one?</summary><div class="in">The clone only copies metadata pointing at the same immutable micro-partitions. New storage is used only when either side changes data.</div></details>
+  <aside class="trk"><h4 data-id="shopco_dev">Follow the dashboard</h4><div class="in"><p>Before changing the dashboard’s SQL, Priya tests it against a fresh clone of the production database.</p></div></aside>
+</section>
+
+<section class="s" id="pipelines" data-t="Streams, tasks, dynamic tables">
+  <div class="sh"><span class="off">28</span><h2>Pipelines inside Snowflake: streams, tasks and dynamic tables</h2></div>
+  <div class="plain"><b>In plain words</b>Raw JSON arrives every minute; the clean ORDERS table must keep up. A stream remembers what is new in a table since you last looked. A task runs SQL on a schedule. Together they process only new rows. A dynamic table does the same with one statement: “keep this query’s result no more than N minutes stale”.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>stream</b><span>A record of the changes to a table since it was last read.</span></div>
+    <div><b>task</b><span>SQL that Snowflake runs on a schedule or when a condition is true.</span></div>
+    <div><b>dynamic table</b><span>A table defined by a query that Snowflake keeps refreshed within a target lag.</span></div>
+    <div><b>incremental</b><span>Processing only what changed, not everything again.</span></div>
+  </div>
+  <p class="lead">Streams track changes, tasks schedule SQL, and dynamic tables declare a refreshed result, so transformations can run incrementally inside Snowflake.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n b">ORDERS_RAW<small>Snowpipe appends</small></span><i data-t="stream: new rows"></i><span class="n p">task every 5 min<small>MERGE new rows</small></span><i data-t="writes"></i><span class="n y">ANALYTICS.ORDERS</span>
+  </div></div><figcaption>Only the rows that arrived since the last run are transformed.</figcaption></figure>
+  <pre class="code"><i>-- the declarative way</i>
+CREATE DYNAMIC TABLE shopco.analytics.orders
+  TARGET_LAG = '5 minutes'  WAREHOUSE = load_wh
+AS
+SELECT v:order_id::number AS order_id, v:customer.id::number AS customer_id,
+       v:customer.country::string AS country, v:ts::timestamp_ntz::date AS order_date,
+       v:amount::number(10,2) AS amount            <i>-- … 15 more columns, trimmed</i>
+  FROM shopco.raw.orders_raw
+QUALIFY ROW_NUMBER() OVER (PARTITION BY v:order_id ORDER BY v:ts DESC) = 1;</pre>
+  <ul>
+    <li><b>Streams and tasks:</b> full control, you write the MERGE yourself.</li>
+    <li><b>Dynamic tables:</b> say what the result is; Snowflake works out how to refresh it, incrementally when it can.</li>
+  </ul>
+  <details class="q"><summary>What does a stream on a table give a task that a plain SELECT on the table does not?</summary><div class="in">Only the rows that changed since the stream was last consumed, with what kind of change each was, so the task can process new data incrementally instead of the whole table.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 landed in ORDERS_RAW at 09:42:20 and appeared in ANALYTICS.ORDERS at the next refresh, 09:45. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="sharing" data-t="Data sharing">
+  <div class="sh"><span class="off">29</span><h2>Data sharing</h2></div>
+  <div class="plain"><b>In plain words</b>Sending data to a partner usually means exporting files, emailing them and keeping them in sync. In Snowflake you can grant another account access to live tables instead. Nothing is copied: they query your micro-partitions on their own warehouse, so they pay for their queries and see updates instantly.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>share</b><span>An object that grants another Snowflake account read access to chosen tables.</span></div>
+    <div><b>provider / consumer</b><span>The account sharing the data / the account receiving it.</span></div>
+    <div><b>Marketplace</b><span>A catalogue of datasets other companies share, some free, some paid.</span></div>
+  </div>
+  <p class="lead">Secure data sharing gives another account live, read-only access to your data without copying it; the consumer pays for the compute it uses.</p>
+  <pre class="code">CREATE SHARE shopco_supplier_share;
+GRANT USAGE ON DATABASE shopco TO SHARE shopco_supplier_share;
+GRANT USAGE ON SCHEMA shopco.analytics TO SHARE shopco_supplier_share;
+GRANT SELECT ON TABLE shopco.analytics.daily_sku_sales TO SHARE shopco_supplier_share;
+ALTER SHARE shopco_supplier_share ADD ACCOUNTS = keyboardco.acme;</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">ShopCo’s micro-partitions</span><i data-t="read, no copy"></i><span class="n b">KeyboardCo’s warehouse<small>their credits</small></span>
+  </div></div><figcaption>The supplier sees today’s sales as soon as ShopCo does, and never holds a copy that goes stale.</figcaption></figure>
+  <details class="q"><summary>Who pays for the compute when a consumer queries a share?</summary><div class="in">The consumer, on its own warehouse. The provider pays only for storing the data it already owns.</div></details>
+  <aside class="trk"><h4 data-id="daily_sku_sales">Follow the dashboard</h4><div class="in"><p>KeyboardCo, which supplies the keyboard in order 90217, sees its daily sales per country through a share instead of a weekly spreadsheet.</p></div></aside>
+</section>
+
+<div class="part" data-part="Security"><h2>Part 6: Security and governance</h2><p>Who may see what</p></div>
+
+<section class="s" id="rbac" data-t="Roles and access">
+  <div class="sh"><span class="off">30</span><h2>Roles and access control</h2></div>
+  <div class="plain"><b>In plain words</b>In Snowflake you never give permissions to a person directly. You give permissions to a role, like “analyst”, and give people roles. When Priya changes teams, you change her role, not fifty grants.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>role</b><span>A named bundle of permissions.</span></div>
+    <div><b>grant</b><span>Giving a privilege (like SELECT) on an object to a role, or a role to a user.</span></div>
+    <div><b>RBAC</b><span>Role-based access control.</span></div>
+  </div>
+  <p class="lead">Privileges are granted to roles and roles to users, in a hierarchy topped by system roles such as ACCOUNTADMIN and SYSADMIN.</p>
+  <figure><div class="canvas"><div class="flow v">
+    <span class="n p">ACCOUNTADMIN<small>everything; use rarely</small></span><i></i><span class="n p">SYSADMIN<small>creates warehouses and databases</small></span><i></i><span class="n y">ANALYST, LOADER<small>custom roles</small></span><i></i><span class="n g">Priya, Marco<small>users</small></span>
+  </div></div><figcaption>Custom roles are usually granted up to SYSADMIN so admins can manage what they create.</figcaption></figure>
+  <pre class="code">CREATE ROLE analyst;
+GRANT USAGE ON WAREHOUSE analytics_wh TO ROLE analyst;
+GRANT USAGE ON DATABASE shopco TO ROLE analyst;
+GRANT USAGE ON SCHEMA shopco.analytics TO ROLE analyst;
+GRANT SELECT ON ALL TABLES IN SCHEMA shopco.analytics TO ROLE analyst;
+GRANT ROLE analyst TO USER priya;</pre>
+  <ul>
+    <li><b>System roles:</b> ORGADMIN, ACCOUNTADMIN, SECURITYADMIN, USERADMIN, SYSADMIN, PUBLIC. <span class="tag g">Guaranteed</span></li>
+    <li><b>Reading a table needs USAGE on its database and schema</b> as well as SELECT on the table. <a class="tag g" href="#c10">Guaranteed · check 10</a></li>
+    <li><b>Do not do daily work as ACCOUNTADMIN.</b></li>
+  </ul>
+  <details class="q"><summary>Priya has SELECT on shopco.analytics.orders but gets “object does not exist or not authorized”. What is she probably missing?</summary><div class="in">USAGE on the database shopco and the schema shopco.analytics (or USAGE on a warehouse to run the query). SELECT alone is not enough.</div></details>
+  <aside class="trk"><h4 data-id="ANALYST">Follow the dashboard</h4><div class="in"><p>The BI tool logs in as a service user with role ANALYST, which can read ANALYTICS but not RAW.</p></div></aside>
+</section>
+
+<section class="s" id="masking" data-t="Masking and row access">
+  <div class="sh"><span class="off">31</span><h2>Masking and row access policies</h2></div>
+  <div class="plain"><b>In plain words</b>Sometimes people may see a table but not everything in it. A masking policy shows “***” instead of an email to most roles. A row access policy shows each country manager only their own country’s rows. The rule lives with the data, so it applies in every tool.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>masking policy</b><span>A rule that hides or transforms a column’s values depending on who is asking.</span></div>
+    <div><b>row access policy</b><span>A rule that filters which rows a role can see.</span></div>
+    <div><b>PII</b><span>Personally identifiable information, such as emails and addresses.</span></div>
+  </div>
+  <p class="lead">Masking policies hide column values and row access policies filter rows based on the querying role, enforced in every query.</p>
+  <pre class="code">CREATE MASKING POLICY email_mask AS (val string) RETURNS string -&gt;
+  CASE WHEN CURRENT_ROLE() IN ('SUPPORT') THEN val ELSE '***MASKED***' END;
+ALTER TABLE customers MODIFY COLUMN email SET MASKING POLICY email_mask;
+
+CREATE ROW ACCESS POLICY country_rows AS (c string) RETURNS boolean -&gt;
+  CURRENT_ROLE() = 'ANALYST' OR c = (SELECT country FROM role_country WHERE role = CURRENT_ROLE());
+ALTER TABLE orders ADD ROW ACCESS POLICY country_rows ON (country);</pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Role SUPPORT</h4><span class="chip">email: priya.k@example.com</span><span class="chip">all countries</span></div>
+    <div><h4>Germany’s manager</h4><span class="chip X">email: ***MASKED***</span><span class="chip Y">only rows where country = DE</span></div>
+  </div></div><figcaption>The same SELECT * on the same tables, run by two roles.</figcaption></figure>
+  <ul>
+    <li><b>Both need Enterprise edition.</b> <span class="tag a">Edition</span></li>
+    <li><b>One policy, every tool:</b> BI, notebooks and SQL all get the same result for the same role.</li>
+  </ul>
+  <details class="q"><summary>Why is a masking policy safer than hiding a column in each dashboard?</summary><div class="in">The policy is enforced by Snowflake on every query against the column, whatever tool runs it. Dashboard-level hiding only protects that one dashboard.</div></details>
+  <aside class="trk"><h4 data-id="country_rows">Follow the dashboard</h4><div class="in"><p>Germany’s country manager opens the same dashboard and sees only the DE row, including order 90217’s contribution.</p></div></aside>
+</section>
+
+<div class="part" data-part="Choose and revise"><h2>Part 7: Choose and revise</h2><p>Fit, compare, test yourself, prove it</p></div>
+
+<section class="s" id="elt" data-t="ELT and the data stack">
+  <div class="sh"><span class="off">32</span><h2>ELT and the modern data stack</h2></div>
+  <div class="plain"><b>In plain words</b>The old way was to clean data before loading it (ETL). With cheap storage and elastic compute, teams now load raw data first and clean it inside the warehouse with SQL (ELT). Around Snowflake sit tools that move data in, tools that manage the SQL transformations, and tools that draw the charts.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>ETL / ELT</b><span>Extract, transform, load / extract, load, then transform inside the warehouse.</span></div>
+    <div><b>dbt</b><span>A popular tool for writing, testing and scheduling SQL transformations.</span></div>
+    <div><b>BI tool</b><span>Business intelligence: dashboard tools such as Tableau, Power BI, Looker.</span></div>
+    <div><b>medallion layers</b><span>Raw (bronze), cleaned (silver) and business-ready (gold) tables.</span></div>
+  </div>
+  <p class="lead">In ELT, raw data is loaded into Snowflake first and transformed there with SQL, typically raw → cleaned → business tables, feeding BI tools.</p>
+  <figure><div class="canvas scroll"><div class="flow">
+    <span class="n g">sources<small>app DBs, files, SaaS</small></span><i data-t="load raw"></i><span class="n b">RAW<small>JSON as it arrived</small></span><i data-t="SQL / dbt"></i><span class="n b">CLEAN<small>typed, deduplicated</small></span><i data-t="SQL / dbt"></i><span class="n y">ANALYTICS<small>business tables</small></span><i data-t="queries"></i><span class="n g">dashboards</span>
+  </div></div><figcaption>Every step after loading is SQL running on a warehouse, which is easy to test, version and rerun.</figcaption></figure>
+  <details class="q"><summary>Why do most teams keep the raw data even after building clean tables from it?</summary><div class="in">So transformations can be fixed and rerun from the original data at any time, without going back to the sources.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217’s path: S3 file → RAW.ORDERS_RAW (VARIANT) → ANALYTICS.ORDERS (20 typed columns) → dashboard’s DE row.</p></div></aside>
+</section>
+
+<section class="s" id="vs" data-t="Snowflake vs the others">
+  <div class="sh"><span class="off">33</span><h2>Snowflake vs BigQuery, Redshift and Databricks</h2></div>
+  <div class="plain"><b>In plain words</b>All four are cloud platforms for analytics, and all can answer the dashboard question. They differ in how you pay, how much you manage, and whether they lean towards SQL analysts or towards data engineers and machine learning.</div>
+  <p class="lead">Choose by billing model, operational effort, cloud and workload mix; each platform is strong at analytics SQL and differs at the edges.</p>
+  <div class="tw"><table>
+    <tr><th></th><th>Snowflake</th><th>BigQuery</th><th>Redshift</th><th>Databricks</th></tr>
+    <tr><td>Clouds</td><td>AWS, Azure, GCP</td><td>Google Cloud</td><td>AWS</td><td>AWS, Azure, GCP</td></tr>
+    <tr><td>Compute model</td><td>Warehouses you size; per-second billing</td><td>Serverless; pay per data scanned or reserved slots</td><td>Clusters or serverless</td><td>Clusters and SQL warehouses</td></tr>
+    <tr><td>Operations</td><td>Very little</td><td>Very little</td><td>More tuning</td><td>More engineering</td></tr>
+    <tr><td>Sweet spot</td><td>SQL analytics, sharing, many teams</td><td>Ad-hoc SQL at scale on GCP</td><td>AWS-centred shops</td><td>Data engineering and ML on open formats</td></tr>
+  </table></div>
+  <ul>
+    <li><b>The gaps keep narrowing:</b> Snowflake runs Python (Snowpark) and reads open Iceberg tables; Databricks offers SQL warehouses. <span class="tag s">Simplified</span></li>
+    <li><b>In an interview,</b> name the deciding requirement: “several teams with isolated compute and easy sharing” points to Snowflake.</li>
+  </ul>
+  <details class="q"><summary>Name one reason a team on Google Cloud might choose BigQuery over Snowflake.</summary><div class="in">It is native to Google Cloud and fully serverless, with no warehouses to size; you pay per data scanned or for reserved capacity, which suits ad-hoc analytics on GCP.</div></details>
+  <aside class="trk"><h4 data-id="shopco">Follow the dashboard</h4><div class="in"><p>ShopCo chose Snowflake because three teams (analytics, finance, data science) needed separate compute on the same data, and suppliers wanted live shares.</p></div></aside>
+</section>
+
+<section class="s" id="srev" data-t="Revision and glossary">
+  <div class="sh"><span class="off">34</span><h2>Quick revision and glossary</h2></div>
+  <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten.</div>
+  <p class="lead">Test yourself, then look up any term.</p>
+  <div class="demo selftest" id="selftest"></div>
+  <details class="q"><summary>Explain in two sentences why Snowflake can give each team its own compute without copying data.</summary><div class="in">Data lives once in cloud storage, separate from compute. Any number of virtual warehouses can read the same micro-partitions, so each team gets its own warehouse over one shared copy.</div></details>
+  <details class="q"><summary>Name the three caches and which one needs a running warehouse.</summary><div class="in">Result cache, warehouse (local disk) cache, and metadata. Only the warehouse cache needs a running warehouse; it is lost on suspend.</div></details>
+  <details class="q"><summary>What makes Time Travel and zero-copy cloning possible?</summary><div class="in">Micro-partitions are immutable: changes write new ones and old ones are kept, so earlier versions can be read and new tables can point at existing files.</div></details>
+  <h3>Glossary</h3>
+  <div class="tw"><table class="gloss"><tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>OLAP</td><td>Analytical workloads: few, large queries that scan and summarise many rows.</td></tr>
+    <tr><td>column store</td><td>Storage that keeps each column’s values together.</td></tr>
+    <tr><td>virtual warehouse</td><td>A compute cluster that runs queries; it stores no data.</td></tr>
+    <tr><td>credit</td><td>Snowflake’s unit of compute billing.</td></tr>
+    <tr><td>auto-suspend</td><td>Switching a warehouse off after a period of no queries.</td></tr>
+    <tr><td>cloud services layer</td><td>Snowflake’s coordination layer: security, metadata, optimizer, result cache.</td></tr>
+    <tr><td>micro-partition</td><td>An immutable columnar file holding 50–500 MB of a table’s uncompressed data.</td></tr>
+    <tr><td>pruning</td><td>Skipping micro-partitions whose min and max cannot match the filter.</td></tr>
+    <tr><td>clustering key</td><td>Columns Snowflake keeps a table ordered by in the background.</td></tr>
+    <tr><td>multi-cluster warehouse</td><td>A warehouse that adds clusters automatically when queries queue.</td></tr>
+    <tr><td>resource monitor</td><td>A credit budget that can notify or suspend warehouses.</td></tr>
+    <tr><td>stage</td><td>A named location of files to load from or unload to.</td></tr>
+    <tr><td>Snowpipe</td><td>Automatic, event-driven loading of new files.</td></tr>
+    <tr><td>VARIANT</td><td>A column type for JSON and other semi-structured data.</td></tr>
+    <tr><td>result cache</td><td>Stored query results reused for identical queries on unchanged data.</td></tr>
+    <tr><td>spilling</td><td>Writing intermediate data to disk because memory ran out.</td></tr>
+    <tr><td>Time Travel</td><td>Querying or restoring data as of an earlier time.</td></tr>
+    <tr><td>Fail-safe</td><td>Seven days of extra recovery after Time Travel, through Snowflake support only.</td></tr>
+    <tr><td>zero-copy clone</td><td>A copy that shares the original’s micro-partitions until either changes.</td></tr>
+    <tr><td>dynamic table</td><td>A table defined by a query that Snowflake keeps refreshed within a target lag.</td></tr>
+    <tr><td>secure share</td><td>Live read access to your data granted to another account, without copying.</td></tr>
+    <tr><td>masking policy</td><td>A rule that hides column values depending on the querying role.</td></tr>
+  </table></div>
+</section>
+
+<section class="s" id="slab" data-t="Proof checklist">
+  <div class="sh"><span class="off">35</span><h2>Proof checklist</h2></div>
+  <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a free Snowflake trial account. These experiments show you how.</div>
+  <p class="lead">10 experiments on a Snowflake trial account. Each settles a tagged statement from the lessons.</p>
+  <p id="labProg" aria-live="polite"></p>
+  <div class="tw" style="max-width:none"><table class="lab">
+    <tr><th>Passed</th><th>#</th><th>Question</th><th>Experiment</th><th>Passes when</th></tr>
+    <tr id="c1"><td><input type="checkbox" data-lab="c1" aria-label="Passed: columnar reads"></td><td>1</td><td><b>Columns read</b></td><td>Run <code>SELECT SUM(o_totalprice) FROM snowflake_sample_data.tpch_sf1.orders</code> and then <code>SELECT *</code> with <code>LIMIT 1000000</code>; compare “Bytes scanned” in the query profile.</td><td>The one-column query scans far fewer bytes.</td></tr>
+    <tr id="c2"><td><input type="checkbox" data-lab="c2" aria-label="Passed: sample data"></td><td>2</td><td><b>Sample data</b></td><td><code>SELECT COUNT(*) FROM snowflake_sample_data.tpch_sf1.orders;</code></td><td>1,500,000, answered almost instantly from metadata.</td></tr>
+    <tr id="c3"><td><input type="checkbox" data-lab="c3" aria-label="Passed: pruning"></td><td>3</td><td><b>Pruning</b></td><td>On <code>tpch_sf100.orders</code>, filter <code>o_orderdate = '1995-03-15'</code>; open the query profile.</td><td>“Partitions scanned” is a small fraction of “Partitions total”.</td></tr>
+    <tr id="c4"><td><input type="checkbox" data-lab="c4" aria-label="Passed: warehouse defaults"></td><td>4</td><td><b>Warehouse defaults and rates</b></td><td><code>CREATE WAREHOUSE t_wh;</code> then <code>SHOW WAREHOUSES LIKE 'T_WH';</code> Compare with the credits table in the documentation.</td><td>auto_suspend 600, auto_resume true, size X-Small; sizes double credits per hour.</td></tr>
+    <tr id="c5"><td><input type="checkbox" data-lab="c5" aria-label="Passed: COPY skips loaded files"></td><td>5</td><td><b>No double loading</b></td><td>Upload a CSV to a table stage with <code>PUT</code>, run <code>COPY INTO</code> twice.</td><td>The second run reports the file as already loaded and adds no rows.</td></tr>
+    <tr id="c6"><td><input type="checkbox" data-lab="c6" aria-label="Passed: result cache"></td><td>6</td><td><b>Result cache</b></td><td>Run the same query twice; then <code>ALTER SESSION SET USE_CACHED_RESULT = FALSE</code> and run it again.</td><td>The second run shows “Query result reuse” and no warehouse time; the third runs normally.</td></tr>
+    <tr id="c7"><td><input type="checkbox" data-lab="c7" aria-label="Passed: Time Travel"></td><td>7</td><td><b>Time Travel</b></td><td><code>SHOW PARAMETERS LIKE 'DATA_RETENTION_TIME_IN_DAYS' IN ACCOUNT;</code> Create a table, insert rows, delete them, then <code>SELECT … AT(OFFSET =&gt; -60)</code>.</td><td>Retention 1; the deleted rows appear in the AT query.</td></tr>
+    <tr id="c8"><td><input type="checkbox" data-lab="c8" aria-label="Passed: UNDROP"></td><td>8</td><td><b>UNDROP</b></td><td>Drop the test table, then <code>UNDROP TABLE</code>.</td><td>The table and its rows are back.</td></tr>
+    <tr id="c9"><td><input type="checkbox" data-lab="c9" aria-label="Passed: cloning"></td><td>9</td><td><b>Zero-copy clone</b></td><td>Clone a large sample-sized table you created; time it; change one row in the clone.</td><td>The clone takes seconds; the original is unchanged.</td></tr>
+    <tr id="c10"><td><input type="checkbox" data-lab="c10" aria-label="Passed: roles"></td><td>10</td><td><b>USAGE is needed</b></td><td>Create a role with only SELECT on a table, grant it to yourself, query the table.</td><td>An authorization error until USAGE on the database and schema is granted.</td></tr>
+  </table></div>
+  <p>The list and its order are a proposal. Rows 7 and 8 share a table. <span class="tag s">Simplified</span></p>
+</section>
+
+<footer>Covers Snowflake as documented in 2025–2026. Credit rates per warehouse size, micro-partition size, retention periods and defaults are quoted from the Snowflake documentation from memory and were not run for this page; the checklist is how you confirm them. Prices, timings and ShopCo’s data are invented examples.</footer>
+
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cell=(o,v,c)=>`<div class="cell ${c||''}"><b>${o}</b><span>${esc(v)}</span></div>`;
+
+/* theme */
+const root=document.documentElement, tb=$('#themeBtn');
+const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+const label=()=>tb.textContent=isDark()?'Light theme':'Dark theme';
+try{const t=localStorage.getItem('course-theme');if(t)root.dataset.theme=t}catch(e){}
+label();
+tb.onclick=()=>{const t=isDark()?'light':'dark';root.dataset.theme=t;try{localStorage.setItem('course-theme',t)}catch(e){}label()};
+new MutationObserver(label).observe(root,{attributes:true,attributeFilter:['data-theme']});
+
+/* contents */
+const toc=$('#toc'), links={};
+document.querySelectorAll('main>.part, main>section.s').forEach(n=>{
+  if(n.classList.contains('part')){toc.appendChild(el('h3','',esc(n.dataset.part)));return}
+  const a=el('a','',`<span>${n.querySelector('.off').textContent}</span>${esc(n.dataset.t)}`);a.href='#'+n.id;toc.appendChild(a);links[n.id]=a;
+});
+const mb=$('#menuBtn');
+mb.onclick=()=>{const o=toc.classList.toggle('open');mb.setAttribute('aria-expanded',o)};
+toc.addEventListener('click',e=>{if(e.target.closest('a')){toc.classList.remove('open');mb.setAttribute('aria-expanded',false)}});
+if('IntersectionObserver' in window){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){Object.values(links).forEach(a=>a.classList.remove('cur'));const a=links[e.target.id];a.classList.add('cur');if(!toc.classList.contains('open'))a.scrollIntoView({block:'nearest'})}}),{rootMargin:'-15% 0px -75% 0px'});
+  document.querySelectorAll('section.s').forEach(s=>io.observe(s));
+}
+const bar=$('#bar');
+addEventListener('scroll',()=>{const h=document.documentElement;bar.style.width=(100*h.scrollTop/Math.max(1,h.scrollHeight-h.clientHeight))+'%'},{passive:true});
+
+
+/* reader tools ------------------------------------------------------------
+   Four tools that need no markup per lesson: search, lesson progress,
+   glossary tooltips (fed by table.gloss) and a self-test (fed by details.q). */
+const lessons=[...document.querySelectorAll('main>section.s')];
+const load=k=>{try{return JSON.parse(localStorage.getItem(k)||'{}')||{}}catch(e){return {}}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+
+/* search: a box at the top of the contents. Matches lesson titles, h3 sub-headings and lesson text. */
+(function(){
+  const box=el('div','srch','<input type="search" placeholder="Search lessons" aria-label="Search lessons"><div class="res" hidden></div>');
+  toc.prepend(box);
+  const inp=box.firstChild,res=box.lastChild,idx=[];let hid=0;
+  const words=n=>{const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT);let o='',x;while((x=w.nextNode()))o+=' '+x.nodeValue;return o};
+  lessons.forEach(s=>{const n=s.querySelector('.off').textContent,title=s.querySelector('h2').textContent;
+    let cur={id:s.id,t:title,n,x:''};idx.push(cur);
+    [...s.children].forEach(c=>{if(c.classList.contains('sh'))return;
+      if(c.tagName==='H3'){if(!c.id)c.id='h'+(hid++);cur={id:c.id,t:c.textContent,n,x:'',p:title};idx.push(cur);return}
+      cur.x+=words(c)})});
+  idx.forEach(e=>{e.x=e.x.replace(/\s+/g,' ');e.low=(e.t+' '+e.x).toLowerCase()});
+  inp.addEventListener('input',()=>{const q=inp.value.trim().toLowerCase();res.innerHTML='';if(q.length<2){res.hidden=true;return}
+    const w=q.split(/\s+/),hits=idx.filter(e=>w.every(x=>e.low.includes(x))).slice(0,8);
+    if(!hits.length)res.appendChild(el('p','','Nothing found. Try a shorter word.'));
+    hits.forEach(e=>{const at=e.x.toLowerCase().indexOf(w[0]);const snip=at<0?(e.p||''):(at>30?'…':'')+e.x.substr(Math.max(0,at-30),90).trim()+'…';
+      const a=el('a','',`<span>${e.n}</span><div>${esc(e.t)}<small>${esc(snip)}</small></div>`);a.href='#'+e.id;res.appendChild(a)});
+    res.hidden=false});
+  inp.addEventListener('keydown',e=>{if(e.key==='Escape'){inp.value='';res.hidden=true}});
+  res.addEventListener('click',e=>{if(e.target.closest('a'))res.hidden=true});
+})();
+
+/* lesson progress: a "Mark as done" button under every lesson title, a tick in the contents, and a count. */
+(function(){
+  const done=load('course-done'),list=lessons.filter(s=>s.id!=='slab');
+  const prog=el('p');prog.id='doneProg';toc.querySelector('.srch').after(prog);
+  const draw=()=>{let n=0;list.forEach(s=>{const on=!!done[s.id];if(on)n++;
+      const b=s.querySelector('.btn.done');b.classList.toggle('ok',on);b.textContent=on?'✓ Done. Undo?':'Mark as done';b.setAttribute('aria-pressed',on);
+      const a=links[s.id],sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=on?'✓':sp.dataset.n;a.classList.toggle('ok',on)});
+    prog.textContent=n+' of '+list.length+' lessons done'};
+  list.forEach(s=>{const b=el('button','btn done');b.type='button';b.onclick=()=>{done[s.id]=!done[s.id];save('course-done',done);draw()};s.querySelector('.sh').after(b)});
+  draw();
+})();
+
+/* glossary tooltips: underline the first mention of each table.gloss term in every lesson. */
+(function(){
+  const terms=[...document.querySelectorAll('table.gloss tr')].map(r=>r.cells).filter(c=>c.length>1&&c[0].tagName==='TD')
+    .map(c=>({name:c[0].textContent.trim(),tip:c[1].textContent.trim()})).filter(t=>t.name.length>2&&!/[()\/]/.test(t.name));
+  if(!terms.length)return;
+  terms.sort((a,b)=>b.name.length-a.name.length);
+  terms.forEach(t=>t.re=new RegExp('(^|[^A-Za-z0-9_-])('+t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?)(?![A-Za-z0-9_-])','i'));
+  /* skipped: code, headings, controls, and containers that clip overflow (a tooltip would be cut off) */
+  const SKIP='pre,code,svg,a,button,h2,h3,h4,summary,th,abbr,input,label,.sh,.tw,.canvas,.board,.demo,.scroll,.trk,.words';
+  lessons.forEach(sec=>{const used={},w=document.createTreeWalker(sec,NodeFilter.SHOW_TEXT),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
+    nodes.forEach(node=>{if(!node.parentElement||node.nodeValue.length<3||node.parentElement.closest(SKIP))return;
+      for(const t of terms){if(used[t.name])continue;const m=t.re.exec(node.nodeValue);if(!m)continue;
+        const mid=node.splitText(m.index+m[1].length);mid.splitText(m[2].length);
+        const ab=el('abbr','gl');ab.tabIndex=0;ab.dataset.tip=t.tip;ab.textContent=mid.nodeValue;mid.replaceWith(ab);used[t.name]=true;return}})});
+})();
+
+/* self-test: a scored run through every details.q on the page, with a retry of the missed ones. */
+(function(){
+  const host=$('#selftest');if(!host)return;
+  const cards=[...document.querySelectorAll('section.s details.q')].map(d=>{const s=d.closest('section.s');
+    return{q:d.querySelector('summary').textContent,a:d.querySelector('.in').innerHTML,id:s.id,n:s.querySelector('.off').textContent,t:s.dataset.t}});
+  if(!cards.length){host.hidden=true;return}
+  let deck,i,missed;
+  const home=msg=>{host.innerHTML='<h4>Self-test</h4><div class="out" aria-live="polite">'+msg+'</div><div class="ctrls"><button class="btn on" data-a="start">Start ('+cards.length+' questions)</button></div>'};
+  const show=()=>{const c=deck[i];host.innerHTML='<h4>Self-test</h4><p class="from">Question '+(i+1)+' of '+deck.length+', from lesson <a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a></p><p class="q">'+esc(c.q)+'</p><div class="a" hidden>'+c.a+'</div>'
+    +'<div class="ctrls"><button class="btn on" data-a="show">Show answer</button><button class="btn" data-a="yes" hidden>Got it</button><button class="btn warn" data-a="no" hidden>Not yet</button><button class="btn" data-a="stop">Stop</button></div>'};
+  const end=()=>{const got=deck.length-missed.length;let h='<h4>Self-test</h4><div class="out" aria-live="polite">Score: '+got+' of '+deck.length+'.</div>';
+    if(missed.length)h+='<p>Worth another look:</p><ul>'+missed.map(c=>'<li><a href="#'+c.id+'">'+c.n+' '+esc(c.t)+'</a>: '+esc(c.q)+'</li>').join('')+'</ul>';
+    h+='<div class="ctrls">'+(missed.length?'<button class="btn on" data-a="retry">Retry the ones I missed</button>':'')+'<button class="btn" data-a="start">Start again</button></div>';host.innerHTML=h};
+  const begin=list=>{deck=list.slice();i=0;missed=[];show()};
+  host.addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const a=b.dataset.a;
+    if(a==='start')begin(cards);else if(a==='retry')begin(missed);else if(a==='stop')home('Stopped. Start again any time.');
+    else if(a==='show'){host.querySelector('.a').hidden=false;b.hidden=true;host.querySelectorAll('[data-a=yes],[data-a=no]').forEach(x=>x.hidden=false)}
+    else{if(a==='no')missed.push(deck[i]);i++;if(i<deck.length)show();else end()}});
+  home('Answer in your head, show the answer, then mark yourself.');
+})();
+
+/* mermaid: rendered here so colours follow the page theme */
+(function(){
+  const LIGHT={background:'#ffffff',primaryColor:'#e2e9f2',primaryTextColor:'#16233a',primaryBorderColor:'#16233a',lineColor:'#52617a',secondaryColor:'#e3edff',tertiaryColor:'#f3f6fa',textColor:'#16233a',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#16233a',actorBkg:'#e2e9f2',actorBorder:'#16233a',actorTextColor:'#16233a',actorLineColor:'#8a99b3',signalColor:'#52617a',signalTextColor:'#16233a',labelBoxBkgColor:'#e2e9f2',labelBoxBorderColor:'#16233a',labelTextColor:'#16233a',loopTextColor:'#16233a',edgeLabelBackground:'#ffffff',clusterBkg:'#f3f6fa',clusterBorder:'#8a99b3',titleColor:'#16233a'};
+  const DARK={background:'#17233a',primaryColor:'#24365a',primaryTextColor:'#e8eef7',primaryBorderColor:'#78a7ff',lineColor:'#a3b3cb',secondaryColor:'#263a5c',tertiaryColor:'#111c2e',textColor:'#e8eef7',noteBkgColor:'#f2b705',noteTextColor:'#16233a',noteBorderColor:'#f2b705',actorBkg:'#24365a',actorBorder:'#78a7ff',actorTextColor:'#e8eef7',actorLineColor:'#4a628c',signalColor:'#a3b3cb',signalTextColor:'#e8eef7',labelBoxBkgColor:'#24365a',labelBoxBorderColor:'#78a7ff',labelTextColor:'#e8eef7',loopTextColor:'#e8eef7',edgeLabelBackground:'#17233a',clusterBkg:'#111c2e',clusterBorder:'#4a628c',titleColor:'#e8eef7'};
+  const CTL_DARK='fill:#3b2f6b,stroke:#b196f5,color:#e8eef7', CTL_LIGHT='fill:#efe8ff,stroke:#7a4fd6,color:#16233a';
+  const items=[...document.querySelectorAll('pre.mmd')].map(pre=>{const w=el('div','svgw');w.hidden=true;pre.after(w);return{pre,w,src:pre.textContent}});
+  let run=0,last=null;
+  async function render(){
+    if(!window.mermaid)return;
+    const dark=isDark();if(dark===last)return;last=dark;const me=++run;
+    mermaid.initialize({startOnLoad:false,theme:'base',themeVariables:Object.assign({fontFamily:'"Atkinson Hyperlegible",Verdana,sans-serif',fontSize:'15px'},dark?DARK:LIGHT),sequence:{useMaxWidth:true,mirrorActors:false},flowchart:{useMaxWidth:true}});
+    for(let i=0;i<items.length;i++){const it=items[i];
+      try{const {svg}=await mermaid.render('mmd'+i+'r'+me,dark?it.src:it.src.replace(CTL_DARK,CTL_LIGHT));
+        if(me!==run)return;it.w.innerHTML=svg;it.w.hidden=false;it.pre.hidden=true}
+      catch(e){it.w.hidden=true;it.pre.hidden=false}
+    }
+  }
+  render();
+  new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{label();render()});
+})();
+
+/* proof checklist */
+(function(){const boxes=[...document.querySelectorAll('[data-lab]')],prog=$('#labProg');if(!boxes.length||!prog)return;let st={};
+  try{st=JSON.parse(localStorage.getItem('course-lab')||'{}')}catch(e){}
+  const draw=()=>{let n=0;boxes.forEach(b=>{b.checked=!!st[b.dataset.lab];b.closest('tr').classList.toggle('ok',b.checked);if(b.checked)n++});prog.textContent=n+' of '+boxes.length+' passed';const a=links.slab;if(a){const sp=a.querySelector('span');sp.dataset.n=sp.dataset.n||sp.textContent;sp.textContent=n===boxes.length?'✓':sp.dataset.n}};
+  boxes.forEach(b=>b.onchange=()=>{st[b.dataset.lab]=b.checked;try{localStorage.setItem('course-lab',JSON.stringify(st))}catch(e){}draw()});draw();
+})();
+
+
+const fmtBytes=b=>{const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1000&&i<u.length-1){b/=1000;i++}return (b>=100?b.toFixed(0):b.toFixed(1))+' '+u[i]};
+
+/* demo: row store vs column store bytes */
+(function(){
+  const rows=$('#cbRows'),cols=$('#cbCols'),cv=$('#cbColsV'),bars=$('#cbBars'),out=$('#cbOut');if(!rows)return;
+  function draw(){
+    const R=+rows.value,k=+cols.value;cv.textContent=k;
+    const rowB=R*20*8,colRaw=R*k*8,colB=colRaw/5;
+    const bar=(lab,b,c)=>'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .6rem;margin:.45rem 0"><span style="font:600 .82rem var(--mono);min-width:7rem">'+lab+'</span><div style="flex:1 1 140px;min-width:0;height:14px;background:var(--surface2);border:1px solid var(--line);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+Math.max(.5,100*b/rowB).toFixed(1)+'%;background:'+c+'"></div></div><span style="font:400 .8rem var(--mono);min-width:5.5rem">'+fmtBytes(b)+'</span></div>';
+    bars.innerHTML=bar('row store',rowB,'var(--bad)')+bar('column store',colRaw,'var(--follower)')+bar('column + compression',colB,'var(--leader)');
+    out.textContent='A query using '+k+' of 20 columns over '+R.toLocaleString('en-US')+' rows: the row store reads '+fmtBytes(rowB)+', the column store '+fmtBytes(colRaw)+' ('+(20/k).toFixed(1)+'× less), about '+fmtBytes(colB)+' after compression ('+(100*rowB/colB/100).toFixed(0)+'× less in total).';
+  }
+  rows.onchange=draw;cols.oninput=draw;draw();
+})();
+
+/* demo: pruning over 365 micro-partitions */
+(function(){
+  const ord=$('#prOrder'),days=$('#prDays'),grid=$('#prGrid'),out=$('#prOut');if(!ord)return;
+  let seed=12345;const rnd=()=>(seed=(seed*1103515245+12345)&0x7fffffff)/0x7fffffff;
+  const N=365,RANDOM=[];
+  for(let p=0;p<N;p++){let mn=1e9,mx=-1;for(let r=0;r<2000;r++){const d=Math.floor(rnd()*N);if(d<mn)mn=d;if(d>mx)mx=d}RANDOM.push([mn,mx])}
+  function go(){
+    const d=+days.value,from=N-d;let scanned=0;let h='';
+    for(let p=0;p<N;p++){const [mn,mx]=ord.value==='date'?[p,p]:RANDOM[p];const hit=mx>=from;if(hit)scanned++;
+      h+='<div title="MP '+(p+1)+': days '+mn+'–'+mx+'" style="width:10px;height:10px;border-radius:2px;background:'+(hit?'var(--leader)':'var(--surface2)')+';border:1px solid '+(hit?'var(--ink)':'var(--line)')+'"></div>'}
+    grid.innerHTML=h;
+    out.textContent='Scanned '+scanned+' of '+N+' micro-partitions ('+(100*scanned/N).toFixed(0)+'%), pruned '+(N-scanned)+'. '+(ord.value==='date'
+      ?'Each partition holds one day, so only the '+d+' matching day'+(d>1?'s are':' is')+' read.'
+      :'Each partition holds rows from all over the year, so its min–max range almost always includes the last '+d+' day'+(d>1?'s':'')+': pruning fails.');
+  }
+  $('#prGo').onclick=go;ord.onchange=go;days.onchange=go;go();
+})();
+
+/* demo: warehouse cost */
+(function(){
+  const size=$('#ccSize'),run=$('#ccRun'),runs=$('#ccRuns'),sus=$('#ccSus'),price=$('#ccPrice'),out=$('#ccOut');if(!size)return;
+  const NAMES={1:'X-Small',2:'Small',4:'Medium',8:'Large',16:'X-Large'};
+  function go(){
+    const r=+size.value,s=Math.max(1,+run.value||1),n=Math.max(1,+runs.value||1),p=Math.max(0,+price.value||0);
+    let credits,detail;
+    if(sus.value==='never'){credits=24*r;detail='Never suspended, it runs 24 hours a day whatever the queries do.'}
+    else{const a=+sus.value,billed=Math.max(60,s+a);credits=n*billed*r/3600;
+      detail='Each run bills max(60 s, '+s+' s + '+a+' s) = '+billed+' s, of which '+(billed-s)+' s is idle time.'}
+    out.textContent=NAMES[r]+' = '+r+' credit'+(r>1?'s':'')+'/hour. '+detail+' Per day: '+credits.toFixed(2)+' credits = $'+(credits*p).toFixed(2)+'. Per month (30 days): $'+(credits*p*30).toFixed(0)+'.';
+  }
+  [size,run,runs,sus,price].forEach(e=>e.oninput=e.onchange=go);go();
+})();
+
+/* demo: which cache answers */
+(function(){
+  const log=$('#caLog'),out=$('#caOut');if(!log)return;
+  let st;
+  const reset=()=>{st={result:false,wh:false,running:false};log.innerHTML='<label>history</label>';out.textContent='The warehouse is suspended and nothing is cached. Run the dashboard query.'};
+  const add=(b,t,c)=>log.insertAdjacentHTML('beforeend',cell(b,t,c+' new'));
+  const scan=(what)=>{if(st.wh){add('warehouse','local SSD cache','pend');return what+' ran on ANALYTICS_WH using data already on its local SSD cache: fast, a little compute.'}
+    const res=st.running?'':'resumed (billed at least 60 s), then ';st.running=true;st.wh=true;add('warehouse','read from storage','lost');return 'ANALYTICS_WH '+res+'read 3 columns of 41 micro-partitions from remote storage: the slowest path.'};
+  const act={
+    run:()=>{if(st.result){add('result cache','0 credits','done');return 'Answered from the result cache in the services layer: same query, unchanged data. No warehouse, no credits.'}
+      const m=scan('The dashboard query');st.result=true;return m+' The answer is now in the result cache for 24 hours.'},
+    variant:()=>'Germany only is different SQL text, so the result cache cannot help. '+scan('It'),
+    count:()=>{add('metadata','COUNT(*)','done');return 'SELECT COUNT(*) is answered from micro-partition metadata in the services layer: no warehouse needed.'},
+    load:()=>{st.result=false;add('load','new rows','');return 'Snowpipe added micro-partitions to ORDERS. Cached results that read ORDERS can no longer be reused; the next dashboard run must compute again.'},
+    suspend:()=>{st.wh=false;st.running=false;add('suspend','SSD cache gone','');return 'ANALYTICS_WH suspended after 60 idle seconds. Compute billing stopped, and its local SSD cache was emptied. The result cache, in the services layer, is unaffected.'}
+  };
+  log.closest('.demo').querySelectorAll('[data-ca]').forEach(b=>b.onclick=()=>{const a=b.dataset.ca;if(a==='reset')return reset();out.textContent=act[a]()});
+  reset();
+})();
+
+})();
+</script>
+</body>
+</html>
