@@ -5,8 +5,18 @@
     "category": "Data Engineering",
     "description": "35 lessons on brokers, topics, partitions, replication, offsets, consumer groups and KRaft",
     "path": "artifacts/kafka.html",
-    "highlights": ["Brokers & topics", "Partitions & offsets", "Producers & consumer groups", "Replication", "KRaft"],
-    "tags": ["Kafka", "KRaft", "Distributed Systems"]
+    "highlights": [
+      "Brokers & topics",
+      "Partitions & offsets",
+      "Producers & consumer groups",
+      "Replication",
+      "KRaft"
+    ],
+    "tags": [
+      "Kafka",
+      "KRaft",
+      "Distributed Systems"
+    ]
   },
   {
     "id": "mssql-cdc-debezium",
@@ -14,8 +24,20 @@
     "category": "Data Engineering",
     "description": "35 lessons on SQL Server CDC, Debezium, Kafka, schema changes and the pipeline into Snowflake",
     "path": "artifacts/mssql-cdc-debezium.html",
-    "highlights": ["CDC internals", "Debezium", "Kafka & schemas", "Schema changes", "Production"],
-    "tags": ["MSSQL", "CDC", "Debezium", "Snowflake", "Schema Evolution"]
+    "highlights": [
+      "CDC internals",
+      "Debezium",
+      "Kafka & schemas",
+      "Schema changes",
+      "Production"
+    ],
+    "tags": [
+      "MSSQL",
+      "CDC",
+      "Debezium",
+      "Snowflake",
+      "Schema Evolution"
+    ]
   },
   {
     "id": "postgresql",
@@ -23,8 +45,19 @@
     "category": "Databases",
     "description": "32 lessons on how PostgreSQL stores, protects, finds and scales data, with the internals behind it",
     "path": "artifacts/postgresql.html",
-    "highlights": ["WAL, pages & buffer cache", "ACID, MVCC & isolation", "Indexes", "Replication & HA", "Performance"],
-    "tags": ["PostgreSQL", "MVCC", "WAL", "System Design"]
+    "highlights": [
+      "WAL, pages & buffer cache",
+      "ACID, MVCC & isolation",
+      "Indexes",
+      "Replication & HA",
+      "Performance"
+    ],
+    "tags": [
+      "PostgreSQL",
+      "MVCC",
+      "WAL",
+      "System Design"
+    ]
   },
   {
     "id": "mongodb",
@@ -32,7 +65,39 @@
     "category": "Databases",
     "description": "60 lessons on MongoDB, from one document on one server to a sharded production cluster",
     "path": "artifacts/mongodb.html",
-    "highlights": ["Document model", "Replica sets & oplog", "Sharding", "Data modelling & indexes", "Consistency & change streams"],
-    "tags": ["MongoDB", "NoSQL", "Sharding", "System Design"]
+    "highlights": [
+      "Document model",
+      "Replica sets & oplog",
+      "Sharding",
+      "Data modelling & indexes",
+      "Consistency & change streams"
+    ],
+    "tags": [
+      "MongoDB",
+      "NoSQL",
+      "Sharding",
+      "System Design"
+    ]
+  },
+  {
+    "id": "mysql",
+    "title": "MySQL, from one query to a sharded fleet",
+    "category": "Databases",
+    "description": "37 lessons on MySQL and InnoDB for system design: storage internals, indexes, locking, replication and sharding",
+    "path": "artifacts/mysql.html",
+    "highlights": [
+      "InnoDB: buffer pool, redo, undo, MVCC",
+      "Indexes & the leftmost prefix",
+      "Isolation, gap locks & deadlocks",
+      "Replication: async, semi-sync, group",
+      "Sharding & Vitess"
+    ],
+    "tags": [
+      "MySQL",
+      "InnoDB",
+      "Replication",
+      "Sharding",
+      "System Design"
+    ]
   }
 ]
