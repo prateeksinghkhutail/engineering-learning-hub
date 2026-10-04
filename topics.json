@@ -99,5 +99,25 @@
       "Sharding",
       "System Design"
     ]
+  },
+  {
+    "id": "redis",
+    "title": "Redis, from one thread to a cluster",
+    "category": "Databases",
+    "description": "36 lessons building Redis from first principles: the single thread, data structures inside, persistence, replication, Sentinel, Cluster and the interview patterns",
+    "path": "artifacts/redis.html",
+    "highlights": [
+      "Why one thread is fast and atomic",
+      "Data structures and how they work inside",
+      "RDB, AOF and what a crash costs",
+      "Replication, Sentinel and Cluster slots",
+      "Caching, rate limits, locks, Lua"
+    ],
+    "tags": [
+      "Redis",
+      "Caching",
+      "In-memory",
+      "System Design"
+    ]
   }
 ]
