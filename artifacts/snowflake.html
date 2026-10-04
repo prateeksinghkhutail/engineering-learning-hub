@@ -280,7 +280,7 @@ figure.big{max-width:none}
 <main>
 <div class="hero">
   <h1>Store everything once. Rent as much computing as each question needs.</h1>
-  <p>A course on Snowflake for data analytics that starts from zero. Part 0 explains what analytics is, why columns beat rows, and runs your first query. Then it goes deep: storage and micro-partitions, virtual warehouses and cost, loading data, caching and performance, Time Travel and cloning, security, and how Snowflake compares. One dashboard question is followed through every lesson, with four simulators.</p>
+  <p>A course on Snowflake for data analytics that starts from zero. Part 0 explains what analytics is and runs your first query; Part 1 teaches the warehousing theory underneath (facts, dimensions, schemas, SCDs, MPP, lakehouses). Then it goes deep into Snowflake itself, ending with a keyword index of every term.</p>
   <div class="canvas herolog scroll">
     <div class="flow" style="margin-bottom:1rem"><span class="n g">JSON files<small>s3://shopco-landing</small></span><i data-t="Snowpipe"></i><span class="n b">storage<small>micro-partitions</small></span><i data-t="read only what is needed"></i><span class="n y">virtual warehouse<small>ANALYTICS_WH, size S</small></span><i data-t="answer"></i><span class="n g">dashboard<small>revenue by country</small></span></div>
     <div class="log"><label>storage</label><div class="cell gone"><b>Oct 01</b><span>skipped</span></div><div class="cell gone"><b>Oct 02</b><span>skipped</span></div><div class="cell gone"><b>Oct 03</b><span>skipped</span></div><div class="cell pend new"><b>Oct 04</b><span>scanned</span></div><div class="cell ghost"><b>today</b><span>loading…</span></div></div>
@@ -298,6 +298,11 @@ figure.big{max-width:none}
 <section class="s" id="s0" data-t="Running example and tags">
   <div class="sh"><span class="off">00</span><h2>The running example and the tags</h2></div>
   <div class="plain"><b>In plain words</b>This course follows one question that an online shop asks every morning: “how much did we sell yesterday, in each country?”, and one order row that feeds into the answer. Do not worry if words like warehouse, stage or micro-partition below are new. Part 0, right after this lesson, starts from zero.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>BI tool</b><span>Business intelligence software that draws dashboards from SQL results.</span></div>
+    <div><b>role</b><span>A named set of permissions; people act through roles (Part 8).</span></div>
+    <div><b>virtual warehouse</b><span>The compute that runs queries (Part 0 and Part 3 explain it).</span></div>
+  </div>
   <p class="lead">ShopCo’s analytics team answers “revenue by country for yesterday” on a dashboard every morning; we follow that question, and one order that feeds it, through every lesson.</p>
   <pre class="code"><i>-- the dashboard's question</i>
 SELECT country, SUM(amount) AS revenue
@@ -387,11 +392,12 @@ order_id 90217 | customer_id 5512 | country 'DE' | order_date 2026-10-04 | amoun
     <div><b>SaaS</b><span>Software as a service: you use it over the internet; the vendor runs it.</span></div>
     <div><b>virtual warehouse</b><span>Snowflake’s name for a cluster of computers that runs your queries. Despite the name, it holds no data.</span></div>
     <div><b>credit</b><span>The unit Snowflake bills computing in.</span></div>
+    <div><b>edition</b><span>Snowflake’s product tiers (Standard, Enterprise, Business Critical); some features need a higher tier.</span></div>
   </div>
   <p class="lead">Snowflake is a cloud data warehouse sold as a service: data lives in cloud storage, queries run on compute clusters called virtual warehouses, and you use plain SQL.</p>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">you<small>SQL from a browser, BI tool or code</small></span><i data-t="HTTPS"></i><span class="n p">Snowflake service<small>runs in AWS, Azure or Google Cloud</small></span><i data-t="starts"></i><span class="n y">virtual warehouse<small>compute, billed while on</small></span><i data-t="reads"></i><span class="n b">your data<small>in cloud storage</small></span>
-  </div></div><figcaption>The whole idea in one line. Part 1 opens each box.</figcaption></figure>
+  </div></div><figcaption>The whole idea in one line. Part 2 opens each box.</figcaption></figure>
   <ul>
     <li><b>No servers to manage.</b> No installing, patching or tuning disks. <span class="tag g">Guaranteed</span></li>
     <li><b>Standard SQL</b> plus extensions for JSON and analytics.</li>
@@ -420,7 +426,7 @@ SELECT o_orderpriority      AS priority,
  ORDER BY priority;</pre>
   <figure><div class="canvas"><div class="flow">
     <span class="n g">worksheet<small>your SQL</small></span><i data-t="1"></i><span class="n p">services layer<small>checks it, makes a plan</small></span><i data-t="2"></i><span class="n y">COMPUTE_WH<small>resumes, scans</small></span><i data-t="3"></i><span class="n g">5 rows of results</span>
-  </div></div><figcaption>What happened when you pressed Run. If the warehouse was off, it started itself first. Part 4 follows this path in detail.</figcaption></figure>
+  </div></div><figcaption>What happened when you pressed Run. If the warehouse was off, it started itself first. Part 6 follows this path in detail.</figcaption></figure>
   <ul>
     <li><b>The sample database is shared with every account</b> and costs no storage. <a class="tag g" href="#c2">Guaranteed · check 2</a></li>
     <li><b>TPC-H</b> is a standard benchmark schema; <code>tpch_sf1</code> is the smallest copy, with 1.5 million orders.</li>
@@ -442,20 +448,223 @@ SELECT o_orderpriority      AS priority,
   <figure><div class="canvas"><div class="two">
     <div><h4>Storage</h4><span class="chip F">per TB per month, after compression</span><span class="chip">cheap compared with compute</span></div>
     <div><h4>Compute</h4><span class="chip Y">credits per hour, by warehouse size</span><span class="chip">billed per second while running</span><span class="chip Y">0 when suspended</span></div>
-  </div></div><figcaption>Two meters. Most bills are dominated by the compute meter, which is why Part 2 is about it.</figcaption></figure>
+  </div></div><figcaption>Two meters. Most bills are dominated by the compute meter, which is why Part 3 is about it.</figcaption></figure>
   <ul>
     <li><b>Most of a typical bill is compute.</b> Storage is usually the smaller part. <span class="tag s">Simplified</span></li>
     <li><b>Price per credit depends on edition, cloud, region and contract.</b> This course uses $3 per credit for examples. <span class="tag x">Example value</span></li>
-    <li><b>Part 2 explains warehouse sizes, credits and auto-suspend in full.</b></li>
+    <li><b>Part 3 explains warehouse sizes, credits and auto-suspend in full.</b></li>
   </ul>
   <details class="q"><summary>A warehouse is suspended all weekend. How much compute does it cost for those two days?</summary><div class="in">Nothing. Compute is only billed while a warehouse is running. The data it would query still costs storage.</div></details>
   <aside class="trk"><h4 data-id="ANALYTICS_WH">Follow the dashboard</h4><div class="in"><p>ShopCo’s warehouse runs about 20 minutes a day in total, mostly for the morning dashboard refresh and analysts’ queries, and is suspended the rest of the time.</p></div></aside>
 </section>
 
-<div class="part" data-part="Architecture"><h2>Part 1: Architecture</h2><p>Three layers, and why they are separate</p></div>
+<div class="part" data-part="Warehousing concepts"><h2>Part 1: Data warehousing concepts</h2><p>The theory every warehouse is built on</p></div>
+
+<section class="s" id="factdim" data-t="Facts and dimensions">
+  <div class="sh"><span class="off">06</span><h2>Facts and dimensions</h2></div>
+  <div class="plain"><b>In plain words</b>Every business question has two halves: something you measure (how much was sold) and the things you slice it by (which country, which product, which day). Warehouses store those halves in different tables. Facts hold the numbers, one row per event. Dimensions hold the descriptions: who, what, where, when.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>fact table</b><span>A table of business events with numeric measures, such as one row per order.</span></div>
+    <div><b>measure</b><span>A number you add up or average: amount, quantity.</span></div>
+    <div><b>dimension table</b><span>A table describing something you group or filter by: customer, product, date.</span></div>
+    <div><b>grain</b><span>What exactly one row of a fact table represents, such as “one order line”.</span></div>
+    <div><b>surrogate key</b><span>A plain number the warehouse assigns as a dimension’s key, instead of reusing the source system’s ID.</span></div>
+  </div>
+  <p class="lead">Dimensional modelling splits data into fact tables, which record measurable events at a declared grain, and dimension tables, which describe the who, what, where and when of those events.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>fact_orders (one row per order line)</h4><div class="tw"><table><tr><th>order_id</th><th>date_key</th><th>customer_key</th><th>product_key</th><th>amount</th></tr><tr><td>90217</td><td>20261004</td><td>5512</td><td>11</td><td>89.50</td></tr><tr><td>90217</td><td>20261004</td><td>5512</td><td>12</td><td>40.00</td></tr></table></div></div>
+    <div><h4>dimensions</h4><span class="chip">dim_customer 5512: Lena, Berlin, DE</span><span class="chip">dim_product 11: Keyboard KB-01</span><span class="chip">dim_product 12: Mouse MS-02</span><span class="chip">dim_date 20261004: Sunday, week 40, Q4</span></div>
+  </div></div><figcaption>The fact rows are narrow: keys and numbers. All the descriptive text lives once in the dimensions.</figcaption></figure>
+  <ul>
+    <li><b>Declare the grain first.</b> “One row per order” and “one row per order line” give different answers to “average price”. <span class="tag g">Guaranteed</span></li>
+    <li><b>Facts are long and thin;</b> dimensions are short and wide.</li>
+    <li><b>A date dimension</b> pre-computes weekday, week, quarter and holidays so nobody has to work them out in every query. 4 October 2026 is a Sunday in ISO week 40, quarter 4 (computed).</li>
+  </ul>
+  <details class="q"><summary>Is “country” a fact or a dimension attribute, and what about “amount”?</summary><div class="in">Country describes the context, so it is a dimension attribute (of the customer). Amount is a number you add up, so it is a measure in the fact table.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 becomes two fact rows, one per item, because ShopCo chose the order-line grain. Together they add up to 129.50 for Germany.</p></div></aside>
+</section>
+
+<section class="s" id="starschema" data-t="Star and snowflake schemas">
+  <div class="sh"><span class="off">07</span><h2>Star schema and snowflake schema</h2></div>
+  <div class="plain"><b>In plain words</b>Draw the fact table in the middle and each dimension around it, joined by keys, and it looks like a star. If you then split a dimension into smaller tables (customer → city → country), the points branch out like a snowflake. That shape gave the “snowflake schema” its name; it is unrelated to the company, which happens to share it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>star schema</b><span>One fact table joined directly to flat, denormalized dimension tables.</span></div>
+    <div><b>snowflake schema</b><span>A star schema whose dimensions are split into further normalized tables.</span></div>
+    <div><b>join</b><span>Combining rows from two tables that share a key.</span></div>
+  </div>
+  <p class="lead">A star schema joins one fact table straight to flat dimension tables; a snowflake schema normalizes those dimensions into sub-tables, saving some space at the cost of more joins.</p>
+  <figure><div class="board"><pre class="mmd">flowchart LR
+  subgraph STAR["Star schema"]
+    F1["fact_orders"]:::lead --- C1["dim_customer&lt;br/&gt;name, city, country"]
+    F1 --- P1["dim_product&lt;br/&gt;name, category, brand"]
+    F1 --- D1["dim_date&lt;br/&gt;day, week, quarter"]
+  end
+  subgraph SNOW["Snowflake schema"]
+    F2["fact_orders"]:::lead --- C2["dim_customer"]
+    C2 --- CI["dim_city"]
+    CI --- CO["dim_country"]
+    F2 --- P2["dim_product"]
+    P2 --- CA["dim_category"]
+  end
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Same data. On the left, “revenue by country” needs one join; on the right, three.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th></th><th>Star</th><th>Snowflake</th></tr>
+    <tr><td>Joins per query</td><td>Few</td><td>More</td></tr>
+    <tr><td>Repeated text in dimensions</td><td>Yes (country name on every customer)</td><td>No</td></tr>
+    <tr><td>Easy for analysts and BI tools</td><td class="yes">Yes</td><td>Less so</td></tr>
+    <tr><td>Usual choice in modern warehouses</td><td class="yes">Yes</td><td>Rarely</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Columnar storage makes repeated text cheap</b> (it compresses well), so the space saving of snowflaking rarely matters today. <span class="tag s">Simplified</span></li>
+    <li><b>Many teams go further:</b> one wide “big table” with the dimensions already joined in.</li>
+  </ul>
+  <details class="q"><summary>Why do most modern cloud warehouses prefer star schemas over snowflake schemas?</summary><div class="in">Columnar compression makes repeated dimension text cheap, so the space a snowflake schema saves is small, while its extra joins make queries slower and harder to write.</div></details>
+  <aside class="trk"><h4 data-id="star schema">Follow the dashboard</h4><div class="in"><p>ShopCo’s dashboard query on a star schema: one join to get the country.</p>
+  <pre class="code">SELECT c.country, SUM(f.amount) AS revenue
+  FROM fact_orders f JOIN dim_customer c ON f.customer_key = c.customer_key
+ WHERE f.date_key = 20261004
+ GROUP BY c.country;</pre></div></aside>
+</section>
+
+<section class="s" id="normal" data-t="Normalization vs denormalization">
+  <div class="sh"><span class="off">08</span><h2>Normalization and denormalization</h2></div>
+  <div class="plain"><b>In plain words</b>An app’s database stores each fact exactly once and links tables by keys, so updates are simple and nothing contradicts itself (normalized). A warehouse is read far more than it is written, so it often copies descriptive fields into the tables people query, trading duplication for fewer joins and faster, simpler queries (denormalized).</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>normalization</b><span>Splitting data so each fact is stored once, linked by keys.</span></div>
+    <div><b>third normal form (3NF)</b><span>The usual target for app databases: no repeated groups, no fields depending on non-key fields.</span></div>
+    <div><b>denormalization</b><span>Deliberately copying data into fewer, wider tables to speed up reads.</span></div>
+  </div>
+  <p class="lead">App databases normalize to make writes safe; warehouses denormalize to make reads fast, because they are written in controlled batches and read constantly.</p>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Normalized (app)</h4><div class="flow v"><span class="n">orders</span><span class="n">customers</span><span class="n">addresses</span><span class="n">countries</span></div><p style="font-size:.9rem;margin:.4rem 0 0">Change a country name once. Three joins to report by country.</p></div>
+    <div><h4>Denormalized (warehouse)</h4><div class="flow v"><span class="n y">orders with country, city, segment copied in</span></div><p style="font-size:.9rem;margin:.4rem 0 0">No joins to report by country. The copy is rebuilt by the pipeline.</p></div>
+  </div></div><figcaption>Neither is “better”: each fits how its data is written and read.</figcaption></figure>
+  <ul>
+    <li><b>The warehouse can afford duplication</b> because the pipeline, not users, writes it, and rebuilds it when sources change.</li>
+    <li><b>ShopCo’s ANALYTICS.ORDERS is denormalized:</b> it carries <code>country</code> directly, which is why the dashboard needs no join at all.</li>
+  </ul>
+  <details class="q"><summary>Why is duplicating the customer’s country into every order row acceptable in a warehouse but risky in an app database?</summary><div class="in">In the app, many users write data and duplicates can drift apart. In the warehouse, a controlled pipeline writes the data and can rebuild every copy from the sources, so duplication is safe and saves joins.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>Lesson 00’s query reads <code>country</code> straight from ORDERS: that table is the denormalized “big table” version of the star schema in the previous lesson.</p></div></aside>
+</section>
+
+<section class="s" id="scd" data-t="Slowly changing dimensions">
+  <div class="sh"><span class="off">09</span><h2>Slowly changing dimensions</h2></div>
+  <div class="plain"><b>In plain words</b>Lena lived in Germany when she bought the keyboard and moves to Austria in November. Should last month’s report suddenly show her purchase as Austrian? Usually not. Dimensions change slowly over time, and the warehouse must choose whether to overwrite history or keep it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>SCD</b><span>Slowly changing dimension: a dimension whose attributes change now and then.</span></div>
+    <div><b>Type 1</b><span>Overwrite the old value; history is lost.</span></div>
+    <div><b>Type 2</b><span>Add a new row with validity dates; history is kept.</span></div>
+    <div><b>Type 3</b><span>Keep a “previous value” column alongside the current one.</span></div>
+  </div>
+  <p class="lead">Slowly changing dimension techniques decide what happens to history when a dimension attribute changes: overwrite it (Type 1), version it (Type 2), or keep one previous value (Type 3).</p>
+  <div class="demo">
+    <h4>Try it: Lena moves from Germany to Austria</h4>
+    <div class="ctrls"><label for="scType">Strategy</label><select id="scType"><option value="1">Type 1: overwrite</option><option value="2" selected>Type 2: new row</option><option value="3">Type 3: previous column</option></select><button class="btn on" id="scMove">Lena moves on 1 Nov</button><button class="btn" id="scReset">Reset</button></div>
+    <div class="tw" id="scTbl"></div>
+    <div class="out" id="scOut" aria-live="polite"></div>
+  </div>
+  <pre class="code"><i>-- Type 2: close the old row, insert the new one</i>
+UPDATE dim_customer SET valid_to = '2026-10-31', is_current = FALSE
+ WHERE customer_id = 5512 AND is_current;
+INSERT INTO dim_customer (customer_key, customer_id, name, country, valid_from, valid_to, is_current)
+VALUES (88231, 5512, 'Lena', 'AT', '2026-11-01', '9999-12-31', TRUE);</pre>
+  <ul>
+    <li><b>Type 2 is the usual choice</b> when reports must stay correct for the past.</li>
+    <li><b>Facts point to the surrogate key</b> that was current at the time, so old orders keep their old country.</li>
+    <li><b>Streams, MERGE and dynamic tables</b> are the Snowflake tools for maintaining SCDs (later parts).</li>
+  </ul>
+  <details class="q"><summary>Under SCD Type 1, what happens to October’s “revenue by country” report after Lena moves to Austria?</summary><div class="in">It changes: her October order is now counted under Austria, because her only customer row was overwritten. Type 2 would keep it under Germany.</div></details>
+  <aside class="trk"><h4 data-id="dim_customer 5512">Follow the dashboard</h4><div class="in"><p>Order 90217 points to customer_key 5512 (the German version). After the move, the October report still shows 129.50 for DE. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="olapops" data-t="Roll-up, drill-down, cube">
+  <div class="sh"><span class="off">10</span><h2>OLAP operations: roll-up, drill-down, slice, dice, pivot</h2></div>
+  <div class="plain"><b>In plain words</b>Analysts explore data by zooming out (from days to months), zooming in (from countries to cities), fixing one value (only Germany), cutting a sub-block (Germany and Austria, Q4 only), and turning rows into columns. These moves have names, and SQL has shortcuts for several of them.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>roll-up / drill-down</b><span>Summarise to a coarser level / break down to a finer level.</span></div>
+    <div><b>slice / dice</b><span>Filter on one dimension value / on several values of several dimensions.</span></div>
+    <div><b>pivot</b><span>Turn values of one column into separate columns.</span></div>
+    <div><b>OLAP cube</b><span>The idea of data arranged by several dimensions at once, with totals at every level.</span></div>
+  </div>
+  <p class="lead">Roll-up, drill-down, slice, dice and pivot are the standard ways of exploring a multidimensional data set, and Snowflake supports them with GROUP BY ROLLUP, CUBE, GROUPING SETS and PIVOT.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">year</span><i data-t="drill down"></i><span class="n">quarter</span><i></i><span class="n">month</span><i></i><span class="n y">day</span><i data-t="roll up"></i><span class="n">month</span>
+  </div></div><figcaption>Moving along one dimension’s levels. The same applies to country → city, or category → product.</figcaption></figure>
+  <pre class="code"><i>-- totals per country, per country+month, and a grand total, in one query</i>
+SELECT country, DATE_TRUNC('month', order_date) AS month, SUM(amount)
+  FROM orders
+ GROUP BY ROLLUP (country, month);
+
+<i>-- every combination of the listed dimensions</i>
+SELECT country, category, SUM(amount) FROM orders_with_products GROUP BY CUBE (country, category);
+
+<i>-- pivot: one column per country</i>
+SELECT * FROM (SELECT order_date, country, amount FROM orders)
+  PIVOT (SUM(amount) FOR country IN ('DE', 'AT', 'FR'));</pre>
+  <ul>
+    <li><b>ROLLUP adds subtotal rows</b> along a hierarchy; <b>CUBE adds subtotals for every combination</b>. <span class="tag g">Guaranteed</span></li>
+    <li><b>Subtotal rows show NULL</b> in the rolled-up columns; <code>GROUPING()</code> tells them apart from real NULLs.</li>
+  </ul>
+  <details class="q"><summary>What is the difference between GROUP BY ROLLUP (country, month) and GROUP BY CUBE (country, month)?</summary><div class="in">ROLLUP gives totals per country+month, per country, and a grand total (following the hierarchy). CUBE adds totals per month across all countries as well: every combination.</div></details>
+  <aside class="trk"><h4 data-id="dashboard">Follow the dashboard</h4><div class="in"><p>The country manager drills down from “DE: 412,880” to cities, then slices to Berlin; order 90217 is one of Berlin’s rows. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="mpp" data-t="MPP and compression">
+  <div class="sh"><span class="off">11</span><h2>Massively parallel processing and columnar compression</h2></div>
+  <div class="plain"><b>In plain words</b>To add up 100 million rows quickly, split the work: give each of many machines a slice, let them add up their slices at the same time, then add the partial results together. And make the slices small: columns of similar values compress into a fraction of their size, so there is less to read.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>MPP</b><span>Massively parallel processing: many machines each working on part of one query.</span></div>
+    <div><b>node</b><span>One machine in a compute cluster.</span></div>
+    <div><b>dictionary encoding</b><span>Storing each distinct value once and replacing it with a small number.</span></div>
+    <div><b>run-length encoding</b><span>Storing “DE ×4000” instead of “DE” four thousand times.</span></div>
+  </div>
+  <p class="lead">Snowflake warehouses are MPP clusters: each node scans part of the micro-partitions and partial results are combined, while columnar encodings shrink what each node must read.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n p">plan</span><i data-t="split 41 partitions"></i><div class="row"><span class="n y">node 1<small>SUM per country</small></span><span class="n y">node 2<small>SUM per country</small></span></div><i data-t="combine"></i><span class="n g">final totals</span>
+  </div></div><figcaption>A Small warehouse’s nodes each total their share of the partitions; the partial sums are merged at the end. <span class="tag s">Simplified</span></figcaption></figure>
+  <figure><div class="canvas scroll">
+    <div class="log"><label>raw</label><div class="cell"><b></b><span>DE</span></div><div class="cell"><b></b><span>DE</span></div><div class="cell"><b></b><span>DE</span></div><div class="cell"><b></b><span>AT</span></div><div class="cell"><b></b><span>AT</span></div></div>
+    <div class="log"><label>dictionary</label><div class="cell pend"><b>0</b><span>DE</span></div><div class="cell pend"><b>1</b><span>AT</span></div><div class="cell"><b></b><span>0 0 0 1 1</span></div></div>
+    <div class="log"><label>run-length</label><div class="cell done"><b></b><span>0 ×3</span></div><div class="cell done"><b></b><span>1 ×2</span></div></div>
+  </div><figcaption>Two classic column encodings applied to a sorted country column. Sorted data compresses far better.</figcaption></figure>
+  <ul>
+    <li><b>Snowflake calls its design a hybrid:</b> shared storage that every warehouse sees (shared-disk), with MPP clusters whose nodes each process a share of the data (shared-nothing). <span class="tag g">Guaranteed</span></li>
+    <li><b>Compression is automatic;</b> Snowflake picks an encoding per column. You never choose it.</li>
+    <li><b>Bigger warehouse = more nodes,</b> which is why a size up can halve a large query’s time.</li>
+  </ul>
+  <details class="q"><summary>Why does a column of countries compress much better when the rows are sorted by country?</summary><div class="in">Equal values sit next to each other, so run-length encoding can store each run as one value and a count instead of repeating the value thousands of times.</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS_WH">Follow the dashboard</h4><div class="in"><p>The 41 micro-partitions for 4 October are split across ANALYTICS_WH’s nodes; each returns about 30 partial sums, one per country.</p></div></aside>
+</section>
+
+<section class="s" id="lakehouse" data-t="Data lake, lakehouse, Iceberg">
+  <div class="sh"><span class="off">12</span><h2>Data lake, lakehouse and open table formats</h2></div>
+  <div class="plain"><b>In plain words</b>A data lake is a big pile of files in cheap cloud storage: cheap and flexible, but hard to query reliably. A warehouse is tidy and fast, but its data lives in its own format. A lakehouse tries to have both, using open table formats like Apache Iceberg that add table features on top of plain files any engine can read.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>data lake</b><span>Raw files (JSON, Parquet, CSV) in object storage, without a database managing them.</span></div>
+    <div><b>Parquet</b><span>An open, columnar file format widely used in data lakes.</span></div>
+    <div><b>open table format</b><span>A standard (Iceberg, Delta Lake, Hudi) that turns folders of Parquet files into tables with transactions and schemas.</span></div>
+    <div><b>lakehouse</b><span>A data lake with warehouse features, built on an open table format.</span></div>
+  </div>
+  <p class="lead">Data lakes store open files cheaply, warehouses add speed and management, and open table formats like Apache Iceberg let warehouse engines such as Snowflake work directly on lake data.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">data lake<small>files, any tool, little structure</small></span><i data-t="+ Iceberg"></i><span class="n y">lakehouse<small>open tables, many engines</small></span><i data-t="+ managed storage"></i><span class="n b">warehouse<small>Snowflake tables</small></span>
+  </div></div><figcaption>A spectrum, not three separate products. Snowflake can sit anywhere on it.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Snowflake option</th><th>Data stored as</th><th>Who else can read it</th></tr>
+    <tr><td>Standard table</td><td>Snowflake micro-partitions</td><td>Only through Snowflake</td></tr>
+    <tr><td>Iceberg table</td><td>Parquet + Iceberg metadata in your bucket</td><td>Spark, Trino, other Iceberg engines</td></tr>
+    <tr><td>External table</td><td>Your existing files, read in place</td><td>Anyone; Snowflake reads them read-only</td></tr>
+  </table></div>
+  <details class="q"><summary>Why might a company store some tables as Iceberg tables instead of standard Snowflake tables?</summary><div class="in">So the same data, in open Parquet and Iceberg format in their own storage, can be read and written by other engines such as Spark, without copying it out of Snowflake.</div></details>
+  <aside class="trk"><h4 data-id="shopco">Follow the dashboard</h4><div class="in"><p>ShopCo keeps ORDERS as a standard table for speed, but its clickstream lives as an Iceberg table that the data science team also reads with Spark. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<div class="part" data-part="Architecture"><h2>Part 2: Architecture</h2><p>Three layers, and why they are separate</p></div>
 
 <section class="s" id="layers" data-t="Three layers">
-  <div class="sh"><span class="off">06</span><h2>The three layers</h2></div>
+  <div class="sh"><span class="off">13</span><h2>The three layers</h2></div>
   <div class="plain"><b>In plain words</b>Think of a library. The shelves hold the books (storage). Reading rooms with desks are where people work (compute); you can open more rooms when it gets busy and close them at night. The front desk keeps the catalogue, checks library cards and tells you where books are (services). Snowflake is built the same way, and each part grows independently.</div>
   <div class="words"><h4>New words</h4>
     <div><b>storage layer</b><span>Where table data lives, in the cloud provider’s object storage.</span></div>
@@ -496,7 +705,7 @@ SELECT o_orderpriority      AS priority,
 </section>
 
 <section class="s" id="separate" data-t="Storage separate from compute">
-  <div class="sh"><span class="off">07</span><h2>Why separating storage and compute matters</h2></div>
+  <div class="sh"><span class="off">14</span><h2>Why separating storage and compute matters</h2></div>
   <div class="plain"><b>In plain words</b>In many older warehouses, data lives on the same machines that run queries. Need more speed? Buy more machines and move data around. One team’s huge report slows everyone else. Snowflake keeps data in one place and lets each team rent its own reading room: the loaders, the analysts and the data scientists never queue behind each other.</div>
   <div class="words"><h4>New words</h4>
     <div><b>shared-nothing</b><span>An older design where each machine stores and processes its own slice of data.</span></div>
@@ -518,7 +727,7 @@ SELECT o_orderpriority      AS priority,
 </section>
 
 <section class="s" id="micro" data-t="Micro-partitions">
-  <div class="sh"><span class="off">08</span><h2>Micro-partitions</h2></div>
+  <div class="sh"><span class="off">15</span><h2>Micro-partitions</h2></div>
   <div class="plain"><b>In plain words</b>Snowflake does not store a table as one big file. It cuts it into many small files, each holding a slice of the rows, stored column by column and compressed. For every file it also writes a little label: the smallest and largest value of each column inside. Those labels are what make the next lesson possible.</div>
   <div class="words"><h4>New words</h4>
     <div><b>micro-partition</b><span>One of the small, immutable files a table is split into, holding 50 to 500 MB of uncompressed data.</span></div>
@@ -537,14 +746,14 @@ SELECT o_orderpriority      AS priority,
   <ul>
     <li><b>50 to 500 MB uncompressed each,</b> much smaller once compressed. <span class="tag g">Guaranteed</span></li>
     <li><b>Created automatically</b> as data is loaded, in the order it arrives. You do not define them.</li>
-    <li><b>Never edited:</b> an UPDATE writes new micro-partitions and retires the old ones, which is also how Time Travel works (Part 5).</li>
+    <li><b>Never edited:</b> an UPDATE writes new micro-partitions and retires the old ones, which is also how Time Travel works (Part 7).</li>
   </ul>
   <details class="q"><summary>What two things does Snowflake record about each column of every micro-partition, and why?</summary><div class="in">The minimum and maximum value (plus counts such as nulls and distinct values). They let the optimizer skip micro-partitions that cannot contain matching rows, without opening them.</div></details>
   <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 sits in one of the micro-partitions loaded on 4 October; that partition’s <code>order_date</code> label reads min 2026-10-04, max 2026-10-04. <span class="tag x">Example value</span></p></div></aside>
 </section>
 
 <section class="s" id="pruning" data-t="Pruning">
-  <div class="sh"><span class="off">09</span><h2>Pruning: skipping data without reading it</h2></div>
+  <div class="sh"><span class="off">16</span><h2>Pruning: skipping data without reading it</h2></div>
   <div class="plain"><b>In plain words</b>Before reading anything, Snowflake checks each micro-partition’s label. If the dashboard wants 4 October and a label says “1 October to 1 October”, that file is skipped without being opened. When the table is stored roughly in date order, a one-day question opens one day’s files out of a whole year.</div>
   <div class="words"><h4>New words</h4>
     <div><b>pruning</b><span>Skipping micro-partitions whose min/max show they cannot match the filter.</span></div>
@@ -572,7 +781,7 @@ Bytes scanned        212 MB
 </section>
 
 <section class="s" id="clustering" data-t="Clustering keys">
-  <div class="sh"><span class="off">10</span><h2>Clustering and clustering keys</h2></div>
+  <div class="sh"><span class="off">17</span><h2>Clustering and clustering keys</h2></div>
   <div class="plain"><b>In plain words</b>Pruning works when rows with similar values sit in the same micro-partitions. Data loaded day by day is naturally sorted by date. If your queries filter on something else, or the order gets scrambled by updates, you can ask Snowflake to keep the table sorted by chosen columns in the background, for a fee.</div>
   <div class="words"><h4>New words</h4>
     <div><b>clustering</b><span>How well rows with similar values are grouped into the same micro-partitions.</span></div>
@@ -596,10 +805,11 @@ SELECT SYSTEM$CLUSTERING_INFORMATION('shopco.analytics.orders', '(order_date)');
 </section>
 
 
-<div class="part" data-part="Warehouses and cost"><h2>Part 2: Virtual warehouses and cost</h2><p>Compute you switch on and off</p></div>
+
+<div class="part" data-part="Warehouses and cost"><h2>Part 3: Virtual warehouses and cost</h2><p>Compute you switch on and off</p></div>
 
 <section class="s" id="wh" data-t="Virtual warehouses">
-  <div class="sh"><span class="off">11</span><h2>Virtual warehouses</h2></div>
+  <div class="sh"><span class="off">18</span><h2>Virtual warehouses</h2></div>
   <div class="plain"><b>In plain words</b>A virtual warehouse is a group of computers Snowflake lends you to run queries. You pick a T-shirt size; each size up has twice the machines and costs twice as much per hour. It starts when a query arrives, stops itself after a quiet spell, and you pay only for the seconds it ran.</div>
   <div class="words"><h4>New words</h4>
     <div><b>warehouse size</b><span>X-Small, Small, Medium, Large… each double the previous in compute and credits per hour.</span></div>
@@ -629,7 +839,7 @@ ANALYTICS_WH  SUSPENDED  Small  60            true</pre></div></aside>
 </section>
 
 <section class="s" id="scale" data-t="Scale up vs scale out">
-  <div class="sh"><span class="off">12</span><h2>Scaling up versus scaling out</h2></div>
+  <div class="sh"><span class="off">19</span><h2>Scaling up versus scaling out</h2></div>
   <div class="plain"><b>In plain words</b>Two different problems, two different fixes. If one big query is slow, use a bigger warehouse: more machines work on that query (scale up). If many people’s queries are queueing, add more copies of the warehouse so they run side by side (scale out).</div>
   <div class="words"><h4>New words</h4>
     <div><b>scale up</b><span>Resize to a bigger warehouse so each query has more compute.</span></div>
@@ -657,7 +867,7 @@ ALTER WAREHOUSE analytics_wh SET
 </section>
 
 <section class="s" id="cost" data-t="Credits and cost">
-  <div class="sh"><span class="off">13</span><h2>Credits, and where the money goes</h2></div>
+  <div class="sh"><span class="off">20</span><h2>Credits, and where the money goes</h2></div>
   <div class="plain"><b>In plain words</b>The bill is mostly “how big was each warehouse, times how long was it on”. A warehouse left running all night with nobody using it is the classic surprise. Short auto-suspend, right-sized warehouses and separate warehouses per team are most of cost control.</div>
   <div class="words"><h4>New words</h4>
     <div><b>credit price</b><span>Dollars per credit; depends on edition, cloud, region and contract.</span></div>
@@ -687,7 +897,7 @@ LOAD_WH         9.8</pre></div></aside>
 </section>
 
 <section class="s" id="monitors" data-t="Resource monitors">
-  <div class="sh"><span class="off">14</span><h2>Keeping spend under control</h2></div>
+  <div class="sh"><span class="off">21</span><h2>Keeping spend under control</h2></div>
   <div class="plain"><b>In plain words</b>Because compute is pay-as-you-go, a forgotten warehouse or a runaway query can burn money quietly. A resource monitor is a budget alarm: it counts credits and can email you, or even switch warehouses off, when a limit is reached.</div>
   <div class="words"><h4>New words</h4>
     <div><b>resource monitor</b><span>A credit budget with actions at chosen percentages.</span></div>
@@ -712,10 +922,303 @@ ALTER WAREHOUSE analytics_wh SET STATEMENT_TIMEOUT_IN_SECONDS = 1800;</pre>
   <aside class="trk"><h4 data-id="analytics_monthly">Follow the dashboard</h4><div class="in"><p>ShopCo’s analytics budget is 50 credits a month; the dashboard uses under half. <span class="tag x">Example value</span></p></div></aside>
 </section>
 
-<div class="part" data-part="Loading data"><h2>Part 3: Loading data</h2><p>From files to tables</p></div>
+<section class="s" id="monitoring" data-t="Monitoring usage">
+  <div class="sh"><span class="off">22</span><h2>Monitoring: query history and account usage</h2></div>
+  <div class="plain"><b>In plain words</b>Snowflake records every query, every warehouse minute, every login and every load. You can read these records with SQL, which is how you find the slowest queries, the most expensive warehouse, or who ran what. There are two places to look: one is instant but short-lived, the other keeps a year of history but arrives with a delay.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>QUERY_HISTORY</b><span>A record of every query: who, when, how long, how much data.</span></div>
+    <div><b>ACCOUNT_USAGE</b><span>A schema in the shared SNOWFLAKE database with a year of account history, updated with a delay.</span></div>
+    <div><b>INFORMATION_SCHEMA</b><span>Per-database views and functions with current, short-term information.</span></div>
+  </div>
+  <p class="lead">SNOWFLAKE.ACCOUNT_USAGE keeps about a year of history with a lag of minutes to hours, while INFORMATION_SCHEMA functions are near real time but only cover recent days.</p>
+  <div class="tw"><table>
+    <tr><th></th><th>ACCOUNT_USAGE</th><th>INFORMATION_SCHEMA</th></tr>
+    <tr><td>Delay</td><td>About 45 minutes to 3 hours, depending on the view</td><td>None</td></tr>
+    <tr><td>History kept</td><td>365 days</td><td>7 days to 6 months, depending on the function</td></tr>
+    <tr><td>Dropped objects</td><td>Included</td><td>Not included</td></tr>
+    <tr><td>Use for</td><td>Cost reports, trends, audits</td><td>“What just happened?”</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">every query and warehouse minute</span><i data-t="recorded"></i><div class="row"><span class="n y">INFORMATION_SCHEMA<small>now, short memory</small></span><span class="n b">ACCOUNT_USAGE<small>later, long memory</small></span></div>
+  </div></div><figcaption>Two views onto the same records, tuned for different questions.</figcaption></figure>
+  <pre class="code"><i>-- the 5 slowest queries on the analytics warehouse this week</i>
+SELECT query_id, user_name, total_elapsed_time / 1000 AS seconds, bytes_scanned
+  FROM snowflake.account_usage.query_history
+ WHERE warehouse_name = 'ANALYTICS_WH'
+   AND start_time &gt;= DATEADD(day, -7, CURRENT_TIMESTAMP())
+ ORDER BY total_elapsed_time DESC
+ LIMIT 5;</pre>
+  <ul>
+    <li><b>Reading ACCOUNT_USAGE needs a privileged role</b> such as ACCOUNTADMIN, or a role granted access to the SNOWFLAKE database. <span class="tag g">Guaranteed</span></li>
+    <li><b>The latency matters:</b> a query from five minutes ago may not appear there yet. <a class="tag s" href="#c15">Simplified · check 15</a></li>
+  </ul>
+  <details class="q"><summary>You want to see a query you ran two minutes ago. Where do you look, and why not ACCOUNT_USAGE?</summary><div class="in">In INFORMATION_SCHEMA (for example the QUERY_HISTORY table function) or the Snowsight query history: they are near real time. ACCOUNT_USAGE views can lag by up to a few hours.</div></details>
+  <aside class="trk"><h4 data-id="query_history">Follow the dashboard</h4><div class="in"><p>Each 07:00 dashboard run appears in QUERY_HISTORY with about 212 MB scanned; the result-cache hits after it show 0 bytes scanned. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<div class="part" data-part="Objects and SQL features"><h2>Part 4: Objects and SQL features</h2><p>What lives in an account, and how SQL behaves</p></div>
+
+<section class="s" id="hierarchy" data-t="Accounts, editions, objects">
+  <div class="sh"><span class="off">23</span><h2>Accounts, editions and the object hierarchy</h2></div>
+  <div class="plain"><b>In plain words</b>Everything in Snowflake sits in a tree of containers. A company (organization) has one or more accounts. An account holds databases, a database holds schemas, and a schema holds tables, views and other objects. Some things, like warehouses, users and roles, belong to the account as a whole. The edition you buy decides which features the account has.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>organization</b><span>The top level: a company’s collection of Snowflake accounts.</span></div>
+    <div><b>account</b><span>One Snowflake deployment in one cloud region, with its own URL.</span></div>
+    <div><b>schema</b><span>A folder inside a database that groups tables and other objects.</span></div>
+    <div><b>edition</b><span>The product tier: Standard, Enterprise, Business Critical, Virtual Private Snowflake.</span></div>
+  </div>
+  <p class="lead">Snowflake objects form a hierarchy of organization → account → database → schema → objects, and the account’s edition determines which features are available.</p>
+  <figure><div class="board"><pre class="mmd">flowchart TB
+  ORG["Organization: ShopCo"]:::ctl --> ACC["Account: shopco (AWS eu-central-1)"]:::ctl
+  ACC --> WH["Warehouses&lt;br/&gt;ANALYTICS_WH, LOAD_WH"]
+  ACC --> UR["Users and roles&lt;br/&gt;Priya, Marco, ANALYST"]
+  ACC --> DB["Database: SHOPCO"]
+  DB --> S1["Schema: RAW"]
+  DB --> S2["Schema: ANALYTICS"]
+  S1 --> T1["ORDERS_RAW, orders_stage, orders_pipe"]
+  S2 --> T2["ORDERS, views, functions"]:::lead
+  classDef lead fill:#f2b705,stroke:#f2b705,color:#16233a
+  classDef ctl fill:#3b2f6b,stroke:#b196f5,color:#e8eef7
+</pre></div><figcaption>Warehouses, users and roles are account-level; tables, stages, pipes and views live inside a schema.</figcaption></figure>
+  <div class="tw"><table>
+    <tr><th>Edition</th><th>Adds, for example</th></tr>
+    <tr><td>Standard</td><td>The core: warehouses, Time Travel up to 1 day, data sharing</td></tr>
+    <tr><td>Enterprise</td><td>Multi-cluster warehouses, Time Travel up to 90 days, materialized views, masking and row access policies, search optimization</td></tr>
+    <tr><td>Business Critical</td><td>Stronger compliance (such as HIPAA, PCI), customer-managed keys, private connectivity, account failover</td></tr>
+    <tr><td>Virtual Private Snowflake</td><td>A fully separate Snowflake environment for the most sensitive cases</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Fully qualified names</b> are <code>database.schema.object</code>, such as <code>SHOPCO.ANALYTICS.ORDERS</code>.</li>
+    <li><b>An account lives in one cloud region;</b> replication (Part 7) copies data to accounts elsewhere.</li>
+  </ul>
+  <details class="q"><summary>Is a virtual warehouse inside a database or schema?</summary><div class="in">Neither. Warehouses, users and roles are account-level objects; databases contain schemas, and schemas contain tables, views, stages and similar objects.</div></details>
+  <aside class="trk"><h4 data-id="SHOPCO.ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>The dashboard table’s full address in this hierarchy: account shopco, database SHOPCO, schema ANALYTICS, table ORDERS. ShopCo runs Enterprise edition. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="tabletypes" data-t="Table types">
+  <div class="sh"><span class="off">24</span><h2>Table types</h2></div>
+  <div class="plain"><b>In plain words</b>Not every table needs the same protection or lifetime. Production data deserves every safety net; a staging table you rebuild nightly does not; a scratch table only needs to last your session. Snowflake lets you choose per table, and some types even keep their data outside Snowflake.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>permanent table</b><span>The default, with full Time Travel and Fail-safe.</span></div>
+    <div><b>transient table</b><span>Lives until dropped, but without Fail-safe and with at most 1 day of Time Travel.</span></div>
+    <div><b>temporary table</b><span>Exists only for your session, then disappears.</span></div>
+    <div><b>hybrid table</b><span>A row-oriented table for fast single-row lookups and updates, with enforced keys.</span></div>
+  </div>
+  <p class="lead">Permanent, transient and temporary tables differ in lifetime and data protection, while external, Iceberg, dynamic and hybrid tables differ in where data lives or how it is maintained.</p>
+  <div class="tw"><table>
+    <tr><th>Type</th><th>Lives until</th><th>Time Travel</th><th>Fail-safe</th><th>Use for</th></tr>
+    <tr><td>Permanent</td><td>Dropped</td><td>0–90 days</td><td class="yes">7 days</td><td>Production data</td></tr>
+    <tr><td>Transient</td><td>Dropped</td><td>0–1 day</td><td class="no">None</td><td>Staging, rebuildable data</td></tr>
+    <tr><td>Temporary</td><td>Session ends</td><td>0–1 day</td><td class="no">None</td><td>Scratch work</td></tr>
+    <tr><td>External</td><td>Dropped (files stay)</td><td class="no">None</td><td class="no">None</td><td>Querying lake files in place, read-only</td></tr>
+    <tr><td>Iceberg</td><td>Dropped</td><td>Depends on catalog</td><td class="no">None</td><td>Open-format lake tables</td></tr>
+    <tr><td>Dynamic</td><td>Dropped</td><td>Yes</td><td>Yes</td><td>Auto-refreshed transformations</td></tr>
+    <tr><td>Hybrid</td><td>Dropped</td><td>Yes</td><td>Yes</td><td>App-style point reads and writes</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n b">RAW.ORDERS_RAW<small>transient</small></span><i data-t="feeds"></i><span class="n y">ANALYTICS.ORDERS<small>permanent</small></span><i data-t="ad-hoc work"></i><span class="n">tmp_q4_check<small>temporary</small></span>
+  </div></div><figcaption>ShopCo picks the cheapest table type that still protects each kind of data enough.</figcaption></figure>
+  <details class="q"><summary>Which table type would you use for a staging table rebuilt from S3 files every night, and why?</summary><div class="in">Transient: it lives until dropped like a permanent table but has no Fail-safe storage cost, which is wasted on data you can reload from the files.</div></details>
+  <aside class="trk"><h4 data-id="ORDERS_RAW">Follow the dashboard</h4><div class="in"><p>Order 90217’s raw JSON sits in a transient table; its clean row sits in a permanent one.</p>
+  <pre class="code">CREATE TRANSIENT TABLE shopco.raw.orders_raw (v VARIANT, loaded_at TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP());</pre></div></aside>
+</section>
+
+<section class="s" id="views" data-t="Views">
+  <div class="sh"><span class="off">25</span><h2>Views: standard, secure and materialized</h2></div>
+  <div class="plain"><b>In plain words</b>A view is a saved query you can use like a table: “revenue_by_day” instead of retyping the SQL. A standard view runs its query each time. A secure view also hides its definition and blocks tricks that could reveal hidden rows, which matters when sharing data. A materialized view stores its result and keeps it updated, trading storage and background cost for speed.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>view</b><span>A named query that behaves like a table.</span></div>
+    <div><b>secure view</b><span>A view whose definition is hidden and whose rows cannot leak through optimizations.</span></div>
+    <div><b>materialized view</b><span>A view whose results are stored and refreshed automatically.</span></div>
+  </div>
+  <p class="lead">Standard views save a query, secure views add protection for sharing and sensitive data, and materialized views store pre-computed results for repeated, expensive queries.</p>
+  <pre class="code">CREATE VIEW analytics.revenue_by_day AS
+  SELECT order_date, country, SUM(amount) AS revenue FROM analytics.orders GROUP BY 1, 2;
+
+CREATE SECURE VIEW analytics.supplier_sales AS
+  SELECT order_date, sku, SUM(price) AS sales FROM analytics.order_items
+   WHERE brand = 'KeyboardCo' GROUP BY 1, 2;</pre>
+  <div class="tw"><table>
+    <tr><th></th><th>Standard</th><th>Secure</th><th>Materialized</th></tr>
+    <tr><td>Stores results</td><td class="no">No</td><td class="no">No</td><td class="yes">Yes</td></tr>
+    <tr><td>Definition visible to users</td><td>Yes</td><td class="no">No</td><td>Yes</td></tr>
+    <tr><td>Required for data shares</td><td>No</td><td class="yes">Yes, for views</td><td>—</td></tr>
+    <tr><td>Limits</td><td>None</td><td>Can be a little slower</td><td>One table, no joins; Enterprise <span class="tag a">Edition</span></td></tr>
+  </table></div>
+  <details class="q"><summary>Why must a view shared with another account be a secure view?</summary><div class="in">Secure views hide their definition and prevent optimizer shortcuts that could expose rows the view filters out, so the consumer can only ever see what the view is meant to show.</div></details>
+  <aside class="trk"><h4 data-id="supplier_sales">Follow the dashboard</h4><div class="in"><p>KeyboardCo’s share is built on the secure view above: it sees the keyboard line of order 90217, but never the mouse.</p></div></aside>
+</section>
+
+<section class="s" id="datatypes" data-t="Data types">
+  <div class="sh"><span class="off">26</span><h2>Data types</h2></div>
+  <div class="plain"><b>In plain words</b>Every column has a type that says what it can hold: numbers, text, dates, JSON. Picking the right type keeps data correct (no “abc” in a price) and makes storage and comparisons efficient. Dates and times deserve extra care, because Snowflake has three kinds of timestamp.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>NUMBER(p, s)</b><span>An exact number with p digits, s of them after the decimal point.</span></div>
+    <div><b>VARCHAR / STRING</b><span>Text.</span></div>
+    <div><b>TIMESTAMP_NTZ / LTZ / TZ</b><span>A timestamp with no time zone / stored in UTC and shown in your session’s zone / stored with its own offset.</span></div>
+    <div><b>OBJECT / ARRAY</b><span>Semi-structured types for key-value maps and lists, alongside VARIANT.</span></div>
+  </div>
+  <p class="lead">Snowflake offers numeric, text, date-time, semi-structured, geospatial and vector types; use exact numbers for money and choose the timestamp flavour deliberately.</p>
+  <div class="tw"><table>
+    <tr><th>Family</th><th>Types</th><th>ShopCo uses for</th></tr>
+    <tr><td>Numeric</td><td>NUMBER, FLOAT</td><td><code>amount NUMBER(10,2)</code>; never FLOAT for money</td></tr>
+    <tr><td>Text</td><td>VARCHAR, STRING</td><td><code>country VARCHAR(2)</code></td></tr>
+    <tr><td>Date and time</td><td>DATE, TIME, TIMESTAMP_NTZ, _LTZ, _TZ</td><td><code>order_date DATE</code>, <code>order_ts TIMESTAMP_TZ</code></td></tr>
+    <tr><td>Semi-structured</td><td>VARIANT, OBJECT, ARRAY</td><td>raw JSON</td></tr>
+    <tr><td>Other</td><td>BOOLEAN, BINARY, GEOGRAPHY, GEOMETRY, VECTOR</td><td>store locations; AI embeddings</td></tr>
+  </table></div>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>FLOAT</h4><span class="chip X">0.1 + 0.2 = 0.30000000000000004</span></div>
+    <div><h4>NUMBER(10,2)</h4><span class="chip Y">0.10 + 0.20 = 0.30</span></div>
+  </div></div><figcaption>Binary floating point cannot store most decimal fractions exactly. Money belongs in NUMBER.</figcaption></figure>
+  <ul>
+    <li><b>Plain TIMESTAMP means TIMESTAMP_NTZ</b> unless the account changes the mapping. <a class="tag d" href="#c11">Default · check 11</a></li>
+    <li><b>Text length limits do not cost storage;</b> VARCHAR(2) and VARCHAR(1000) store “DE” the same way.</li>
+  </ul>
+  <details class="q"><summary>Why should order amounts be NUMBER(10,2) rather than FLOAT?</summary><div class="in">FLOAT is binary floating point and cannot represent most decimal fractions exactly, so sums of money drift by tiny amounts. NUMBER stores exact decimals.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>129.50 is stored exactly as NUMBER(10,2); the dashboard total for Germany adds exact cents.</p></div></aside>
+</section>
+
+<section class="s" id="constraints" data-t="Constraints are not enforced">
+  <div class="sh"><span class="off">27</span><h2>Constraints: declared, mostly not enforced</h2></div>
+  <div class="plain"><b>In plain words</b>In an app database, declaring “order_id is the primary key” stops anyone inserting a second order 90217. In Snowflake’s standard tables you may declare primary, unique and foreign keys, but they are only labels for documentation and tools. Snowflake will happily store two copies of order 90217. Only NOT NULL is actually checked. Deduplication is your pipeline’s job.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>constraint</b><span>A rule about the data, such as “this column is unique”.</span></div>
+    <div><b>enforced</b><span>Checked by the database, which rejects rows that break it.</span></div>
+    <div><b>informational</b><span>Recorded for tools and readers, but not checked.</span></div>
+  </div>
+  <p class="lead">On standard Snowflake tables PRIMARY KEY, UNIQUE and FOREIGN KEY are informational only; only NOT NULL is enforced, so pipelines must prevent duplicates themselves.</p>
+  <pre class="code">CREATE TABLE t (id NUMBER PRIMARY KEY, name STRING NOT NULL);
+INSERT INTO t VALUES (1, 'a');
+INSERT INTO t VALUES (1, 'b');          <i>-- succeeds: the primary key is not enforced</i>
+INSERT INTO t VALUES (2, NULL);         <i>-- fails: NULL result in a non-nullable column</i></pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>App database</h4><span class="chip">PRIMARY KEY: duplicate rejected</span><span class="chip">FOREIGN KEY: orphan rejected</span></div>
+    <div><h4>Snowflake (standard tables)</h4><span class="chip X">PRIMARY KEY: duplicate stored</span><span class="chip X">FOREIGN KEY: orphan stored</span><span class="chip Y">NOT NULL: rejected</span></div>
+  </div></div><figcaption>Why: checking uniqueness across billions of rows on every load would slow loading enormously.</figcaption></figure>
+  <ul>
+    <li><b>Hybrid tables are the exception:</b> they enforce primary, unique and foreign keys. <a class="tag g" href="#c12">Guaranteed · check 12</a></li>
+    <li><b>Prevent duplicates with MERGE</b> or the QUALIFY ROW_NUMBER pattern from the analytics SQL lesson.</li>
+  </ul>
+  <details class="q"><summary>Your pipeline loaded the same file twice through two different stages and ORDERS has a PRIMARY KEY on order_id. Will Snowflake stop the duplicates?</summary><div class="in">No. Primary keys on standard tables are informational. The duplicates are stored, and the pipeline must remove or prevent them, for example with MERGE or QUALIFY ROW_NUMBER().</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Order 90217 reached ORDERS_RAW twice after an app retry. The primary key did nothing; the dedup step kept one row, so Germany’s revenue was not doubled.</p></div></aside>
+</section>
+
+<section class="s" id="txn" data-t="Transactions and concurrency">
+  <div class="sh"><span class="off">28</span><h2>Transactions and concurrency</h2></div>
+  <div class="plain"><b>In plain words</b>A transaction groups changes so they all happen or none do. Snowflake supports this like any database. Each statement normally commits on its own; you can group several with BEGIN and COMMIT. Readers never wait for writers, but two statements updating the same table may queue behind each other.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>ACID</b><span>Atomic, consistent, isolated, durable: the guarantees of a transaction.</span></div>
+    <div><b>autocommit</b><span>Each statement is its own transaction unless you start one explicitly.</span></div>
+    <div><b>READ COMMITTED</b><span>Each statement sees data committed before it started.</span></div>
+    <div><b>lock</b><span>A claim on a table that makes conflicting writers wait.</span></div>
+  </div>
+  <p class="lead">Snowflake transactions are ACID with READ COMMITTED isolation; reads never block, inserts run concurrently, and UPDATE, DELETE and MERGE on the same table generally wait for each other.</p>
+  <pre class="code">BEGIN;
+DELETE FROM analytics.orders WHERE order_date = '2026-10-04';
+INSERT INTO analytics.orders SELECT … FROM raw.orders_clean WHERE order_date = '2026-10-04';
+COMMIT;      <i>-- dashboards never see the day half-deleted</i></pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Run together freely</h4><span class="chip Y">SELECT + anything</span><span class="chip Y">INSERT + INSERT</span><span class="chip Y">COPY + INSERT</span></div>
+    <div><h4>Usually queue</h4><span class="chip X">UPDATE + UPDATE</span><span class="chip X">MERGE + DELETE</span><span class="chip X">MERGE + MERGE</span></div>
+  </div></div><figcaption>Immutable micro-partitions make reads lock-free. Changing existing rows takes table-level locks. <span class="tag s">Simplified</span></figcaption></figure>
+  <ul>
+    <li><b>Isolation level is READ COMMITTED.</b> <span class="tag g">Guaranteed</span></li>
+    <li><b>Waiting writers time out</b> after <code>LOCK_TIMEOUT</code> (12 hours by default). <a class="tag d" href="#c13">Default · check 13</a></li>
+    <li><b>Design pipelines to append</b> where possible; frequent small UPDATEs fight each other and rewrite micro-partitions.</li>
+  </ul>
+  <details class="q"><summary>Two pipelines MERGE into the same table at the same time. What happens?</summary><div class="in">They generally cannot run in parallel: one takes the table’s lock and the other waits until the first commits (or until LOCK_TIMEOUT expires).</div></details>
+  <aside class="trk"><h4 data-id="ANALYTICS.ORDERS">Follow the dashboard</h4><div class="in"><p>Marco’s reload of 4 October runs as one transaction, so the 07:00 dashboard sees either the old day or the new one, never a half-empty Germany.</p></div></aside>
+</section>
+
+<section class="s" id="merge" data-t="MERGE">
+  <div class="sh"><span class="off">29</span><h2>MERGE: insert, update or delete in one statement</h2></div>
+  <div class="plain"><b>In plain words</b>A batch of new and changed orders arrives. Some orders are new and must be inserted; some already exist and must be updated; cancelled ones must be removed. MERGE compares the batch with the table by a key and does the right thing for each row, in one statement.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>MERGE</b><span>One statement that inserts, updates or deletes target rows depending on whether they match source rows.</span></div>
+    <div><b>upsert</b><span>Insert if missing, update if present.</span></div>
+    <div><b>target / source</b><span>The table being changed / the incoming rows.</span></div>
+  </div>
+  <p class="lead">MERGE matches source rows to target rows on a key and applies inserts, updates and deletes accordingly, which is how incremental pipelines and slowly changing dimensions are maintained.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n b">source: new batch</span><i data-t="match on order_id"></i><div class="row"><span class="n y">matched + changed → UPDATE</span><span class="n g">not matched → INSERT</span><span class="n r">matched + cancelled → DELETE</span></div>
+  </div></div><figcaption>Every source row ends up in exactly one branch.</figcaption></figure>
+  <pre class="code">MERGE INTO analytics.orders t
+USING raw.orders_new s
+   ON t.order_id = s.order_id
+ WHEN MATCHED AND s.status = 'cancelled' THEN DELETE
+ WHEN MATCHED THEN UPDATE SET t.amount = s.amount, t.status = s.status
+ WHEN NOT MATCHED THEN INSERT (order_id, customer_id, country, order_date, amount, status)
+                       VALUES (s.order_id, s.customer_id, s.country, s.order_date, s.amount, s.status);</pre>
+  <ul>
+    <li><b>Deduplicate the source first:</b> if two source rows match one target row, MERGE can fail or behave unpredictably.</li>
+    <li><b>MERGE + a stream</b> processes only changed rows, the classic incremental pipeline.</li>
+  </ul>
+  <details class="q"><summary>Why should the source of a MERGE contain at most one row per key?</summary><div class="in">If several source rows match the same target row, the update is ambiguous; Snowflake raises an error (or picks one nondeterministically, depending on settings). Deduplicating the source first avoids it.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>The batch with order 90217 hit the NOT MATCHED branch and was inserted; its later status change to “shipped” hit the UPDATE branch.</p></div></aside>
+</section>
+
+<section class="s" id="udf" data-t="UDFs, procedures, Snowpark">
+  <div class="sh"><span class="off">30</span><h2>Functions, procedures and Snowpark</h2></div>
+  <div class="plain"><b>In plain words</b>When SQL’s built-in functions are not enough, you can write your own. A user-defined function computes a value inside a query. A stored procedure runs a series of steps, like a small program. Snowpark lets you write data transformations in Python, Java or Scala that still run inside Snowflake, next to the data.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>UDF</b><span>User-defined function: your own function callable in SQL.</span></div>
+    <div><b>stored procedure</b><span>Code that runs several statements, with logic, called with CALL.</span></div>
+    <div><b>Snowpark</b><span>A library for writing DataFrame code in Python, Java or Scala that runs in Snowflake.</span></div>
+    <div><b>DataFrame</b><span>A table-like object you transform with method calls instead of SQL text.</span></div>
+  </div>
+  <p class="lead">UDFs extend SQL with your own functions, stored procedures run multi-step logic, and Snowpark runs Python, Java or Scala data code inside Snowflake’s warehouses.</p>
+  <pre class="code">CREATE FUNCTION analytics.net_amount(gross NUMBER(10,2), vat_rate NUMBER(4,3))
+RETURNS NUMBER(10,2) AS 'gross / (1 + vat_rate)';
+SELECT analytics.net_amount(129.50, 0.19);         <i>-- 108.82 (computed: 129.50 / 1.19)</i>
+
+CREATE PROCEDURE analytics.reload_day(d DATE) RETURNS STRING LANGUAGE SQL AS
+$$ BEGIN
+     DELETE FROM analytics.orders WHERE order_date = :d;
+     INSERT INTO analytics.orders SELECT … FROM raw.orders_clean WHERE order_date = :d;
+     RETURN 'reloaded';
+   END; $$;
+CALL analytics.reload_day('2026-10-04');</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">Python on a laptop<small>Snowpark DataFrame code</small></span><i data-t="translated and sent"></i><span class="n y">Snowflake warehouse<small>runs next to the data</small></span>
+  </div></div><figcaption>With Snowpark, data never leaves Snowflake; the code goes to the data.</figcaption></figure>
+  <ul>
+    <li><b>UDF languages:</b> SQL, JavaScript, Python, Java, Scala.</li>
+    <li><b>Snowpark-optimized warehouses</b> give each node much more memory, for model training and large in-memory work.</li>
+  </ul>
+  <details class="q"><summary>What is the difference between a UDF and a stored procedure?</summary><div class="in">A UDF returns a value and is used inside a query, row by row. A stored procedure is called on its own with CALL and can run many statements with control flow.</div></details>
+  <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>Finance’s view of order 90217 uses the UDF above: 129.50 gross is 108.82 net of German 19% VAT (computed).</p></div></aside>
+</section>
+
+<section class="s" id="approx" data-t="Approximate and sampling functions">
+  <div class="sh"><span class="off">31</span><h2>Approximate and sampling functions</h2></div>
+  <div class="plain"><b>In plain words</b>Counting exactly how many different customers bought something in a year means remembering every one of them. If “about 4.2 million, give or take 2%” is good enough for a dashboard, an approximate function gets there much faster with far less memory. Sampling does the same for exploration: look at 1% of the rows to get a feel for the data.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>cardinality</b><span>The number of distinct values.</span></div>
+    <div><b>HyperLogLog</b><span>The algorithm behind approximate distinct counts, using a small fixed amount of memory.</span></div>
+    <div><b>sample</b><span>A random subset of rows.</span></div>
+  </div>
+  <p class="lead">APPROX_COUNT_DISTINCT, APPROX_PERCENTILE and SAMPLE trade a small, known error for large savings in time and memory on big tables.</p>
+  <pre class="code">SELECT COUNT(DISTINCT customer_id)        FROM analytics.orders;   <i>-- exact, heavier</i>
+SELECT APPROX_COUNT_DISTINCT(customer_id) FROM analytics.orders;   <i>-- HyperLogLog estimate</i>
+SELECT APPROX_PERCENTILE(amount, 0.5)     FROM analytics.orders;   <i>-- approximate median</i>
+SELECT * FROM analytics.orders SAMPLE (1);                          <i>-- about 1% of rows</i></pre>
+  <figure><div class="canvas"><div class="two">
+    <div><h4>Exact distinct count</h4><span class="chip">remembers every distinct value</span><span class="chip">memory grows with the data</span></div>
+    <div><h4>APPROX_COUNT_DISTINCT</h4><span class="chip Y">fixed small memory</span><span class="chip Y">typical error under 2%</span></div>
+  </div></div><figcaption>The trade in one picture. Use exact counts for finance; estimates for trends.</figcaption></figure>
+  <ul>
+    <li><b>Average relative error of APPROX_COUNT_DISTINCT is about 1.6%.</b> <a class="tag s" href="#c14">Simplified · check 14</a></li>
+    <li><b>Approximations combine across groups</b> with HLL state functions, so daily estimates can be merged into monthly ones.</li>
+  </ul>
+  <details class="q"><summary>When should you not use APPROX_COUNT_DISTINCT?</summary><div class="in">When the number must be exact, such as invoices, finance reports or anything audited. Use it for dashboards and trends where a percent or two of error does not change decisions.</div></details>
+  <aside class="trk"><h4 data-id="dashboard">Follow the dashboard</h4><div class="in"><p>The “unique customers this year” tile uses the approximate count; the revenue tiles stay exact. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<div class="part" data-part="Loading data"><h2>Part 5: Loading data</h2><p>From files to tables</p></div>
 
 <section class="s" id="stages" data-t="Stages and file formats">
-  <div class="sh"><span class="off">15</span><h2>Stages and file formats</h2></div>
+  <div class="sh"><span class="off">32</span><h2>Stages and file formats</h2></div>
   <div class="plain"><b>In plain words</b>Before Snowflake can load files, it needs to know where they are and how to read them. A stage is a saved pointer to a folder of files, usually in your own S3 bucket. A file format says “these are JSON” or “these are CSV with a header row”.</div>
   <div class="words"><h4>New words</h4>
     <div><b>stage</b><span>A named location of files for loading or unloading.</span></div>
@@ -746,7 +1249,7 @@ s3://shopco-landing/orders/2026/10/04/0941-17.json    4812   Sun, 4 Oct 2026 09:
 </section>
 
 <section class="s" id="copy" data-t="COPY INTO">
-  <div class="sh"><span class="off">16</span><h2>Bulk loading with COPY INTO</h2></div>
+  <div class="sh"><span class="off">33</span><h2>Bulk loading with COPY INTO</h2></div>
   <div class="plain"><b>In plain words</b>COPY INTO is the “load these files into this table” command. A warehouse reads the files in parallel and writes micro-partitions. Snowflake also remembers which files it has already loaded, so running the same command twice does not double the data.</div>
   <div class="words"><h4>New words</h4>
     <div><b>COPY INTO</b><span>The SQL command that loads staged files into a table, or unloads a table into files.</span></div>
@@ -774,7 +1277,7 @@ file                         status  rows_parsed  rows_loaded
 </section>
 
 <section class="s" id="snowpipe" data-t="Snowpipe">
-  <div class="sh"><span class="off">17</span><h2>Continuous loading with Snowpipe</h2></div>
+  <div class="sh"><span class="off">34</span><h2>Continuous loading with Snowpipe</h2></div>
   <div class="plain"><b>In plain words</b>Instead of loading once a night, Snowpipe loads each file within about a minute of it landing. S3 tells Snowflake “a new file arrived”, and Snowflake runs a COPY for it on its own compute. You do not run a warehouse for it.</div>
   <div class="words"><h4>New words</h4>
     <div><b>Snowpipe</b><span>A service that loads files automatically as they arrive.</span></div>
@@ -810,13 +1313,14 @@ file                         status  rows_parsed  rows_loaded
 </section>
 
 <section class="s" id="variant" data-t="JSON and VARIANT">
-  <div class="sh"><span class="off">18</span><h2>JSON and the VARIANT type</h2></div>
+  <div class="sh"><span class="off">35</span><h2>JSON and the VARIANT type</h2></div>
   <div class="plain"><b>In plain words</b>Raw data often arrives as JSON, with nesting and fields that change over time. Snowflake can store a whole JSON document in one column of type VARIANT and still query inside it with a simple path syntax, so you can load first and decide on columns later.</div>
   <div class="words"><h4>New words</h4>
     <div><b>VARIANT</b><span>A column type that holds any JSON-like value.</span></div>
     <div><b>path</b><span>The way into nested data: <code>v:customer.country</code>.</span></div>
     <div><b>cast (::)</b><span>Convert a value to a type: <code>::string</code>, <code>::number</code>.</span></div>
     <div><b>FLATTEN</b><span>Turns each element of an array into its own row.</span></div>
+    <div><b>ELT</b><span>Extract, load, then transform inside the warehouse: load raw data first, clean it later with SQL.</span></div>
   </div>
   <p class="lead">A VARIANT column stores semi-structured data such as JSON, and you query it with paths, casts and FLATTEN as if it were columns.</p>
   <pre class="code"><i>-- raw row in ORDERS_RAW (one VARIANT column v)</i>
@@ -839,17 +1343,44 @@ ORDER_ID  COUNTRY  SKU    PRICE
     <div><h4>After FLATTEN on items</h4><div class="log"><div class="cell pend"><b>row 1</b><span>90217 · DE · KB-01</span></div></div><div class="log"><div class="cell pend"><b>row 2</b><span>90217 · DE · MS-02</span></div></div></div>
   </div></div><figcaption>One nested document becomes ordinary rows and columns that SQL can group and sum.</figcaption></figure>
   <ul>
-    <li><b>Load raw, transform later:</b> keep the original JSON in a raw table and build clean tables from it (ELT, Part 7).</li>
+    <li><b>Load raw, transform later:</b> keep the original JSON in a raw table and build clean tables from it (ELT, Part 9).</li>
     <li><b>Common fields are stored efficiently:</b> Snowflake extracts frequent paths into columnar form, so they prune and compress well. <span class="tag s">Simplified</span></li>
   </ul>
   <details class="q"><summary>What does LATERAL FLATTEN(input =&gt; v:items) do to an order with three items?</summary><div class="in">It produces three rows, one per element of the items array, each joined to its parent order row, so you can select each item’s fields.</div></details>
   <aside class="trk"><h4 data-id="order 90217">Follow the dashboard</h4><div class="in"><p>The two items add up to the order’s amount: 89.50 + 40.00 = 129.50, the value in ANALYTICS.ORDERS.</p></div></aside>
 </section>
 
-<div class="part" data-part="Queries and performance"><h2>Part 4: Queries and performance</h2><p>What happens when you press Run</p></div>
+
+<section class="s" id="unload" data-t="Unloading data">
+  <div class="sh"><span class="off">36</span><h2>Unloading data to files</h2></div>
+  <div class="plain"><b>In plain words</b>Loading brings files in; unloading writes query results out as files, for a partner who wants a CSV or a system that reads Parquet from S3. The same COPY INTO command runs in the other direction: from a table or query into a stage.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>unload</b><span>Write table or query results out to files in a stage.</span></div>
+    <div><b>GET</b><span>Download files from an internal stage to your computer.</span></div>
+  </div>
+  <p class="lead">COPY INTO a stage writes query results to files in parallel, in CSV, JSON or Parquet, which other systems can then pick up.</p>
+  <pre class="code">COPY INTO @shopco.raw.exports/daily_country_revenue/2026-10-04/
+FROM (SELECT country, SUM(amount) AS revenue
+        FROM shopco.analytics.orders WHERE order_date = '2026-10-04' GROUP BY country)
+FILE_FORMAT = (TYPE = PARQUET)
+HEADER = TRUE;
+
+rows_unloaded  input_bytes  output_bytes
+30             …            …</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">query on a warehouse</span><i data-t="written in parallel"></i><span class="n b">files in a stage<small>S3 folder</small></span><i data-t="picked up by"></i><span class="n g">partner or other system</span>
+  </div></div><figcaption>The mirror image of loading. Several files may be written, one per thread, unless you ask for a single file.</figcaption></figure>
+  <ul>
+    <li><b>Unloads are split into several files</b> by default, up to <code>MAX_FILE_SIZE</code> each (16 MB by default). <a class="tag d" href="#c16">Default · check 16</a></li>
+    <li><b>For Snowflake-to-Snowflake, prefer a share</b> (Part 7): no files, no copies, always current.</li>
+  </ul>
+  <details class="q"><summary>A partner on another Snowflake account wants daily revenue. Why is a share usually better than unloading files for them?</summary><div class="in">A share gives them live, read-only access with no copies to produce, transfer or keep in sync. Files go stale and must be regenerated and moved every day.</div></details>
+  <aside class="trk"><h4 data-id="exports">Follow the dashboard</h4><div class="in"><p>The 30 country totals for 4 October, Germany’s included, go to a Parquet file each morning for the finance system that is not on Snowflake.</p></div></aside>
+</section>
+<div class="part" data-part="Queries and performance"><h2>Part 6: Queries and performance</h2><p>What happens when you press Run</p></div>
 
 <section class="s" id="qlife" data-t="Life of a query">
-  <div class="sh"><span class="off">19</span><h2>The life of a query</h2></div>
+  <div class="sh"><span class="off">37</span><h2>The life of a query</h2></div>
   <div class="plain"><b>In plain words</b>When the dashboard sends its query, the services layer checks permissions, looks at the min/max labels to decide which files are needed, and makes a plan. Only then does the warehouse wake up, fetch those files, and add up the numbers across its machines.</div>
   <div class="words"><h4>New words</h4>
     <div><b>compilation</b><span>Parsing, checking and planning a query, done in the services layer.</span></div>
@@ -882,7 +1413,7 @@ Rows returned      30</pre></div></aside>
 </section>
 
 <section class="s" id="caches" data-t="Three caches">
-  <div class="sh"><span class="off">20</span><h2>Three caches</h2></div>
+  <div class="sh"><span class="off">38</span><h2>Three caches</h2></div>
   <div class="plain"><b>In plain words</b>Snowflake avoids repeating work three ways. If someone asks exactly the same question and the data has not changed, it hands back the saved answer for free. If a warehouse recently read some data, it keeps a copy on its own fast disks. And some questions, like counting rows, can be answered from the labels alone.</div>
   <div class="words"><h4>New words</h4>
     <div><b>result cache</b><span>Saved results of recent queries, reused for identical queries on unchanged data.</span></div>
@@ -918,7 +1449,7 @@ Rows returned      30</pre></div></aside>
 </section>
 
 <section class="s" id="spill" data-t="Spilling and sizing">
-  <div class="sh"><span class="off">21</span><h2>Spilling, and when to size up</h2></div>
+  <div class="sh"><span class="off">39</span><h2>Spilling, and when to size up</h2></div>
   <div class="plain"><b>In plain words</b>Big joins and sorts need working memory. When a warehouse runs out of memory it writes the overflow to its local disk, then to remote storage, and each step is much slower. The query profile shows this as “bytes spilled”. A bigger warehouse has more memory, so the spilling stops.</div>
   <div class="words"><h4>New words</h4>
     <div><b>spilling</b><span>Writing intermediate data to disk because it does not fit in memory.</span></div>
@@ -937,7 +1468,7 @@ Rows returned      30</pre></div></aside>
 </section>
 
 <section class="s" id="sqlpatterns" data-t="Analytics SQL patterns">
-  <div class="sh"><span class="off">22</span><h2>Analytics SQL patterns</h2></div>
+  <div class="sh"><span class="off">40</span><h2>Analytics SQL patterns</h2></div>
   <div class="plain"><b>In plain words</b>Most dashboards are built from a handful of SQL shapes: totals per group, totals per day, running totals, “top N per group”, and keeping only the latest version of each row. Learn these and you can answer most business questions.</div>
   <div class="words"><h4>New words</h4>
     <div><b>window function</b><span>A calculation across related rows that keeps every row, such as a running total.</span></div>
@@ -972,7 +1503,7 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY loaded_at DESC) = 1;</
 </section>
 
 <section class="s" id="accel" data-t="Speed-up features">
-  <div class="sh"><span class="off">23</span><h2>Speed-up features: materialized views, search optimization, acceleration</h2></div>
+  <div class="sh"><span class="off">41</span><h2>Speed-up features: materialized views, search optimization, acceleration</h2></div>
   <div class="plain"><b>In plain words</b>For special cases Snowflake can do extra work in the background so particular queries are faster: keep a pre-computed summary up to date, build a lookup structure for finding needles in a haystack, or lend extra compute to big scans. Each costs credits, so use them where a measured problem exists.</div>
   <div class="words"><h4>New words</h4>
     <div><b>materialized view</b><span>A stored, automatically refreshed query result.</span></div>
@@ -995,11 +1526,12 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY loaded_at DESC) = 1;</
 </section>
 
 <section class="s" id="smap" data-t="Where it lives, who calls whom">
-  <div class="sh"><span class="off">24</span><h2>Where it lives and who calls whom</h2></div>
+  <div class="sh"><span class="off">42</span><h2>Where it lives and who calls whom</h2></div>
   <div class="plain"><b>In plain words</b>Diagrams show boxes and arrows but rarely say where each piece of data physically sits, or which program connects to which. Now that you have seen loading and caching, this lesson answers both for ShopCo’s whole setup: the files in S3, the warehouse machines, Snowflake’s services, and the tools on the outside.</div>
   <div class="words"><h4>New words</h4>
-    <div><b>Time Travel</b><span>Snowflake keeping old versions of data so you can query or restore them. Part 5 explains it.</span></div>
+    <div><b>Time Travel</b><span>Snowflake keeping old versions of data so you can query or restore them. Part 7 explains it.</span></div>
     <div><b>storage integration</b><span>The trust set-up that lets Snowflake read ShopCo’s own S3 bucket.</span></div>
+    <div><b>IAM role</b><span>An AWS identity with permissions; ShopCo lets Snowflake assume one to read its bucket.</span></div>
   </div>
   <p class="lead">Table data sits in Snowflake-managed cloud storage, metadata and cached results sit in the services layer, warehouses hold only a temporary cache, and every client connects over HTTPS.</p>
   <h3>Where each thing lives</h3>
@@ -1034,10 +1566,10 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY loaded_at DESC) = 1;</
   </ul>
 </section>
 
-<div class="part" data-part="Data features"><h2>Part 5: Time Travel, cloning, pipelines, sharing</h2><p>What immutable files make possible</p></div>
+<div class="part" data-part="Data features"><h2>Part 7: Time Travel, cloning, pipelines, sharing</h2><p>What immutable files make possible</p></div>
 
 <section class="s" id="timetravel" data-t="Time Travel">
-  <div class="sh"><span class="off">25</span><h2>Time Travel</h2></div>
+  <div class="sh"><span class="off">43</span><h2>Time Travel</h2></div>
   <div class="plain"><b>In plain words</b>Because micro-partitions are never edited, an UPDATE or DELETE writes new files and keeps the old ones for a while. So you can ask “what did this table look like an hour ago?”, or bring back a table you dropped by mistake, with ordinary SQL.</div>
   <div class="words"><h4>New words</h4>
     <div><b>Time Travel</b><span>Querying or restoring data as it was at an earlier moment.</span></div>
@@ -1063,7 +1595,7 @@ DROP TABLE orders;  UNDROP TABLE orders;</pre>
 </section>
 
 <section class="s" id="failsafe" data-t="Fail-safe">
-  <div class="sh"><span class="off">26</span><h2>Fail-safe</h2></div>
+  <div class="sh"><span class="off">44</span><h2>Fail-safe</h2></div>
   <div class="plain"><b>In plain words</b>After Time Travel’s window ends, Snowflake keeps the old data for seven more days in a vault only Snowflake staff can open. It is a last resort for disasters, not something you can query yourself.</div>
   <div class="words"><h4>New words</h4>
     <div><b>Fail-safe</b><span>A 7-day period after Time Travel during which only Snowflake support can recover data.</span></div>
@@ -1082,7 +1614,7 @@ DROP TABLE orders;  UNDROP TABLE orders;</pre>
 </section>
 
 <section class="s" id="clone" data-t="Zero-copy cloning">
-  <div class="sh"><span class="off">27</span><h2>Zero-copy cloning</h2></div>
+  <div class="sh"><span class="off">45</span><h2>Zero-copy cloning</h2></div>
   <div class="plain"><b>In plain words</b>Copying a 10 TB table normally takes hours and doubles your storage. A Snowflake clone just copies the list of micro-partitions, so it is instant and free at first. Only data you change afterwards gets new files.</div>
   <div class="words"><h4>New words</h4>
     <div><b>clone</b><span>A new table, schema or database that starts by sharing the original’s micro-partitions.</span></div>
@@ -1103,13 +1635,14 @@ CREATE TABLE orders_backup CLONE orders AT(OFFSET =&gt; -3600);    <i>-- combine
 </section>
 
 <section class="s" id="pipelines" data-t="Streams, tasks, dynamic tables">
-  <div class="sh"><span class="off">28</span><h2>Pipelines inside Snowflake: streams, tasks and dynamic tables</h2></div>
+  <div class="sh"><span class="off">46</span><h2>Pipelines inside Snowflake: streams, tasks and dynamic tables</h2></div>
   <div class="plain"><b>In plain words</b>Raw JSON arrives every minute; the clean ORDERS table must keep up. A stream remembers what is new in a table since you last looked. A task runs SQL on a schedule. Together they process only new rows. A dynamic table does the same with one statement: “keep this query’s result no more than N minutes stale”.</div>
   <div class="words"><h4>New words</h4>
     <div><b>stream</b><span>A record of the changes to a table since it was last read.</span></div>
     <div><b>task</b><span>SQL that Snowflake runs on a schedule or when a condition is true.</span></div>
     <div><b>dynamic table</b><span>A table defined by a query that Snowflake keeps refreshed within a target lag.</span></div>
     <div><b>incremental</b><span>Processing only what changed, not everything again.</span></div>
+    <div><b>MERGE</b><span>One statement that inserts, updates or deletes rows depending on whether they match (see the MERGE lesson).</span></div>
   </div>
   <p class="lead">Streams track changes, tasks schedule SQL, and dynamic tables declare a refreshed result, so transformations can run incrementally inside Snowflake.</p>
   <figure><div class="canvas"><div class="flow">
@@ -1133,7 +1666,7 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY v:order_id ORDER BY v:ts DESC) = 1;</pre
 </section>
 
 <section class="s" id="sharing" data-t="Data sharing">
-  <div class="sh"><span class="off">29</span><h2>Data sharing</h2></div>
+  <div class="sh"><span class="off">47</span><h2>Data sharing</h2></div>
   <div class="plain"><b>In plain words</b>Sending data to a partner usually means exporting files, emailing them and keeping them in sync. In Snowflake you can grant another account access to live tables instead. Nothing is copied: they query your micro-partitions on their own warehouse, so they pay for their queries and see updates instantly.</div>
   <div class="words"><h4>New words</h4>
     <div><b>share</b><span>An object that grants another Snowflake account read access to chosen tables.</span></div>
@@ -1153,10 +1686,63 @@ ALTER SHARE shopco_supplier_share ADD ACCOUNTS = keyboardco.acme;</pre>
   <aside class="trk"><h4 data-id="daily_sku_sales">Follow the dashboard</h4><div class="in"><p>KeyboardCo, which supplies the keyboard in order 90217, sees its daily sales per country through a share instead of a weekly spreadsheet.</p></div></aside>
 </section>
 
-<div class="part" data-part="Security"><h2>Part 6: Security and governance</h2><p>Who may see what</p></div>
+
+<section class="s" id="replication" data-t="Replication and failover">
+  <div class="sh"><span class="off">48</span><h2>Replication and failover across regions</h2></div>
+  <div class="plain"><b>In plain words</b>An account lives in one cloud region. If that whole region has an outage, or you need the data close to users on another continent, you can keep a copy of databases in an account in another region, or even another cloud, and switch to it if needed.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>replication</b><span>Keeping a copy of databases (and other objects) in another account, refreshed on a schedule.</span></div>
+    <div><b>failover</b><span>Making the copy the primary when the original is unavailable.</span></div>
+    <div><b>failover group</b><span>A set of objects that replicate and fail over together.</span></div>
+    <div><b>client redirect</b><span>A connection URL that can be pointed at the new primary account.</span></div>
+  </div>
+  <p class="lead">Replication and failover groups copy databases and account objects to accounts in other regions or clouds, and Business Critical edition can promote that copy when the primary region fails.</p>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n y">shopco<small>AWS eu-central-1, primary</small></span><i data-t="refresh every 10 min"></i><span class="n b">shopco_dr<small>AWS eu-west-1, secondary</small></span><i data-t="region outage: failover"></i><span class="n y">shopco_dr becomes primary</span>
+  </div></div><figcaption>The secondary is read-only until failover. Client redirect moves the BI tool’s connection without changing its settings.</figcaption></figure>
+  <pre class="code">CREATE FAILOVER GROUP shopco_fg
+  OBJECT_TYPES = DATABASES, ROLES, WAREHOUSES
+  ALLOWED_DATABASES = shopco
+  ALLOWED_ACCOUNTS = shopco_org.shopco_dr
+  REPLICATION_SCHEDULE = '10 MINUTE';</pre>
+  <ul>
+    <li><b>Replication works across regions and clouds;</b> failover needs Business Critical edition. <span class="tag a">Edition</span></li>
+    <li><b>Data since the last refresh can be lost</b> in a failover: the schedule sets your recovery point.</li>
+    <li><b>Replication transfers data,</b> which costs compute and cross-region transfer.</li>
+  </ul>
+  <details class="q"><summary>With a 10-minute replication schedule, how much data could be missing after a sudden failover?</summary><div class="in">Up to about the last 10 minutes of changes, everything since the last completed refresh. The schedule is the recovery point objective.</div></details>
+  <aside class="trk"><h4 data-id="shopco_dr">Follow the dashboard</h4><div class="in"><p>If Frankfurt failed at 06:55, the dashboard would run against Ireland at 07:00 with data up to the 06:50 refresh, including order 90217 from the day before. <span class="tag x">Example value</span></p></div></aside>
+</section>
+
+<section class="s" id="cortex" data-t="AI and ML in Snowflake">
+  <div class="sh"><span class="off">49</span><h2>AI and machine learning inside Snowflake</h2></div>
+  <div class="plain"><b>In plain words</b>Snowflake now includes AI functions you call from SQL, such as scoring the sentiment of a review or summarising text, and machine-learning functions such as forecasting next month’s sales. The data does not leave Snowflake; the model comes to it.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Cortex</b><span>Snowflake’s family of built-in AI and ML features.</span></div>
+    <div><b>LLM</b><span>Large language model: an AI model that reads and writes text.</span></div>
+    <div><b>forecast</b><span>A prediction of future values from past values over time.</span></div>
+  </div>
+  <p class="lead">Snowflake Cortex provides LLM functions callable from SQL and ML functions such as forecasting and anomaly detection, all running next to the data under the same access controls.</p>
+  <pre class="code">SELECT review_id, SNOWFLAKE.CORTEX.SENTIMENT(review_text) AS sentiment   <i>-- -1 (negative) to 1 (positive)</i>
+  FROM shopco.analytics.product_reviews
+ WHERE sku = 'KB-01';
+
+SELECT SNOWFLAKE.CORTEX.SUMMARIZE(LISTAGG(review_text, ' '))
+  FROM shopco.analytics.product_reviews WHERE sku = 'KB-01';</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n b">reviews table</span><i data-t="SQL function"></i><span class="n p">Cortex model<small>runs inside Snowflake</small></span><i data-t="score per row"></i><span class="n g">sentiment column</span>
+  </div></div><figcaption>No export to an outside AI service; roles and masking still apply to what the model can read.</figcaption></figure>
+  <ul>
+    <li><b>Billed per use,</b> separately from warehouses, based on the amount of text processed. <span class="tag s">Simplified</span></li>
+    <li><b>Availability varies by region and changes quickly;</b> check the documentation for your account.</li>
+  </ul>
+  <details class="q"><summary>What is the main advantage of calling an AI function inside Snowflake instead of exporting data to an external AI API?</summary><div class="in">The data never leaves Snowflake, so existing access controls, masking and governance still apply, and there is no export pipeline to build or secure.</div></details>
+  <aside class="trk"><h4 data-id="KB-01">Follow the dashboard</h4><div class="in"><p>A new dashboard tile shows the average review sentiment for the keyboard Lena bought in order 90217. <span class="tag x">Example value</span></p></div></aside>
+</section>
+<div class="part" data-part="Security"><h2>Part 8: Security and governance</h2><p>Who may see what</p></div>
 
 <section class="s" id="rbac" data-t="Roles and access">
-  <div class="sh"><span class="off">30</span><h2>Roles and access control</h2></div>
+  <div class="sh"><span class="off">50</span><h2>Roles and access control</h2></div>
   <div class="plain"><b>In plain words</b>In Snowflake you never give permissions to a person directly. You give permissions to a role, like “analyst”, and give people roles. When Priya changes teams, you change her role, not fifty grants.</div>
   <div class="words"><h4>New words</h4>
     <div><b>role</b><span>A named bundle of permissions.</span></div>
@@ -1183,7 +1769,7 @@ GRANT ROLE analyst TO USER priya;</pre>
 </section>
 
 <section class="s" id="masking" data-t="Masking and row access">
-  <div class="sh"><span class="off">31</span><h2>Masking and row access policies</h2></div>
+  <div class="sh"><span class="off">51</span><h2>Masking and row access policies</h2></div>
   <div class="plain"><b>In plain words</b>Sometimes people may see a table but not everything in it. A masking policy shows “***” instead of an email to most roles. A row access policy shows each country manager only their own country’s rows. The rule lives with the data, so it applies in every tool.</div>
   <div class="words"><h4>New words</h4>
     <div><b>masking policy</b><span>A rule that hides or transforms a column’s values depending on who is asking.</span></div>
@@ -1210,16 +1796,77 @@ ALTER TABLE orders ADD ROW ACCESS POLICY country_rows ON (country);</pre>
   <aside class="trk"><h4 data-id="country_rows">Follow the dashboard</h4><div class="in"><p>Germany’s country manager opens the same dashboard and sees only the DE row, including order 90217’s contribution.</p></div></aside>
 </section>
 
-<div class="part" data-part="Choose and revise"><h2>Part 7: Choose and revise</h2><p>Fit, compare, test yourself, prove it</p></div>
+<section class="s" id="auth" data-t="Authentication and network">
+  <div class="sh"><span class="off">52</span><h2>Authentication and network policies</h2></div>
+  <div class="plain"><b>In plain words</b>Before roles decide what you may see, Snowflake must be sure who you are and that you are connecting from somewhere allowed. People should sign in through the company’s login system with a second factor; programs should use keys instead of passwords; and network policies can refuse connections from unknown places.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>authentication</b><span>Proving who you are.</span></div>
+    <div><b>MFA</b><span>Multi-factor authentication: a password plus a second proof, such as a phone app.</span></div>
+    <div><b>SSO</b><span>Single sign-on through the company’s identity provider (for example Okta or Entra ID).</span></div>
+    <div><b>key-pair authentication</b><span>A program proves its identity with a private key instead of a password.</span></div>
+    <div><b>network policy</b><span>A list of IP addresses or networks allowed (or blocked) to connect.</span></div>
+  </div>
+  <p class="lead">Users authenticate with SSO or MFA, services with key pairs or OAuth, and network policies restrict where connections may come from.</p>
+  <div class="tw"><table>
+    <tr><th>Who</th><th>How they sign in</th></tr>
+    <tr><td>People (Priya, Marco)</td><td>SSO via the identity provider, with MFA</td></tr>
+    <tr><td>BI tool, pipelines</td><td>Key-pair authentication or OAuth, as service users</td></tr>
+  </table></div>
+  <pre class="code">ALTER USER bi_service SET RSA_PUBLIC_KEY = 'MIIBIjANBgkq…';
+
+CREATE NETWORK POLICY shopco_office
+  ALLOWED_IP_LIST = ('203.0.113.0/24', '198.51.100.17');
+ALTER USER bi_service SET NETWORK_POLICY = shopco_office;</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n g">connection</span><i data-t="1. allowed network?"></i><span class="n p">network policy</span><i data-t="2. who are you?"></i><span class="n p">SSO / MFA / key pair</span><i data-t="3. what may you do?"></i><span class="n y">role privileges</span>
+  </div></div><figcaption>Three gates, in order. Each lesson of this part covers one of them.</figcaption></figure>
+  <ul>
+    <li><b>Password-only sign-in for people is being phased out</b> by Snowflake in favour of MFA, SSO and keys. <span class="tag s">Simplified</span></li>
+    <li><b>Private connectivity</b> (such as AWS PrivateLink) keeps traffic off the public internet; it needs Business Critical. <span class="tag a">Edition</span></li>
+  </ul>
+  <details class="q"><summary>Why should the BI tool use key-pair authentication instead of a user’s password?</summary><div class="in">A key pair cannot be phished or guessed like a password, is not tied to a person who may leave, and can be rotated by administrators without anyone typing it.</div></details>
+  <aside class="trk"><h4 data-id="bi_service">Follow the dashboard</h4><div class="in"><p>The 07:00 dashboard refresh signs in as <code>bi_service</code> with a key pair, from the office IP range, then uses role ANALYST.</p></div></aside>
+</section>
+
+<section class="s" id="governance" data-t="Tags, classification, lineage">
+  <div class="sh"><span class="off">53</span><h2>Governance: tags, classification and access history</h2></div>
+  <div class="plain"><b>In plain words</b>As data grows, you need to know which columns hold personal data, who looked at them, and where each table’s data came from. Snowflake lets you label columns with tags, can scan tables to suggest which columns look sensitive, and keeps a history of which user read which columns.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>object tag</b><span>A label such as <code>pii = 'email'</code> attached to a table or column.</span></div>
+    <div><b>classification</b><span>Snowflake analysing columns and suggesting categories such as email or phone number.</span></div>
+    <div><b>access history</b><span>A record of which queries read or wrote which columns.</span></div>
+    <div><b>lineage</b><span>Where data came from and where it flows next.</span></div>
+  </div>
+  <p class="lead">Object tags label sensitive data, tag-based masking protects every tagged column at once, classification finds sensitive columns, and ACCESS_HISTORY records who read what.</p>
+  <pre class="code">CREATE TAG governance.pii;
+ALTER TABLE analytics.customers MODIFY COLUMN email SET TAG governance.pii = 'email';
+ALTER TAG governance.pii SET MASKING POLICY email_mask;      <i>-- protects every tagged column</i>
+
+SELECT query_start_time, user_name, direct_objects_accessed
+  FROM snowflake.account_usage.access_history
+ WHERE query_start_time &gt;= DATEADD(day, -1, CURRENT_TIMESTAMP());</pre>
+  <figure><div class="canvas"><div class="flow">
+    <span class="n">classification<small>finds email-like columns</small></span><i data-t="suggests"></i><span class="n p">tag pii = 'email'</span><i data-t="tag-based masking"></i><span class="n y">masked for most roles</span><i data-t="every read logged"></i><span class="n b">access history</span>
+  </div></div><figcaption>A governance loop: find, label, protect, audit.</figcaption></figure>
+  <ul>
+    <li><b>Tags, tag-based masking and access history need Enterprise edition.</b> <span class="tag a">Edition</span></li>
+    <li><b>One masking policy on a tag</b> protects new tagged columns automatically, instead of one policy per column.</li>
+  </ul>
+  <details class="q"><summary>Why attach a masking policy to a tag rather than to each email column?</summary><div class="in">Every column with that tag is protected automatically, including columns added later, so nobody has to remember to attach the policy to each one.</div></details>
+  <aside class="trk"><h4 data-id="customers.email">Follow the dashboard</h4><div class="in"><p>Lena’s email in dim_customer is tagged pii and masked for ANALYST; the access history shows the dashboard never read that column.</p></div></aside>
+</section>
+
+<div class="part" data-part="Choose and revise"><h2>Part 9: Choose and revise</h2><p>Fit, compare, test yourself, prove it</p></div>
 
 <section class="s" id="elt" data-t="ELT and the data stack">
-  <div class="sh"><span class="off">32</span><h2>ELT and the modern data stack</h2></div>
+  <div class="sh"><span class="off">54</span><h2>ELT and the modern data stack</h2></div>
   <div class="plain"><b>In plain words</b>The old way was to clean data before loading it (ETL). With cheap storage and elastic compute, teams now load raw data first and clean it inside the warehouse with SQL (ELT). Around Snowflake sit tools that move data in, tools that manage the SQL transformations, and tools that draw the charts.</div>
   <div class="words"><h4>New words</h4>
     <div><b>ETL / ELT</b><span>Extract, transform, load / extract, load, then transform inside the warehouse.</span></div>
     <div><b>dbt</b><span>A popular tool for writing, testing and scheduling SQL transformations.</span></div>
     <div><b>BI tool</b><span>Business intelligence: dashboard tools such as Tableau, Power BI, Looker.</span></div>
     <div><b>medallion layers</b><span>Raw (bronze), cleaned (silver) and business-ready (gold) tables.</span></div>
+    <div><b>ETL</b><span>Extract, transform, then load: clean the data before it reaches the warehouse.</span></div>
   </div>
   <p class="lead">In ELT, raw data is loaded into Snowflake first and transformed there with SQL, typically raw → cleaned → business tables, feeding BI tools.</p>
   <figure><div class="canvas scroll"><div class="flow">
@@ -1230,8 +1877,14 @@ ALTER TABLE orders ADD ROW ACCESS POLICY country_rows ON (country);</pre>
 </section>
 
 <section class="s" id="vs" data-t="Snowflake vs the others">
-  <div class="sh"><span class="off">33</span><h2>Snowflake vs BigQuery, Redshift and Databricks</h2></div>
+  <div class="sh"><span class="off">55</span><h2>Snowflake vs BigQuery, Redshift and Databricks</h2></div>
   <div class="plain"><b>In plain words</b>All four are cloud platforms for analytics, and all can answer the dashboard question. They differ in how you pay, how much you manage, and whether they lean towards SQL analysts or towards data engineers and machine learning.</div>
+  <div class="words"><h4>New words</h4>
+    <div><b>Snowpark</b><span>Snowflake’s library for running Python, Java or Scala data code inside Snowflake.</span></div>
+    <div><b>Iceberg</b><span>An open table format for data lakes that several engines can read.</span></div>
+    <div><b>slot</b><span>BigQuery’s unit of reserved compute.</span></div>
+    <div><b>serverless</b><span>You do not size or start any compute; the service does it per query.</span></div>
+  </div>
   <p class="lead">Choose by billing model, operational effort, cloud and workload mix; each platform is strong at analytics SQL and differs at the edges.</p>
   <div class="tw"><table>
     <tr><th></th><th>Snowflake</th><th>BigQuery</th><th>Redshift</th><th>Databricks</th></tr>
@@ -1248,8 +1901,16 @@ ALTER TABLE orders ADD ROW ACCESS POLICY country_rows ON (country);</pre>
   <aside class="trk"><h4 data-id="shopco">Follow the dashboard</h4><div class="in"><p>ShopCo chose Snowflake because three teams (analytics, finance, data science) needed separate compute on the same data, and suppliers wanted live shares.</p></div></aside>
 </section>
 
+<section class="s" id="kwindex" data-t="Keyword index">
+  <div class="sh"><span class="off">56</span><h2>Keyword index: every term in the course</h2></div>
+  <div class="plain"><b>In plain words</b>Every word introduced anywhere in this course, A to Z, with a one-line meaning and a link to the lesson that teaches it. Use it as a dictionary, or read it top to bottom as a final check of what you know.</div>
+  <p class="lead">177 keywords, each defined in plain words and linked to the lesson where it is explained.</p>
+  <p style="font:600 .95rem var(--mono);line-height:2"><a href="#kw-A">A</a> <a href="#kw-B">B</a> <a href="#kw-C">C</a> <a href="#kw-D">D</a> <a href="#kw-E">E</a> <a href="#kw-F">F</a> <a href="#kw-G">G</a> <a href="#kw-H">H</a> <a href="#kw-I">I</a> <a href="#kw-J">J</a> <a href="#kw-K">K</a> <a href="#kw-L">L</a> <a href="#kw-M">M</a> <a href="#kw-N">N</a> <a href="#kw-O">O</a> <a href="#kw-P">P</a> <a href="#kw-Q">Q</a> <a href="#kw-R">R</a> <a href="#kw-S">S</a> <a href="#kw-T">T</a> <a href="#kw-U">U</a> <a href="#kw-V">V</a> <a href="#kw-W">W</a> </p>
+  <div class="tw"><table class="kw"><tr><th>Keyword</th><th>Meaning</th><th>Learn it in</th></tr><tr id="kw-A"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">A</td></tr><tr><td><b>access history</b></td><td>A record of which queries read or wrote which columns.</td><td><a href="#governance">Tags, classification, lineage</a></td></tr><tr><td><b>account</b></td><td>One Snowflake deployment in one cloud region, with its own URL.</td><td><a href="#hierarchy">Accounts, editions, objects</a></td></tr><tr><td><b>ACCOUNT_USAGE</b></td><td>A schema in the shared SNOWFLAKE database with a year of account history, updated with a delay.</td><td><a href="#monitoring">Monitoring usage</a></td></tr><tr><td><b>ACID</b></td><td>Atomic, consistent, isolated, durable: the guarantees of a transaction.</td><td><a href="#txn">Transactions and concurrency</a></td></tr><tr><td><b>aggregate</b></td><td>A summary over many rows: SUM, COUNT, AVG.</td><td><a href="#olap">What analytics is</a></td></tr><tr><td><b>authentication</b></td><td>Proving who you are.</td><td><a href="#auth">Authentication and network</a></td></tr><tr><td><b>autocommit</b></td><td>Each statement is its own transaction unless you start one explicitly.</td><td><a href="#txn">Transactions and concurrency</a></td></tr><tr><td><b>auto-resume</b></td><td>Start the warehouse automatically when a query arrives.</td><td><a href="#wh">Virtual warehouses</a></td></tr><tr><td><b>auto-suspend</b></td><td>A warehouse setting that switches it off after it has been idle for a while.</td><td><a href="#paymodel">What you pay for</a></td></tr><tr id="kw-B"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">B</td></tr><tr><td><b>BI tool</b></td><td>Business intelligence software that draws dashboards from SQL results.</td><td><a href="#s0">Running example and tags</a></td></tr><tr id="kw-C"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">C</td></tr><tr><td><b>cardinality</b></td><td>The number of distinct values.</td><td><a href="#approx">Approximate and sampling functions</a></td></tr><tr><td><b>cast (::)</b></td><td>Convert a value to a type: <code>::string</code>, <code>::number</code>.</td><td><a href="#variant">JSON and VARIANT</a></td></tr><tr><td><b>classification</b></td><td>Snowflake analysing columns and suggesting categories such as email or phone number.</td><td><a href="#governance">Tags, classification, lineage</a></td></tr><tr><td><b>client redirect</b></td><td>A connection URL that can be pointed at the new primary account.</td><td><a href="#replication">Replication and failover</a></td></tr><tr><td><b>clone</b></td><td>A new table, schema or database that starts by sharing the original’s micro-partitions.</td><td><a href="#clone">Zero-copy cloning</a></td></tr><tr><td><b>cloud</b></td><td>Computers and storage rented from a provider like AWS, Azure or Google Cloud.</td><td><a href="#whatsnow">What Snowflake is</a></td></tr><tr><td><b>cloud services layer</b></td><td>Snowflake’s always-on brain: login, security, metadata, query planning.</td><td><a href="#layers">Three layers</a></td></tr><tr><td><b>clustering</b></td><td>How well rows with similar values are grouped into the same micro-partitions.</td><td><a href="#clustering">Clustering keys</a></td></tr><tr><td><b>clustering depth</b></td><td>How many micro-partitions overlap for a given value; lower is better.</td><td><a href="#clustering">Clustering keys</a></td></tr><tr><td><b>clustering key</b></td><td>Columns you ask Snowflake to keep the table ordered by.</td><td><a href="#clustering">Clustering keys</a></td></tr><tr><td><b>column store</b></td><td>Stores all values of one column together.</td><td><a href="#columns">Rows vs columns</a></td></tr><tr><td><b>compilation</b></td><td>Parsing, checking and planning a query, done in the services layer.</td><td><a href="#qlife">Life of a query</a></td></tr><tr><td><b>compression</b></td><td>Storing data in fewer bytes; works best when similar values sit together.</td><td><a href="#columns">Rows vs columns</a></td></tr><tr><td><b>compute</b></td><td>The processing power that runs queries: your virtual warehouses.</td><td><a href="#paymodel">What you pay for</a></td></tr><tr><td><b>compute layer</b></td><td>The virtual warehouses that run queries.</td><td><a href="#layers">Three layers</a></td></tr><tr><td><b>concurrency</b></td><td>How many queries run at the same time.</td><td><a href="#separate">Storage separate from compute</a></td></tr><tr><td><b>constraint</b></td><td>A rule about the data, such as “this column is unique”.</td><td><a href="#constraints">Constraints are not enforced</a></td></tr><tr><td><b>COPY INTO</b></td><td>The SQL command that loads staged files into a table, or unloads a table into files.</td><td><a href="#copy">COPY INTO</a></td></tr><tr><td><b>Cortex</b></td><td>Snowflake’s family of built-in AI and ML features.</td><td><a href="#cortex">AI and ML in Snowflake</a></td></tr><tr><td><b>credit</b></td><td>The unit Snowflake bills computing in.</td><td><a href="#whatsnow">What Snowflake is</a></td></tr><tr><td><b>credit price</b></td><td>Dollars per credit; depends on edition, cloud, region and contract.</td><td><a href="#cost">Credits and cost</a></td></tr><tr id="kw-D"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">D</td></tr><tr><td><b>database.schema.table</b></td><td>Snowflake’s three-level naming: a database holds schemas, a schema holds tables.</td><td><a href="#firstq">Your first query</a></td></tr><tr><td><b>DataFrame</b></td><td>A table-like object you transform with method calls instead of SQL text.</td><td><a href="#udf">UDFs, procedures, Snowpark</a></td></tr><tr><td><b>data lake</b></td><td>Raw files (JSON, Parquet, CSV) in object storage, without a database managing them.</td><td><a href="#lakehouse">Data lake, lakehouse, Iceberg</a></td></tr><tr><td><b>data warehouse</b></td><td>A database built for OLAP, holding copies of data from many sources.</td><td><a href="#olap">What analytics is</a></td></tr><tr><td><b>dbt</b></td><td>A popular tool for writing, testing and scheduling SQL transformations.</td><td><a href="#elt">ELT and the data stack</a></td></tr><tr><td><b>denormalization</b></td><td>Deliberately copying data into fewer, wider tables to speed up reads.</td><td><a href="#normal">Normalization vs denormalization</a></td></tr><tr><td><b>dictionary encoding</b></td><td>Storing each distinct value once and replacing it with a small number.</td><td><a href="#mpp">MPP and compression</a></td></tr><tr><td><b>dimension table</b></td><td>A table describing something you group or filter by: customer, product, date.</td><td><a href="#factdim">Facts and dimensions</a></td></tr><tr><td><b>dynamic table</b></td><td>A table defined by a query that Snowflake keeps refreshed within a target lag.</td><td><a href="#pipelines">Streams, tasks, dynamic tables</a></td></tr><tr id="kw-E"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">E</td></tr><tr><td><b>edition</b></td><td>Snowflake’s product tiers (Standard, Enterprise, Business Critical); some features need a higher tier.</td><td><a href="#whatsnow">What Snowflake is</a></td></tr><tr><td><b>ELT</b></td><td>Extract, load, then transform inside the warehouse: load raw data first, clean it later with SQL.</td><td><a href="#variant">JSON and VARIANT</a></td></tr><tr><td><b>enforced</b></td><td>Checked by the database, which rejects rows that break it.</td><td><a href="#constraints">Constraints are not enforced</a></td></tr><tr><td><b>ETL</b></td><td>Extract, transform, then load: clean the data before it reaches the warehouse.</td><td><a href="#elt">ELT and the data stack</a></td></tr><tr><td><b>ETL / ELT</b></td><td>Extract, transform, load / extract, load, then transform inside the warehouse.</td><td><a href="#elt">ELT and the data stack</a></td></tr><tr><td><b>event notification</b></td><td>A message from S3 saying a new file was created.</td><td><a href="#snowpipe">Snowpipe</a></td></tr><tr><td><b>external stage</b></td><td>Points at your own cloud storage, such as an S3 bucket.</td><td><a href="#stages">Stages and file formats</a></td></tr><tr id="kw-F"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">F</td></tr><tr><td><b>fact table</b></td><td>A table of business events with numeric measures, such as one row per order.</td><td><a href="#factdim">Facts and dimensions</a></td></tr><tr><td><b>failover</b></td><td>Making the copy the primary when the original is unavailable.</td><td><a href="#replication">Replication and failover</a></td></tr><tr><td><b>failover group</b></td><td>A set of objects that replicate and fail over together.</td><td><a href="#replication">Replication and failover</a></td></tr><tr><td><b>Fail-safe</b></td><td>A 7-day period after Time Travel during which only Snowflake support can recover data.</td><td><a href="#failsafe">Fail-safe</a></td></tr><tr><td><b>FLATTEN</b></td><td>Turns each element of an array into its own row.</td><td><a href="#variant">JSON and VARIANT</a></td></tr><tr><td><b>forecast</b></td><td>A prediction of future values from past values over time.</td><td><a href="#cortex">AI and ML in Snowflake</a></td></tr><tr id="kw-G"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">G</td></tr><tr><td><b>GET</b></td><td>Download files from an internal stage to your computer.</td><td><a href="#unload">Unloading data</a></td></tr><tr><td><b>grain</b></td><td>What exactly one row of a fact table represents, such as “one order line”.</td><td><a href="#factdim">Facts and dimensions</a></td></tr><tr><td><b>grant</b></td><td>Giving a privilege (like SELECT) on an object to a role, or a role to a user.</td><td><a href="#rbac">Roles and access</a></td></tr><tr><td><b>GROUP BY</b></td><td>SQL that makes one result row per distinct value, used with SUM or COUNT.</td><td><a href="#firstq">Your first query</a></td></tr><tr id="kw-H"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">H</td></tr><tr><td><b>hybrid table</b></td><td>A row-oriented table for fast single-row lookups and updates, with enforced keys.</td><td><a href="#tabletypes">Table types</a></td></tr><tr><td><b>HyperLogLog</b></td><td>The algorithm behind approximate distinct counts, using a small fixed amount of memory.</td><td><a href="#approx">Approximate and sampling functions</a></td></tr><tr id="kw-I"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">I</td></tr><tr><td><b>IAM role</b></td><td>An AWS identity with permissions; ShopCo lets Snowflake assume one to read its bucket.</td><td><a href="#smap">Where it lives, who calls whom</a></td></tr><tr><td><b>Iceberg</b></td><td>An open table format for data lakes that several engines can read.</td><td><a href="#vs">Snowflake vs the others</a></td></tr><tr><td><b>immutable</b></td><td>Never changed after it is written; an update writes a new micro-partition instead.</td><td><a href="#micro">Micro-partitions</a></td></tr><tr><td><b>incremental</b></td><td>Processing only what changed, not everything again.</td><td><a href="#pipelines">Streams, tasks, dynamic tables</a></td></tr><tr><td><b>informational</b></td><td>Recorded for tools and readers, but not checked.</td><td><a href="#constraints">Constraints are not enforced</a></td></tr><tr><td><b>INFORMATION_SCHEMA</b></td><td>Per-database views and functions with current, short-term information.</td><td><a href="#monitoring">Monitoring usage</a></td></tr><tr><td><b>internal stage</b></td><td>Storage inside Snowflake that you upload files into.</td><td><a href="#stages">Stages and file formats</a></td></tr><tr id="kw-J"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">J</td></tr><tr><td><b>join</b></td><td>Combining rows from two tables that share a key.</td><td><a href="#starschema">Star and snowflake schemas</a></td></tr><tr id="kw-K"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">K</td></tr><tr><td><b>key-pair authentication</b></td><td>A program proves its identity with a private key instead of a password.</td><td><a href="#auth">Authentication and network</a></td></tr><tr id="kw-L"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">L</td></tr><tr><td><b>lakehouse</b></td><td>A data lake with warehouse features, built on an open table format.</td><td><a href="#lakehouse">Data lake, lakehouse, Iceberg</a></td></tr><tr><td><b>latency</b></td><td>The delay between a file landing and its rows being queryable.</td><td><a href="#snowpipe">Snowpipe</a></td></tr><tr><td><b>lineage</b></td><td>Where data came from and where it flows next.</td><td><a href="#governance">Tags, classification, lineage</a></td></tr><tr><td><b>LLM</b></td><td>Large language model: an AI model that reads and writes text.</td><td><a href="#cortex">AI and ML in Snowflake</a></td></tr><tr><td><b>load metadata</b></td><td>Snowflake’s record of which files have been loaded into a table.</td><td><a href="#copy">COPY INTO</a></td></tr><tr><td><b>local / remote spilling</b></td><td>Spill to the warehouse’s SSD (slow) / to cloud storage (much slower).</td><td><a href="#spill">Spilling and sizing</a></td></tr><tr><td><b>lock</b></td><td>A claim on a table that makes conflicting writers wait.</td><td><a href="#txn">Transactions and concurrency</a></td></tr><tr id="kw-M"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">M</td></tr><tr><td><b>Marketplace</b></td><td>A catalogue of datasets other companies share, some free, some paid.</td><td><a href="#sharing">Data sharing</a></td></tr><tr><td><b>masking policy</b></td><td>A rule that hides or transforms a column’s values depending on who is asking.</td><td><a href="#masking">Masking and row access</a></td></tr><tr><td><b>materialized view</b></td><td>A view whose results are stored and refreshed automatically.</td><td><a href="#views">Views</a></td></tr><tr><td><b>measure</b></td><td>A number you add up or average: amount, quantity.</td><td><a href="#factdim">Facts and dimensions</a></td></tr><tr><td><b>medallion layers</b></td><td>Raw (bronze), cleaned (silver) and business-ready (gold) tables.</td><td><a href="#elt">ELT and the data stack</a></td></tr><tr><td><b>MERGE</b></td><td>One statement that inserts, updates or deletes target rows depending on whether they match source rows.</td><td><a href="#merge">MERGE</a></td></tr><tr><td><b>metadata</b></td><td>Data about the data, such as each micro-partition’s min and max per column.</td><td><a href="#micro">Micro-partitions</a></td></tr><tr><td><b>metadata cache</b></td><td>Counts and min/max kept by the services layer, enough for some queries.</td><td><a href="#caches">Three caches</a></td></tr><tr><td><b>MFA</b></td><td>Multi-factor authentication: a password plus a second proof, such as a phone app.</td><td><a href="#auth">Authentication and network</a></td></tr><tr><td><b>micro-partition</b></td><td>One of the small, immutable files a table is split into, holding 50 to 500 MB of uncompressed data.</td><td><a href="#micro">Micro-partitions</a></td></tr><tr><td><b>MPP</b></td><td>Massively parallel processing: many machines each working on part of one query.</td><td><a href="#mpp">MPP and compression</a></td></tr><tr><td><b>multi-cluster warehouse</b></td><td>A warehouse that adds and removes clusters automatically as the queue grows and shrinks.</td><td><a href="#scale">Scale up vs scale out</a></td></tr><tr id="kw-N"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">N</td></tr><tr><td><b>network policy</b></td><td>A list of IP addresses or networks allowed (or blocked) to connect.</td><td><a href="#auth">Authentication and network</a></td></tr><tr><td><b>node</b></td><td>One machine in a compute cluster.</td><td><a href="#mpp">MPP and compression</a></td></tr><tr><td><b>normalization</b></td><td>Splitting data so each fact is stored once, linked by keys.</td><td><a href="#normal">Normalization vs denormalization</a></td></tr><tr><td><b>NUMBER(p, s)</b></td><td>An exact number with p digits, s of them after the decimal point.</td><td><a href="#datatypes">Data types</a></td></tr><tr id="kw-O"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">O</td></tr><tr><td><b>OBJECT / ARRAY</b></td><td>Semi-structured types for key-value maps and lists, alongside VARIANT.</td><td><a href="#datatypes">Data types</a></td></tr><tr><td><b>object storage</b></td><td>Cheap, durable cloud file storage such as Amazon S3.</td><td><a href="#layers">Three layers</a></td></tr><tr><td><b>object tag</b></td><td>A label such as <code>pii = 'email'</code> attached to a table or column.</td><td><a href="#governance">Tags, classification, lineage</a></td></tr><tr><td><b>OLAP</b></td><td>Online analytical processing: few, big queries that scan and summarise lots of data.</td><td><a href="#olap">What analytics is</a></td></tr><tr><td><b>OLAP cube</b></td><td>The idea of data arranged by several dimensions at once, with totals at every level.</td><td><a href="#olapops">Roll-up, drill-down, cube</a></td></tr><tr><td><b>OLTP</b></td><td>Online transaction processing: many small reads and writes, like an app’s main database.</td><td><a href="#olap">What analytics is</a></td></tr><tr><td><b>ON_ERROR</b></td><td>What to do with bad rows: stop, skip the file, or continue.</td><td><a href="#copy">COPY INTO</a></td></tr><tr><td><b>open table format</b></td><td>A standard (Iceberg, Delta Lake, Hudi) that turns folders of Parquet files into tables with transactions and schemas.</td><td><a href="#lakehouse">Data lake, lakehouse, Iceberg</a></td></tr><tr><td><b>organization</b></td><td>The top level: a company’s collection of Snowflake accounts.</td><td><a href="#hierarchy">Accounts, editions, objects</a></td></tr><tr id="kw-P"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">P</td></tr><tr><td><b>Parquet</b></td><td>An open, columnar file format widely used in data lakes.</td><td><a href="#lakehouse">Data lake, lakehouse, Iceberg</a></td></tr><tr><td><b>PARTITION BY</b></td><td>In a window function, the groups the calculation restarts for.</td><td><a href="#sqlpatterns">Analytics SQL patterns</a></td></tr><tr><td><b>path</b></td><td>The way into nested data: <code>v:customer.country</code>.</td><td><a href="#variant">JSON and VARIANT</a></td></tr><tr><td><b>permanent table</b></td><td>The default, with full Time Travel and Fail-safe.</td><td><a href="#tabletypes">Table types</a></td></tr><tr><td><b>PII</b></td><td>Personally identifiable information, such as emails and addresses.</td><td><a href="#masking">Masking and row access</a></td></tr><tr><td><b>pivot</b></td><td>Turn values of one column into separate columns.</td><td><a href="#olapops">Roll-up, drill-down, cube</a></td></tr><tr><td><b>provider / consumer</b></td><td>The account sharing the data / the account receiving it.</td><td><a href="#sharing">Data sharing</a></td></tr><tr><td><b>pruning</b></td><td>Skipping micro-partitions whose min/max show they cannot match the filter.</td><td><a href="#pruning">Pruning</a></td></tr><tr id="kw-Q"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">Q</td></tr><tr><td><b>QUALIFY</b></td><td>Snowflake’s filter on window-function results.</td><td><a href="#sqlpatterns">Analytics SQL patterns</a></td></tr><tr><td><b>query acceleration</b></td><td>Extra serverless compute lent to parts of large scans.</td><td><a href="#accel">Speed-up features</a></td></tr><tr><td><b>QUERY_HISTORY</b></td><td>A record of every query: who, when, how long, how much data.</td><td><a href="#monitoring">Monitoring usage</a></td></tr><tr><td><b>query profile</b></td><td>A diagram of each step of a finished query, with time and data read.</td><td><a href="#qlife">Life of a query</a></td></tr><tr><td><b>queuing</b></td><td>Queries waiting because the warehouse is busy.</td><td><a href="#scale">Scale up vs scale out</a></td></tr><tr id="kw-R"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">R</td></tr><tr><td><b>RBAC</b></td><td>Role-based access control.</td><td><a href="#rbac">Roles and access</a></td></tr><tr><td><b>READ COMMITTED</b></td><td>Each statement sees data committed before it started.</td><td><a href="#txn">Transactions and concurrency</a></td></tr><tr><td><b>replication</b></td><td>Keeping a copy of databases (and other objects) in another account, refreshed on a schedule.</td><td><a href="#replication">Replication and failover</a></td></tr><tr><td><b>resource monitor</b></td><td>A credit budget with actions at chosen percentages.</td><td><a href="#monitors">Resource monitors</a></td></tr><tr><td><b>result cache</b></td><td>Saved results of recent queries, reused for identical queries on unchanged data.</td><td><a href="#caches">Three caches</a></td></tr><tr><td><b>retention period</b></td><td>How long old versions are kept for Time Travel.</td><td><a href="#timetravel">Time Travel</a></td></tr><tr><td><b>role</b></td><td>A named set of permissions; people act through roles (Part 8).</td><td><a href="#s0">Running example and tags</a></td></tr><tr><td><b>roll-up / drill-down</b></td><td>Summarise to a coarser level / break down to a finer level.</td><td><a href="#olapops">Roll-up, drill-down, cube</a></td></tr><tr><td><b>row access policy</b></td><td>A rule that filters which rows a role can see.</td><td><a href="#masking">Masking and row access</a></td></tr><tr><td><b>row store</b></td><td>Stores all fields of a row together.</td><td><a href="#columns">Rows vs columns</a></td></tr><tr><td><b>run-length encoding</b></td><td>Storing “DE ×4000” instead of “DE” four thousand times.</td><td><a href="#mpp">MPP and compression</a></td></tr><tr id="kw-S"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">S</td></tr><tr><td><b>SaaS</b></td><td>Software as a service: you use it over the internet; the vendor runs it.</td><td><a href="#whatsnow">What Snowflake is</a></td></tr><tr><td><b>sample</b></td><td>A random subset of rows.</td><td><a href="#approx">Approximate and sampling functions</a></td></tr><tr><td><b>scale out</b></td><td>Run extra clusters of the same warehouse to serve more queries at once.</td><td><a href="#scale">Scale up vs scale out</a></td></tr><tr><td><b>scale up</b></td><td>Resize to a bigger warehouse so each query has more compute.</td><td><a href="#scale">Scale up vs scale out</a></td></tr><tr><td><b>scan</b></td><td>Actually reading data from storage.</td><td><a href="#pruning">Pruning</a></td></tr><tr><td><b>SCD</b></td><td>Slowly changing dimension: a dimension whose attributes change now and then.</td><td><a href="#scd">Slowly changing dimensions</a></td></tr><tr><td><b>schema</b></td><td>A folder inside a database that groups tables and other objects.</td><td><a href="#hierarchy">Accounts, editions, objects</a></td></tr><tr><td><b>search optimization</b></td><td>A background structure that speeds up selective lookups, like finding one email in billions of rows.</td><td><a href="#accel">Speed-up features</a></td></tr><tr><td><b>secure view</b></td><td>A view whose definition is hidden and whose rows cannot leak through optimizations.</td><td><a href="#views">Views</a></td></tr><tr><td><b>serverless</b></td><td>You do not size or start any compute; the service does it per query.</td><td><a href="#vs">Snowflake vs the others</a></td></tr><tr><td><b>serverless feature</b></td><td>Work Snowflake runs on its own compute, such as Snowpipe or Automatic Clustering, billed separately.</td><td><a href="#cost">Credits and cost</a></td></tr><tr><td><b>share</b></td><td>An object that grants another Snowflake account read access to chosen tables.</td><td><a href="#sharing">Data sharing</a></td></tr><tr><td><b>shared-nothing</b></td><td>An older design where each machine stores and processes its own slice of data.</td><td><a href="#separate">Storage separate from compute</a></td></tr><tr><td><b>slice / dice</b></td><td>Filter on one dimension value / on several values of several dimensions.</td><td><a href="#olapops">Roll-up, drill-down, cube</a></td></tr><tr><td><b>slot</b></td><td>BigQuery’s unit of reserved compute.</td><td><a href="#vs">Snowflake vs the others</a></td></tr><tr><td><b>snowflake schema</b></td><td>A star schema whose dimensions are split into further normalized tables.</td><td><a href="#starschema">Star and snowflake schemas</a></td></tr><tr><td><b>Snowpark</b></td><td>A library for writing DataFrame code in Python, Java or Scala that runs in Snowflake.</td><td><a href="#udf">UDFs, procedures, Snowpark</a></td></tr><tr><td><b>Snowpipe</b></td><td>A service that loads files automatically as they arrive.</td><td><a href="#snowpipe">Snowpipe</a></td></tr><tr><td><b>Snowsight</b></td><td>Snowflake’s web interface, where you write and run SQL in worksheets.</td><td><a href="#firstq">Your first query</a></td></tr><tr><td><b>spilling</b></td><td>Writing intermediate data to disk because it does not fit in memory.</td><td><a href="#spill">Spilling and sizing</a></td></tr><tr><td><b>SSO</b></td><td>Single sign-on through the company’s identity provider (for example Okta or Entra ID).</td><td><a href="#auth">Authentication and network</a></td></tr><tr><td><b>stage</b></td><td>A named location of files for loading or unloading.</td><td><a href="#stages">Stages and file formats</a></td></tr><tr><td><b>star schema</b></td><td>One fact table joined directly to flat, denormalized dimension tables.</td><td><a href="#starschema">Star and snowflake schemas</a></td></tr><tr><td><b>statement timeout</b></td><td>A limit on how long one query may run before it is cancelled.</td><td><a href="#monitors">Resource monitors</a></td></tr><tr><td><b>storage</b></td><td>The space your data takes, after compression.</td><td><a href="#paymodel">What you pay for</a></td></tr><tr><td><b>storage integration</b></td><td>A trust set-up that lets Snowflake read your bucket without storing keys.</td><td><a href="#stages">Stages and file formats</a></td></tr><tr><td><b>storage layer</b></td><td>Where table data lives, in the cloud provider’s object storage.</td><td><a href="#layers">Three layers</a></td></tr><tr><td><b>stored procedure</b></td><td>Code that runs several statements, with logic, called with CALL.</td><td><a href="#udf">UDFs, procedures, Snowpark</a></td></tr><tr><td><b>stream</b></td><td>A record of the changes to a table since it was last read.</td><td><a href="#pipelines">Streams, tasks, dynamic tables</a></td></tr><tr><td><b>surrogate key</b></td><td>A plain number the warehouse assigns as a dimension’s key, instead of reusing the source system’s ID.</td><td><a href="#factdim">Facts and dimensions</a></td></tr><tr><td><b>suspended</b></td><td>Switched off; costs nothing and holds no cache.</td><td><a href="#wh">Virtual warehouses</a></td></tr><tr id="kw-T"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">T</td></tr><tr><td><b>target / source</b></td><td>The table being changed / the incoming rows.</td><td><a href="#merge">MERGE</a></td></tr><tr><td><b>task</b></td><td>SQL that Snowflake runs on a schedule or when a condition is true.</td><td><a href="#pipelines">Streams, tasks, dynamic tables</a></td></tr><tr><td><b>temporary table</b></td><td>Exists only for your session, then disappears.</td><td><a href="#tabletypes">Table types</a></td></tr><tr><td><b>third normal form (3NF)</b></td><td>The usual target for app databases: no repeated groups, no fields depending on non-key fields.</td><td><a href="#normal">Normalization vs denormalization</a></td></tr><tr><td><b>TIMESTAMP_NTZ / LTZ / TZ</b></td><td>A timestamp with no time zone / stored in UTC and shown in your session’s zone / stored with its own offset.</td><td><a href="#datatypes">Data types</a></td></tr><tr><td><b>Time Travel</b></td><td>Snowflake keeping old versions of data so you can query or restore them. Part 7 explains it.</td><td><a href="#smap">Where it lives, who calls whom</a></td></tr><tr><td><b>transient table</b></td><td>Lives until dropped, but without Fail-safe and with at most 1 day of Time Travel.</td><td><a href="#tabletypes">Table types</a></td></tr><tr><td><b>Type 1</b></td><td>Overwrite the old value; history is lost.</td><td><a href="#scd">Slowly changing dimensions</a></td></tr><tr><td><b>Type 2</b></td><td>Add a new row with validity dates; history is kept.</td><td><a href="#scd">Slowly changing dimensions</a></td></tr><tr><td><b>Type 3</b></td><td>Keep a “previous value” column alongside the current one.</td><td><a href="#scd">Slowly changing dimensions</a></td></tr><tr id="kw-U"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">U</td></tr><tr><td><b>UDF</b></td><td>User-defined function: your own function callable in SQL.</td><td><a href="#udf">UDFs, procedures, Snowpark</a></td></tr><tr><td><b>UNDROP</b></td><td>Restore a dropped table, schema or database within retention.</td><td><a href="#timetravel">Time Travel</a></td></tr><tr><td><b>unload</b></td><td>Write table or query results out to files in a stage.</td><td><a href="#unload">Unloading data</a></td></tr><tr><td><b>upsert</b></td><td>Insert if missing, update if present.</td><td><a href="#merge">MERGE</a></td></tr><tr id="kw-V"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">V</td></tr><tr><td><b>VARCHAR / STRING</b></td><td>Text.</td><td><a href="#datatypes">Data types</a></td></tr><tr><td><b>VARIANT</b></td><td>A column type that holds any JSON-like value.</td><td><a href="#variant">JSON and VARIANT</a></td></tr><tr><td><b>view</b></td><td>A named query that behaves like a table.</td><td><a href="#views">Views</a></td></tr><tr><td><b>virtual warehouse</b></td><td>The compute that runs queries (Part 0 and Part 3 explain it).</td><td><a href="#s0">Running example and tags</a></td></tr><tr id="kw-W"><td colspan="3" style="background:var(--surface2);font:700 .9rem var(--display)">W</td></tr><tr><td><b>warehouse cache</b></td><td>Recently read data on a warehouse’s local SSDs, lost when it suspends.</td><td><a href="#caches">Three caches</a></td></tr><tr><td><b>warehouse size</b></td><td>X-Small, Small, Medium, Large… each double the previous in compute and credits per hour.</td><td><a href="#wh">Virtual warehouses</a></td></tr><tr><td><b>window function</b></td><td>A calculation across related rows that keeps every row, such as a running total.</td><td><a href="#sqlpatterns">Analytics SQL patterns</a></td></tr><tr><td><b>workload isolation</b></td><td>Different jobs running on separate compute so they cannot slow each other.</td><td><a href="#separate">Storage separate from compute</a></td></tr></table></div>
+  <aside class="trk"><h4 data-id="all terms">Follow the dashboard</h4><div class="in"><p>Try explaining the dashboard’s journey using only words from this index: file, stage, Snowpipe, VARIANT, MERGE, micro-partition, pruning, warehouse, result cache.</p></div></aside>
+</section>
 <section class="s" id="srev" data-t="Revision and glossary">
-  <div class="sh"><span class="off">34</span><h2>Quick revision and glossary</h2></div>
+  <div class="sh"><span class="off">57</span><h2>Quick revision and glossary</h2></div>
   <div class="plain"><b>In plain words</b>Test yourself with every quick check from the course, then look up any word you have forgotten.</div>
   <p class="lead">Test yourself, then look up any term.</p>
   <div class="demo selftest" id="selftest"></div>
@@ -1284,9 +1945,9 @@ ALTER TABLE orders ADD ROW ACCESS POLICY country_rows ON (country);</pre>
 </section>
 
 <section class="s" id="slab" data-t="Proof checklist">
-  <div class="sh"><span class="off">35</span><h2>Proof checklist</h2></div>
+  <div class="sh"><span class="off">58</span><h2>Proof checklist</h2></div>
   <div class="plain"><b>In plain words</b>Everything tagged Default or Simplified in this course can be checked on a free Snowflake trial account. These experiments show you how.</div>
-  <p class="lead">10 experiments on a Snowflake trial account. Each settles a tagged statement from the lessons.</p>
+  <p class="lead">16 experiments on a Snowflake trial account. Each settles a tagged statement from the lessons.</p>
   <p id="labProg" aria-live="polite"></p>
   <div class="tw" style="max-width:none"><table class="lab">
     <tr><th>Passed</th><th>#</th><th>Question</th><th>Experiment</th><th>Passes when</th></tr>
@@ -1300,6 +1961,12 @@ ALTER TABLE orders ADD ROW ACCESS POLICY country_rows ON (country);</pre>
     <tr id="c8"><td><input type="checkbox" data-lab="c8" aria-label="Passed: UNDROP"></td><td>8</td><td><b>UNDROP</b></td><td>Drop the test table, then <code>UNDROP TABLE</code>.</td><td>The table and its rows are back.</td></tr>
     <tr id="c9"><td><input type="checkbox" data-lab="c9" aria-label="Passed: cloning"></td><td>9</td><td><b>Zero-copy clone</b></td><td>Clone a large sample-sized table you created; time it; change one row in the clone.</td><td>The clone takes seconds; the original is unchanged.</td></tr>
     <tr id="c10"><td><input type="checkbox" data-lab="c10" aria-label="Passed: roles"></td><td>10</td><td><b>USAGE is needed</b></td><td>Create a role with only SELECT on a table, grant it to yourself, query the table.</td><td>An authorization error until USAGE on the database and schema is granted.</td></tr>
+    <tr id="c11"><td><input type="checkbox" data-lab="c11" aria-label="Passed: timestamp mapping"></td><td>11</td><td><b>TIMESTAMP means NTZ</b></td><td><code>SHOW PARAMETERS LIKE 'TIMESTAMP_TYPE_MAPPING' IN ACCOUNT;</code></td><td>Value <code>TIMESTAMP_NTZ</code>.</td></tr>
+    <tr id="c12"><td><input type="checkbox" data-lab="c12" aria-label="Passed: constraints"></td><td>12</td><td><b>Keys are not enforced</b></td><td>Create a standard table with a PRIMARY KEY and insert the same key twice; repeat with a hybrid table if your account supports them.</td><td>The standard table accepts both rows; the hybrid table rejects the duplicate.</td></tr>
+    <tr id="c13"><td><input type="checkbox" data-lab="c13" aria-label="Passed: lock timeout"></td><td>13</td><td><b>Lock timeout</b></td><td><code>SHOW PARAMETERS LIKE 'LOCK_TIMEOUT' IN SESSION;</code></td><td>Value 43200 seconds (12 hours).</td></tr>
+    <tr id="c14"><td><input type="checkbox" data-lab="c14" aria-label="Passed: approximate count"></td><td>14</td><td><b>Approximate counts</b></td><td>Compare <code>COUNT(DISTINCT o_custkey)</code> and <code>APPROX_COUNT_DISTINCT(o_custkey)</code> on <code>tpch_sf10.orders</code>.</td><td>The estimate is within about 2% and usually faster.</td></tr>
+    <tr id="c15"><td><input type="checkbox" data-lab="c15" aria-label="Passed: account usage latency"></td><td>15</td><td><b>Usage views lag</b></td><td>Run a tagged query, then look for it in <code>TABLE(INFORMATION_SCHEMA.QUERY_HISTORY())</code> and in <code>SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY</code>.</td><td>It appears at once in the first, later in the second.</td></tr>
+    <tr id="c16"><td><input type="checkbox" data-lab="c16" aria-label="Passed: unload files"></td><td>16</td><td><b>Unloading splits files</b></td><td><code>COPY INTO @~/unload/ FROM snowflake_sample_data.tpch_sf1.lineitem;</code> then <code>LIST @~/unload/;</code></td><td>Several files, each up to about 16 MB.</td></tr>
   </table></div>
   <p>The list and its order are a proposal. Rows 7 and 8 share a table. <span class="tag s">Simplified</span></p>
 </section>
@@ -1516,6 +2183,33 @@ const fmtBytes=b=>{const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1000&&i<u.
   };
   log.closest('.demo').querySelectorAll('[data-ca]').forEach(b=>b.onclick=()=>{const a=b.dataset.ca;if(a==='reset')return reset();out.textContent=act[a]()});
   reset();
+})();
+
+/* demo: slowly changing dimension types */
+(function(){
+  const typ=$('#scType'),tbl=$('#scTbl'),out=$('#scOut');if(!typ)return;
+  let moved=false;
+  function rows(){
+    const t=typ.value;
+    if(t==='3')return {cols:['customer_key','name','country','previous_country'],data:[[5512,'Lena',moved?'AT':'DE',moved?'DE':'']]};
+    if(t==='1')return {cols:['customer_key','name','country'],data:[[5512,'Lena',moved?'AT':'DE']]};
+    const d=[[5512,'Lena','DE','2025-03-02',moved?'2026-10-31':'9999-12-31',moved?'false':'true']];
+    if(moved)d.push([88231,'Lena','AT','2026-11-01','9999-12-31','true']);
+    return {cols:['customer_key','name','country','valid_from','valid_to','is_current'],data:d};
+  }
+  function draw(){
+    const r=rows();
+    tbl.innerHTML='<table><tr>'+r.cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+r.data.map((row,i)=>'<tr'+(moved&&(typ.value!=='2'||i===1)?' style="background:var(--leader-bg,var(--ok-bg))"':'')+'>'+row.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</table>';
+    if(!moved){out.textContent='Order 90217 (October) points to customer_key 5512. Press the button to move Lena to Austria.';return}
+    out.textContent={
+      '1':'Type 1 overwrote the country. October’s report now counts order 90217 under AT: history was rewritten, and nobody can tell.',
+      '2':'Type 2 closed the DE row and added a new AT row with a new key. Order 90217 still points to key 5512, so October stays DE; November orders use key 88231 and count as AT.',
+      '3':'Type 3 kept one previous value. Reports by country now say AT for October too, unless they use previous_country; a second move would lose DE entirely.'}[typ.value];
+  }
+  $('#scMove').onclick=()=>{moved=true;draw()};
+  $('#scReset').onclick=()=>{moved=false;draw()};
+  typ.onchange=()=>{draw()};
+  draw();
 })();
 
 })();

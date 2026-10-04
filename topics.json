@@ -144,14 +144,14 @@
     "id": "snowflake",
     "title": "Snowflake for data analytics, from zero",
     "category": "Data Analytics",
-    "description": "35 lessons that start from “what is analytics” and go deep: micro-partitions and pruning, virtual warehouses and cost, loading, caching, Time Travel, cloning, sharing and security",
+    "description": "58 lessons from “what is analytics” through warehousing theory (facts, dimensions, star schema, SCDs, MPP, lakehouse) to Snowflake in depth, with a 177-term keyword index",
     "path": "artifacts/snowflake.html",
     "highlights": [
       "Start here: OLAP, columns, your first query",
-      "Storage, compute and services layers",
-      "Micro-partitions, pruning, clustering",
-      "Warehouses, credits and cost control",
-      "Snowpipe, caches, Time Travel, cloning, sharing"
+      "Warehousing theory: star schema, SCDs, OLAP, MPP",
+      "Micro-partitions, pruning, warehouses and cost",
+      "Objects, table types, MERGE, transactions, Snowpark",
+      "Time Travel, sharing, replication, security, governance"
     ],
     "tags": [
       "Snowflake",
